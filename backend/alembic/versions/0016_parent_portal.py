@@ -26,8 +26,8 @@ def upgrade() -> None:
     op.add_column("guardians", sa.Column("emergency_contact_phone", sa.String(length=32), nullable=True))
 
     op.add_column("student_guardians", sa.Column("relation", sa.String(length=32), nullable=False, server_default="guardian"))
-    op.add_column("student_guardians", sa.Column("is_primary", sa.Boolean(), nullable=False, server_default=sa.text("0")))
-    op.execute("UPDATE student_guardians SET is_primary = 0 WHERE is_primary IS NULL")
+    op.add_column("student_guardians", sa.Column("is_primary", sa.Boolean(), nullable=False, server_default=sa.text("false")))
+    op.execute("UPDATE student_guardians SET is_primary = false WHERE is_primary IS NULL")
     op.alter_column("student_guardians", "relation", server_default=None)
     op.alter_column("student_guardians", "is_primary", server_default=None)
 
@@ -47,9 +47,9 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Uuid(as_uuid=True), sa.ForeignKey("users.id"), index=True, nullable=False),
         sa.Column("school_id", sa.Uuid(as_uuid=True), sa.ForeignKey("schools.id"), index=True, nullable=False),
         sa.Column("language", sa.String(length=16), nullable=True),
-        sa.Column("notify_sms", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-        sa.Column("notify_email", sa.Boolean(), nullable=False, server_default=sa.text("1")),
-        sa.Column("notify_push", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("notify_sms", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("notify_email", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+        sa.Column("notify_push", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
@@ -78,8 +78,8 @@ def upgrade() -> None:
         sa.Column("student_id", sa.Uuid(as_uuid=True), sa.ForeignKey("students.id"), index=True, nullable=False),
         sa.Column("category", sa.String(length=64), nullable=True),
         sa.Column("note", sa.String(length=2000), nullable=False),
-        sa.Column("is_positive", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-        sa.Column("requires_ack", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_positive", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("requires_ack", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("acknowledged_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_by_user_id", sa.Uuid(as_uuid=True), sa.ForeignKey("users.id"), index=True, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),

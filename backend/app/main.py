@@ -24,17 +24,9 @@ def create_app() -> FastAPI:
     auth_rule = RateLimitRule(window_seconds=15 * 60, max_requests=settings.rate_limit_auth_per_15_minutes)
     api_rule = RateLimitRule(window_seconds=60, max_requests=settings.rate_limit_api_per_minute)
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_allow_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
     @app.middleware("http")
     async def _security_headers(request: Request, call_next):
-        if settings.rate_limit_enabled:
+        if settings.rate_limit_enabled and request.method != "OPTIONS":
             client_host = request.client.host if request.client else "unknown"
             path = request.url.path
             is_auth = path.startswith(f"{settings.api_v1_prefix}/auth/") and path.endswith(("/login", "/register"))
@@ -122,6 +114,15 @@ def create_app() -> FastAPI:
         return RedirectResponse(url="/openapi.json")
 
     app.include_router(api_router, prefix=settings.api_v1_prefix)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allow_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     return app
 
 

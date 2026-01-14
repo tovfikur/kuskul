@@ -17,7 +17,15 @@ router = APIRouter(dependencies=[Depends(require_permission("academic:read"))])
 
 
 def _out(s: Section) -> SectionOut:
-    return SectionOut(id=s.id, class_id=s.class_id, name=s.name, capacity=s.capacity, room_number=s.room_number)
+    return SectionOut(
+        id=s.id,
+        class_id=s.class_id,
+        name=s.name,
+        capacity=s.capacity,
+        stream_id=s.stream_id,
+        is_active=s.is_active,
+        room_number=s.room_number,
+    )
 
 
 @router.get("", response_model=list[SectionOut])
@@ -50,7 +58,15 @@ def create_section(payload: SectionCreate, db: Session = Depends(get_db), school
     if not c or c.school_id != school_id:
         raise not_found("Class not found")
     now = datetime.now(timezone.utc)
-    s = Section(class_id=payload.class_id, name=payload.name, capacity=payload.capacity, room_number=payload.room_number, created_at=now)
+    s = Section(
+        class_id=payload.class_id,
+        name=payload.name,
+        capacity=payload.capacity,
+        stream_id=payload.stream_id,
+        is_active=payload.is_active,
+        room_number=payload.room_number,
+        created_at=now,
+    )
     db.add(s)
     db.commit()
     db.refresh(s)
@@ -71,6 +87,10 @@ def update_section(
         s.name = payload.name
     if payload.capacity is not None:
         s.capacity = payload.capacity
+    if payload.stream_id is not None:
+        s.stream_id = payload.stream_id
+    if payload.is_active is not None:
+        s.is_active = payload.is_active
     if payload.room_number is not None:
         s.room_number = payload.room_number
     db.commit()
@@ -103,4 +123,3 @@ def get_section_timetable() -> None:
 @router.get("/{section_id}/teachers", include_in_schema=False)
 def get_section_teachers() -> None:
     raise not_implemented("Teachers are not implemented yet")
-

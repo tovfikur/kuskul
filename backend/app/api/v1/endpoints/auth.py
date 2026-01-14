@@ -349,8 +349,16 @@ def verify_two_factor() -> None:
 
 @router.get("/me", response_model=MeResponse)
 def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> MeResponse:
-    memberships = db.execute(select(Membership).where(Membership.user_id == user.id, Membership.is_active.is_(True))).scalars().all()
+    results = db.execute(
+        select(Membership, School)
+        .join(School, Membership.school_id == School.id)
+        .where(Membership.user_id == user.id, Membership.is_active.is_(True))
+    ).all()
     items: list[dict] = []
-    for m in memberships:
-        items.append({"school_id": str(m.school_id), "role_id": str(m.role_id)})
+    for m, s in results:
+        items.append({
+            "school_id": str(m.school_id),
+            "role_id": str(m.role_id),
+            "school_name": s.name
+        })
     return MeResponse(user_id=user.id, email=user.email, memberships=items)

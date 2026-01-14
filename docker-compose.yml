@@ -24,6 +24,7 @@ services:
       CORS_ORIGINS: http://localhost:3000
       REFRESH_TOKEN_COOKIE_SECURE: "false"
       REFRESH_TOKEN_COOKIE_SAMESITE: lax
+      RATE_LIMIT_ENABLED: "false"
     ports:
       - "8000:8000"
     depends_on:
@@ -33,10 +34,11 @@ services:
   web:
     build:
       context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8000/api/v1
     environment:
       VITE_API_BASE_URL: http://localhost:8000/api/v1
     ports:
       - "3000:80"
     depends_on:
       - api
-

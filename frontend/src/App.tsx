@@ -1,71 +1,47 @@
-import './App.css'
-import { Link, Route, Routes } from 'react-router-dom'
+import "./App.css";
+import { Route, Routes } from "react-router-dom";
 
-import { useAppDispatch, useAppSelector } from './app/hooks'
-import { LoginPage } from './features/auth/LoginPage'
-import { RequireAuth } from './features/auth/RequireAuth'
-import { setActiveSchoolId, signOut } from './features/auth/authSlice'
-import { UsersPage } from './features/users/UsersPage'
+import { LoginPage } from "./features/auth/LoginPage";
+import { RequireAuth } from "./features/auth/RequireAuth";
+import DashboardPage from "./pages/DashboardPage";
+import MainLayout from "./layouts/MainLayout";
+import AuthLayout from "./layouts/AuthLayout";
 
-function Dashboard() {
-  const dispatch = useAppDispatch()
-  const email = useAppSelector((s) => s.auth.email)
-  const memberships = useAppSelector((s) => s.auth.memberships)
-  const activeSchoolId = useAppSelector((s) => s.auth.activeSchoolId)
-
-  return (
-    <div style={{ padding: 16 }}>
-      <header style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-        <strong>{email}</strong>
-        <select
-          value={activeSchoolId ?? ''}
-          onChange={(e) => dispatch(setActiveSchoolId(e.target.value || null))}
-        >
-          {memberships.map((m) => (
-            <option key={m.school_id} value={m.school_id}>
-              {m.school_id}
-            </option>
-          ))}
-        </select>
-        <nav style={{ display: 'flex', gap: 12 }}>
-          <Link to="/">Home</Link>
-          <Link to="/users">Users</Link>
-        </nav>
-        <button style={{ marginLeft: 'auto' }} onClick={() => dispatch(signOut())}>
-          Sign out
-        </button>
-      </header>
-
-      <main style={{ marginTop: 24 }}>
-        <h1>Dashboard</h1>
-        <div>Active school: {activeSchoolId ?? 'none'}</div>
-      </main>
-    </div>
-  )
-}
+import AcademicPage from "./features/academic/AcademicPage";
+import StudentsPage from "./features/students/StudentsPage";
+import StaffPage from "./features/staff/StaffPage";
+import ExamsPage from "./features/exams/ExamsPage";
+import FinancePage from "./features/finance/FinancePage";
+import LogisticsPage from "./features/logistics/LogisticsPage";
+import SettingsPage from "./features/settings/SettingsPage";
+import SystemUsersPage from "./features/settings/SystemUsersPage";
 
 function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
+      <Route element={<AuthLayout />}>
+        <Route path="/login" element={<LoginPage />} />
+      </Route>
+
       <Route
-        path="/"
         element={
           <RequireAuth>
-            <Dashboard />
+            <MainLayout />
           </RequireAuth>
         }
-      />
-      <Route
-        path="/users"
-        element={
-          <RequireAuth>
-            <UsersPage />
-          </RequireAuth>
-        }
-      />
+      >
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/academic" element={<AcademicPage />} />
+        <Route path="/students" element={<StudentsPage />} />
+        <Route path="/staff" element={<StaffPage />} />
+        <Route path="/exams" element={<ExamsPage />} />
+        <Route path="/finance" element={<FinancePage />} />
+        <Route path="/logistics" element={<LogisticsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/users" element={<SystemUsersPage />} />
+      </Route>
     </Routes>
-  )
+  );
 }
 
-export default App
+export default App;

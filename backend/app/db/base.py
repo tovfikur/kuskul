@@ -14,6 +14,11 @@ from app.models.staff import Staff
 from app.models.student import Student
 from app.models.student_guardian import StudentGuardian
 from app.models.subject import Subject
+from app.models.stream import Stream
+from app.models.subject_group import SubjectGroup
+from app.models.term import Term
+from app.models.curriculum_unit import CurriculumUnit
+from app.models.academic_calendar_settings import AcademicCalendarSettings
 from app.models.teacher_assignment import StaffAttendance, StudentAttendance, TeacherAssignment
 from app.models.leave import Leave
 from app.models.time_slot import TimeSlot

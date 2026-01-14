@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, String, Uuid
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -15,5 +15,10 @@ class Subject(Base):
     school_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("schools.id"), index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    subject_type: Mapped[str] = mapped_column(String(32), default="theory", nullable=False)
+    credits: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    max_marks: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    group_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("subject_groups.id"), nullable=True)
+    stream_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("streams.id"), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-

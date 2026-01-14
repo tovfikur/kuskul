@@ -15,6 +15,8 @@ class TimeSlot(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     start_time: Mapped[time] = mapped_column(Time, nullable=False)
     end_time: Mapped[time] = mapped_column(Time, nullable=False)
+    slot_type: Mapped[str] = mapped_column(String(32), default="class", nullable=False)
+    shift: Mapped[str] = mapped_column(String(32), default="morning", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

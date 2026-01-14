@@ -21,6 +21,8 @@ def _out(s: TimeSlot) -> TimeSlotOut:
         name=s.name,
         start_time=s.start_time,
         end_time=s.end_time,
+        slot_type=s.slot_type,
+        shift=s.shift,
         is_active=s.is_active,
     )
 
@@ -49,6 +51,8 @@ def create_time_slot(payload: TimeSlotCreate, db: Session = Depends(get_db), sch
         name=payload.name,
         start_time=payload.start_time,
         end_time=payload.end_time,
+        slot_type=payload.slot_type,
+        shift=payload.shift,
         is_active=payload.is_active,
         created_at=now,
     )
@@ -71,6 +75,10 @@ def update_time_slot(
         s.start_time = payload.start_time
     if payload.end_time is not None:
         s.end_time = payload.end_time
+    if payload.slot_type is not None:
+        s.slot_type = payload.slot_type
+    if payload.shift is not None:
+        s.shift = payload.shift
     if payload.is_active is not None:
         s.is_active = payload.is_active
     if s.end_time <= s.start_time:

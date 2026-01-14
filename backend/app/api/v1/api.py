@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import academic_years, analytics, attendance_staff, attendance_students, audit_logs, auth, backup, batch, certificates, classes, communication_logs, discounts, documents, enrollments, events, exam_schedules, exams, fee_dues, fee_payments, fee_structures, grades, guardians, health, holidays, import_export, leaves, library_books, library_issues, marks, messages, notices, notifications, parent_portal, reports, results, roles, schools, sections, settings, staff, students, subjects, teacher_assignments, time_slots, timetable, transport_assignments, transport_route_stops, transport_routes, transport_vehicles, users
+from app.api.v1.endpoints import academic_calendar_settings, academic_years, analytics, attendance_staff, attendance_students, audit_logs, auth, backup, batch, certificates, classes, communication_logs, curriculum, discounts, documents, enrollments, events, exam_schedules, exams, fee_dues, fee_payments, fee_structures, grades, guardians, health, holidays, import_export, leaves, library_books, library_issues, marks, messages, notices, notifications, parent_portal, reports, results, roles, schools, sections, settings, staff, streams, students, subject_groups, subjects, teacher_assignments, terms, time_slots, timetable, transport_assignments, transport_route_stops, transport_routes, transport_vehicles, users
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
@@ -9,9 +9,14 @@ api_router.include_router(schools.router, prefix="/schools", tags=["schools"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(academic_years.router, prefix="/academic-years", tags=["academic-years"])
+api_router.include_router(terms.router, prefix="/terms", tags=["terms"])
 api_router.include_router(classes.router, prefix="/classes", tags=["classes"])
 api_router.include_router(sections.router, prefix="/sections", tags=["sections"])
+api_router.include_router(streams.router, prefix="/streams", tags=["streams"])
+api_router.include_router(subject_groups.router, prefix="/subject-groups", tags=["subject-groups"])
 api_router.include_router(subjects.router, prefix="/subjects", tags=["subjects"])
+api_router.include_router(curriculum.router, prefix="/curriculum", tags=["curriculum"])
+api_router.include_router(academic_calendar_settings.router, prefix="/academic-calendar", tags=["academic-calendar"])
 api_router.include_router(students.router, prefix="/students", tags=["students"])
 api_router.include_router(enrollments.router, prefix="/enrollments", tags=["enrollments"])
 api_router.include_router(guardians.router, prefix="/guardians", tags=["guardians"])

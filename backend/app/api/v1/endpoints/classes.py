@@ -20,7 +20,7 @@ router = APIRouter(dependencies=[Depends(require_permission("academic:read"))])
 
 
 def _class_out(row: SchoolClass) -> ClassOut:
-    return ClassOut(id=row.id, school_id=row.school_id, name=row.name, numeric_value=row.numeric_value)
+    return ClassOut(id=row.id, school_id=row.school_id, name=row.name, numeric_value=row.numeric_value, is_active=row.is_active)
 
 
 @router.get("", response_model=list[ClassOut])
@@ -40,7 +40,13 @@ def get_class(class_id: uuid.UUID, db: Session = Depends(get_db), school_id=Depe
 @router.post("", response_model=ClassOut, dependencies=[Depends(require_permission("academic:write"))])
 def create_class(payload: ClassCreate, db: Session = Depends(get_db), school_id=Depends(get_active_school_id)) -> ClassOut:
     now = datetime.now(timezone.utc)
-    c = SchoolClass(school_id=school_id, name=payload.name, numeric_value=payload.numeric_value, created_at=now)
+    c = SchoolClass(
+        school_id=school_id,
+        name=payload.name,
+        numeric_value=payload.numeric_value,
+        is_active=payload.is_active,
+        created_at=now,
+    )
     db.add(c)
     db.commit()
     db.refresh(c)
@@ -56,8 +62,9 @@ def update_class(
         raise not_found("Class not found")
     if payload.name is not None:
         c.name = payload.name
-    if payload.numeric_value is not None or payload.numeric_value is None:
-        c.numeric_value = payload.numeric_value
+    c.numeric_value = payload.numeric_value
+    if payload.is_active is not None:
+        c.is_active = payload.is_active
     db.commit()
     return _class_out(c)
 
@@ -78,7 +85,18 @@ def get_class_sections(class_id: uuid.UUID, db: Session = Depends(get_db), schoo
     if not c or c.school_id != school_id:
         raise not_found("Class not found")
     sections = db.execute(select(Section).where(Section.class_id == class_id).order_by(Section.name.asc())).scalars().all()
-    return [SectionOut(id=s.id, class_id=s.class_id, name=s.name, capacity=s.capacity, room_number=s.room_number) for s in sections]
+    return [
+        SectionOut(
+            id=s.id,
+            class_id=s.class_id,
+            name=s.name,
+            capacity=s.capacity,
+            stream_id=s.stream_id,
+            is_active=s.is_active,
+            room_number=s.room_number,
+        )
+        for s in sections
+    ]
 
 
 @router.get("/{class_id}/subjects", response_model=list[SubjectOut])
@@ -92,7 +110,21 @@ def get_class_subjects(class_id: uuid.UUID, db: Session = Depends(get_db), schoo
         .where(ClassSubject.class_id == class_id)
         .order_by(Subject.name.asc())
     ).scalars().all()
-    return [SubjectOut(id=s.id, school_id=s.school_id, name=s.name, code=s.code) for s in subjects]
+    return [
+        SubjectOut(
+            id=s.id,
+            school_id=s.school_id,
+            name=s.name,
+            code=s.code,
+            subject_type=s.subject_type,
+            credits=s.credits,
+            max_marks=s.max_marks,
+            group_id=s.group_id,
+            stream_id=s.stream_id,
+            is_active=s.is_active,
+        )
+        for s in subjects
+    ]
 
 
 @router.get("/{class_id}/students", include_in_schema=False)
@@ -103,4 +135,3 @@ def get_class_students() -> None:
 @router.get("/{class_id}/statistics", include_in_schema=False)
 def get_class_statistics() -> None:
     raise not_implemented("Class statistics are not implemented yet")
-
