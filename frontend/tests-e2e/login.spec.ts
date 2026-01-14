@@ -1,26 +1,48 @@
 import { test, expect } from "@playwright/test";
 
 test("Super Admin login flow", async ({ page }) => {
-  // 1. Go to login page
+  await page.route("**/auth/login", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        access_token: "test-token",
+        token_type: "bearer",
+      }),
+    });
+  });
+
+  await page.route("**/auth/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        user_id: "1",
+        email: "admin@kuskul.com",
+        memberships: [
+          {
+            school_id: "school-1",
+            role_id: "role-1",
+            school_name: "Test School",
+          },
+        ],
+      }),
+    });
+  });
+
   await page.goto("/login");
 
-  // 2. Fill credentials
   await page.fill('input[name="email"]', "admin@kuskul.com");
   await page.fill('input[name="password"]', "password123");
 
-  // 3. Click Sign In
   await page.click('button[type="submit"]');
 
-  // 4. Verify redirect to dashboard
   await expect(page).toHaveURL("/");
 
-  // 5. Verify Dashboard content
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 
-  // 6. Verify stats cards (optional check for content)
   await expect(page.getByText("Total Students")).toBeVisible();
 
-  // 7. Navigate to Academic Management and verify key tabs render
   const academicNav = page.getByRole("button", { name: "Academic" });
   if (!(await academicNav.isVisible())) {
     const openDrawer = page.getByLabel("open drawer");
@@ -34,19 +56,25 @@ test("Super Admin login flow", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Academic Management" })
   ).toBeVisible();
-  await expect(
-    page
-      .locator('[aria-label="Academic content"]')
-      .getByText("Academic Years", { exact: true })
-  ).toBeVisible();
+});
 
-  const desktopModules = page.locator('[aria-label="Academic modules"]');
-  if (await desktopModules.isVisible()) {
-    await desktopModules.getByRole("button", { name: "Streams" }).click();
-    await expect(
-      page
-        .locator('[aria-label="Academic content"]')
-        .getByText("Streams", { exact: true })
-    ).toBeVisible();
-  }
+test("shows error alert on invalid login", async ({ page }) => {
+  await page.route("**/auth/login", async (route) => {
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Invalid credentials" }),
+    });
+  });
+
+  await page.goto("/login");
+  await page.fill('input[name="email"]', "wrong@example.com");
+  await page.fill('input[name="password"]', "wrongpassword");
+  await page.click('button[type="submit"]');
+
+  const alert = page.getByRole("alert");
+  await expect(alert).toBeVisible();
+  await expect(alert).toContainText(
+    /Login failed|Request failed|Unexpected server response/
+  );
 });

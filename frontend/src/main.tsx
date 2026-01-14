@@ -10,6 +10,7 @@ import theme from "./theme/theme";
 
 import { store } from "./app/store";
 import { setupInterceptors } from "./api/interceptors";
+import { ToastProvider } from "./app/ToastProvider";
 
 setupInterceptors();
 
@@ -19,7 +20,9 @@ createRoot(document.getElementById("root")!).render(
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <BrowserRouter>
-          <App />
+          <ToastProvider>
+            <App />
+          </ToastProvider>
         </BrowserRouter>
       </ThemeProvider>
     </Provider>

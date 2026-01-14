@@ -110,7 +110,6 @@ export default function TimetableTab() {
       loadTimetable();
     } catch (e) {
       console.error(e);
-      alert("Failed to create entry");
     }
   };
 
