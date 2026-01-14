@@ -28,6 +28,22 @@ export async function createAcademicYear(data: {
   return resp.data;
 }
 
+export async function updateAcademicYear(
+  id: string,
+  data: {
+    name?: string;
+    start_date?: string;
+    end_date?: string;
+  }
+): Promise<AcademicYear> {
+  const resp = await api.put(`/academic-years/${id}`, data);
+  return resp.data;
+}
+
+export async function deleteAcademicYear(id: string): Promise<void> {
+  await api.delete(`/academic-years/${id}`);
+}
+
 export async function setCurrentAcademicYear(
   id: string
 ): Promise<AcademicYear> {
