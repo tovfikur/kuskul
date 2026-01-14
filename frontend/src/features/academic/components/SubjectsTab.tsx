@@ -21,7 +21,12 @@ import {
   Switch,
   FormControlLabel,
   Chip,
+  IconButton,
+  Tooltip,
+  DialogContentText,
 } from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import {
   getSubjects,
   createSubject,
@@ -29,6 +34,8 @@ import {
   getClasses,
   getStreams,
   getSubjectGroups,
+  updateSubject,
+  deleteSubject,
   type Subject,
   type SchoolClass,
   type Stream,
@@ -55,6 +62,23 @@ export default function SubjectsTab() {
 
   const [assignSubject, setAssignSubject] = useState<Subject | null>(null);
   const [selectedClassId, setSelectedClassId] = useState("");
+
+  const [editSubjectState, setEditSubjectState] = useState<Subject | null>(
+    null
+  );
+  const [deleteSubjectState, setDeleteSubjectState] = useState<Subject | null>(
+    null
+  );
+  const [editForm, setEditForm] = useState({
+    name: "",
+    code: "",
+    subject_type: "theory",
+    credits: "",
+    max_marks: "",
+    stream_id: "",
+    group_id: "",
+    is_active: true,
+  });
 
   const load = async () => {
     try {
@@ -106,6 +130,61 @@ export default function SubjectsTab() {
     }
   };
 
+  const handleOpenEdit = (s: Subject) => {
+    setEditSubjectState(s);
+    setEditForm({
+      name: s.name,
+      code: s.code ?? "",
+      subject_type: s.subject_type,
+      credits: s.credits != null ? String(s.credits) : "",
+      max_marks: s.max_marks != null ? String(s.max_marks) : "",
+      stream_id: s.stream_id ?? "",
+      group_id: s.group_id ?? "",
+      is_active: s.is_active,
+    });
+  };
+
+  const handleUpdate = async () => {
+    if (!editSubjectState) return;
+    try {
+      await updateSubject(editSubjectState.id, {
+        name: editForm.name,
+        code: editForm.code || null,
+        subject_type: editForm.subject_type,
+        credits: editForm.credits ? parseInt(editForm.credits) : null,
+        max_marks: editForm.max_marks ? parseInt(editForm.max_marks) : null,
+        stream_id: editForm.stream_id ? editForm.stream_id : null,
+        group_id: editForm.group_id ? editForm.group_id : null,
+        is_active: editForm.is_active,
+      });
+      setEditSubjectState(null);
+      setEditForm({
+        name: "",
+        code: "",
+        subject_type: "theory",
+        credits: "",
+        max_marks: "",
+        stream_id: "",
+        group_id: "",
+        is_active: true,
+      });
+      load();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteSubjectState) return;
+    try {
+      await deleteSubject(deleteSubjectState.id);
+      setDeleteSubjectState(null);
+      load();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleAssign = async () => {
     if (!assignSubject || !selectedClassId) return;
     try {
@@ -141,7 +220,7 @@ export default function SubjectsTab() {
               <TableCell>Stream</TableCell>
               <TableCell>Group</TableCell>
               <TableCell>Status</TableCell>
-              <TableCell>Actions</TableCell>
+              <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -161,10 +240,30 @@ export default function SubjectsTab() {
                     size="small"
                   />
                 </TableCell>
-                <TableCell>
-                  <Button size="small" onClick={() => setAssignSubject(row)}>
+                <TableCell align="right">
+                  <Button
+                    size="small"
+                    sx={{ mr: 1 }}
+                    onClick={() => setAssignSubject(row)}
+                  >
                     Assign to Class
                   </Button>
+                  <Tooltip title="Edit">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleOpenEdit(row)}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete">
+                    <IconButton
+                      size="small"
+                      onClick={() => setDeleteSubjectState(row)}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </TableCell>
               </TableRow>
             ))}
@@ -277,6 +376,200 @@ export default function SubjectsTab() {
           <Button onClick={() => setOpenCreate(false)}>Cancel</Button>
           <Button onClick={handleCreate} variant="contained">
             Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!editSubjectState}
+        onClose={() => {
+          setEditSubjectState(null);
+          setEditForm({
+            name: "",
+            code: "",
+            subject_type: "theory",
+            credits: "",
+            max_marks: "",
+            stream_id: "",
+            group_id: "",
+            is_active: true,
+          });
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit Subject</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Name"
+            fullWidth
+            margin="normal"
+            value={editForm.name}
+            onChange={(e) =>
+              setEditForm({
+                ...editForm,
+                name: e.target.value,
+              })
+            }
+          />
+          <TextField
+            label="Code"
+            fullWidth
+            margin="normal"
+            value={editForm.code}
+            onChange={(e) =>
+              setEditForm({
+                ...editForm,
+                code: e.target.value,
+              })
+            }
+          />
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Subject Type</InputLabel>
+            <Select
+              value={editForm.subject_type}
+              label="Subject Type"
+              onChange={(e) =>
+                setEditForm({
+                  ...editForm,
+                  subject_type: e.target.value,
+                })
+              }
+            >
+              <MenuItem value="theory">Theory</MenuItem>
+              <MenuItem value="practical">Practical</MenuItem>
+              <MenuItem value="lab">Lab</MenuItem>
+            </Select>
+          </FormControl>
+          <Box sx={{ display: "flex", gap: 2 }}>
+            <TextField
+              label="Credits"
+              type="number"
+              margin="normal"
+              value={editForm.credits}
+              onChange={(e) =>
+                setEditForm({
+                  ...editForm,
+                  credits: e.target.value,
+                })
+              }
+              sx={{ flex: 1 }}
+            />
+            <TextField
+              label="Max Marks"
+              type="number"
+              margin="normal"
+              value={editForm.max_marks}
+              onChange={(e) =>
+                setEditForm({
+                  ...editForm,
+                  max_marks: e.target.value,
+                })
+              }
+              sx={{ flex: 1 }}
+            />
+          </Box>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Stream</InputLabel>
+            <Select
+              value={editForm.stream_id}
+              label="Stream"
+              onChange={(e) =>
+                setEditForm({
+                  ...editForm,
+                  stream_id: e.target.value,
+                })
+              }
+            >
+              <MenuItem value="">None</MenuItem>
+              {streams.map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Subject Group</InputLabel>
+            <Select
+              value={editForm.group_id}
+              label="Subject Group"
+              onChange={(e) =>
+                setEditForm({
+                  ...editForm,
+                  group_id: e.target.value,
+                })
+              }
+            >
+              <MenuItem value="">None</MenuItem>
+              {groups.map((g) => (
+                <MenuItem key={g.id} value={g.id}>
+                  {g.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={editForm.is_active}
+                onChange={(e) =>
+                  setEditForm({
+                    ...editForm,
+                    is_active: e.target.checked,
+                  })
+                }
+              />
+            }
+            label="Active"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setEditSubjectState(null);
+              setEditForm({
+                name: "",
+                code: "",
+                subject_type: "theory",
+                credits: "",
+                max_marks: "",
+                stream_id: "",
+                group_id: "",
+                is_active: true,
+              });
+            }}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleUpdate} variant="contained">
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!deleteSubjectState}
+        onClose={() => setDeleteSubjectState(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete Subject</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete{" "}
+            <strong>{deleteSubjectState?.name}</strong>? This action cannot be
+            undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteSubjectState(null)}>Cancel</Button>
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
+            variant="contained"
+          >
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

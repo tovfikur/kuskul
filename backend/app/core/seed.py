@@ -1,7 +1,13 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.security import hash_password
+from app.models.membership import Membership
 from app.models.role import Role
+from app.models.school import School
+from app.models.user import User
 
 
 def ensure_default_roles(db: Session) -> None:
@@ -192,3 +198,36 @@ def ensure_default_roles(db: Session) -> None:
         seed_allow = set(((permissions or {}).get("allow", [])) if isinstance(permissions, dict) else [])
         role.permissions = {"allow": sorted(current_allow | seed_allow)}
     db.flush()
+
+
+def ensure_default_admin(db: Session) -> None:
+    email = "admin@kuskul.com"
+    password = "password123"
+    school_code = "KUSKUL_DEMO"
+    school_name = "KusKul Demo School"
+
+    existing_user = db.scalar(select(User).where(User.email == email))
+    if existing_user:
+        return
+
+    now = datetime.now(timezone.utc)
+    user = User(
+        email=email,
+        password_hash=hash_password(password),
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(user)
+
+    school = db.scalar(select(School).where(School.code == school_code))
+    if not school:
+        school = School(name=school_name, code=school_code, is_active=True, created_at=now)
+        db.add(school)
+
+    ensure_default_roles(db)
+    role = db.scalar(select(Role).where(Role.name == "admin"))
+    db.flush()
+    if role:
+        membership = Membership(user_id=user.id, school_id=school.id, role_id=role.id, is_active=True, created_at=now)
+        db.add(membership)

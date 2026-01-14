@@ -1,0 +1,56 @@
+# Global Python ignores
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+*.log
+*.sqlite3
+*.db
+.env
+.venv/
+venv/
+ENV/
+.envrc
+
+# VSCode
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test and coverage
+.coverage
+htmlcov/
+.tox/
+.nox/
+.cache/
+pytest_cache/
+
+# Alembic
+alembic/versions/__pycache__/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Misc
+*.bak
+*.swp
+*.swo
+
+# Ignore node_modules for frontend
+node_modules/
+
+# Ignore frontend build artifacts
+dist/
+build/
+
+# Ignore Playwright and Vitest outputs
+playwright-report/
+test-results/

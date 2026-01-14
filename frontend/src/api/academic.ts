@@ -80,6 +80,24 @@ export async function createTerm(data: {
   return resp.data;
 }
 
+export async function updateTerm(
+  id: string,
+  data: {
+    name?: string;
+    start_date?: string;
+    end_date?: string;
+    weightage?: number;
+    is_active?: boolean;
+  }
+): Promise<Term> {
+  const resp = await api.put(`/terms/${id}`, data);
+  return resp.data;
+}
+
+export async function deleteTerm(id: string): Promise<void> {
+  await api.delete(`/terms/${id}`);
+}
+
 export type Stream = {
   id: string;
   school_id: string;
@@ -98,6 +116,18 @@ export async function createStream(data: {
 }): Promise<Stream> {
   const resp = await api.post("/streams", data);
   return resp.data;
+}
+
+export async function updateStream(
+  id: string,
+  data: { name?: string; is_active?: boolean }
+): Promise<Stream> {
+  const resp = await api.put(`/streams/${id}`, data);
+  return resp.data;
+}
+
+export async function deleteStream(id: string): Promise<void> {
+  await api.delete(`/streams/${id}`);
 }
 
 export type SchoolClass = {
@@ -120,6 +150,22 @@ export async function createClass(data: {
 }): Promise<SchoolClass> {
   const resp = await api.post("/classes", data);
   return resp.data;
+}
+
+export async function updateClass(
+  id: string,
+  data: {
+    name?: string;
+    numeric_value?: number | null;
+    is_active?: boolean;
+  }
+): Promise<SchoolClass> {
+  const resp = await api.put(`/classes/${id}`, data);
+  return resp.data;
+}
+
+export async function deleteClass(id: string): Promise<void> {
+  await api.delete(`/classes/${id}`);
 }
 
 export type Section = {
@@ -149,6 +195,24 @@ export async function createSection(data: {
   return resp.data;
 }
 
+export async function updateSection(
+  id: string,
+  data: {
+    name?: string;
+    capacity?: number;
+    stream_id?: string | null;
+    is_active?: boolean;
+    room_number?: string | null;
+  }
+): Promise<Section> {
+  const resp = await api.put(`/sections/${id}`, data);
+  return resp.data;
+}
+
+export async function deleteSection(id: string): Promise<void> {
+  await api.delete(`/sections/${id}`);
+}
+
 export type SubjectGroup = {
   id: string;
   school_id: string;
@@ -174,6 +238,23 @@ export async function createSubjectGroup(data: {
 }): Promise<SubjectGroup> {
   const resp = await api.post("/subject-groups", data);
   return resp.data;
+}
+
+export async function updateSubjectGroup(
+  id: string,
+  data: {
+    name?: string;
+    class_id?: string | null;
+    stream_id?: string | null;
+    is_optional?: boolean;
+  }
+): Promise<SubjectGroup> {
+  const resp = await api.put(`/subject-groups/${id}`, data);
+  return resp.data;
+}
+
+export async function deleteSubjectGroup(id: string): Promise<void> {
+  await api.delete(`/subject-groups/${id}`);
 }
 
 export type Subject = {
@@ -206,6 +287,27 @@ export async function createSubject(data: {
 }): Promise<Subject> {
   const resp = await api.post("/subjects", data);
   return resp.data;
+}
+
+export async function updateSubject(
+  id: string,
+  data: {
+    name?: string;
+    code?: string | null;
+    subject_type?: string;
+    credits?: number | null;
+    max_marks?: number | null;
+    group_id?: string | null;
+    stream_id?: string | null;
+    is_active?: boolean;
+  }
+): Promise<Subject> {
+  const resp = await api.put(`/subjects/${id}`, data);
+  return resp.data;
+}
+
+export async function deleteSubject(id: string): Promise<void> {
+  await api.delete(`/subjects/${id}`);
 }
 
 export async function assignSubjectToClass(
@@ -245,6 +347,25 @@ export async function createTimeSlot(data: {
   return resp.data;
 }
 
+export async function updateTimeSlot(
+  id: string,
+  data: {
+    name?: string;
+    start_time?: string;
+    end_time?: string;
+    slot_type?: string;
+    shift?: string;
+    is_active?: boolean;
+  }
+): Promise<TimeSlot> {
+  const resp = await api.put(`/time-slots/${id}`, data);
+  return resp.data;
+}
+
+export async function deleteTimeSlot(id: string): Promise<void> {
+  await api.delete(`/time-slots/${id}`);
+}
+
 export type TimetableEntry = {
   id: string;
   academic_year_id: string;
@@ -278,6 +399,24 @@ export async function createTimetableEntry(data: {
   return resp.data;
 }
 
+export async function updateTimetableEntry(
+  id: string,
+  data: {
+    time_slot_id?: string;
+    day_of_week?: number;
+    subject_id?: string | null;
+    staff_id?: string | null;
+    room?: string | null;
+  }
+): Promise<TimetableEntry> {
+  const resp = await api.put(`/timetable/${id}`, data);
+  return resp.data;
+}
+
+export async function deleteTimetableEntry(id: string): Promise<void> {
+  await api.delete(`/timetable/${id}`);
+}
+
 export type TeacherAssignment = {
   id: string;
   academic_year_id: string;
@@ -308,6 +447,24 @@ export async function createTeacherAssignment(data: {
   return resp.data;
 }
 
+export async function updateTeacherAssignment(
+  id: string,
+  data: {
+    academic_year_id?: string;
+    staff_id?: string;
+    section_id?: string;
+    subject_id?: string;
+    is_active?: boolean;
+  }
+): Promise<TeacherAssignment> {
+  const resp = await api.put(`/teacher-assignments/${id}`, data);
+  return resp.data;
+}
+
+export async function deleteTeacherAssignment(id: string): Promise<void> {
+  await api.delete(`/teacher-assignments/${id}`);
+}
+
 export type Grade = {
   id: string;
   school_id: string;
@@ -328,6 +485,22 @@ export async function createGrade(data: {
 }): Promise<Grade> {
   const resp = await api.post("/grades", data);
   return resp.data;
+}
+
+export async function updateGrade(
+  id: string,
+  data: {
+    name?: string;
+    min_percentage?: number;
+    max_percentage?: number;
+  }
+): Promise<Grade> {
+  const resp = await api.put(`/grades/${id}`, data);
+  return resp.data;
+}
+
+export async function deleteGrade(id: string): Promise<void> {
+  await api.delete(`/grades/${id}`);
 }
 
 export type CurriculumUnit = {
@@ -356,6 +529,22 @@ export async function createCurriculumUnit(data: {
 }): Promise<CurriculumUnit> {
   const resp = await api.post("/curriculum", data);
   return resp.data;
+}
+
+export async function updateCurriculumUnit(
+  id: string,
+  data: {
+    title?: string;
+    description?: string | null;
+    order_index?: number;
+  }
+): Promise<CurriculumUnit> {
+  const resp = await api.put(`/curriculum/${id}`, data);
+  return resp.data;
+}
+
+export async function deleteCurriculumUnit(id: string): Promise<void> {
+  await api.delete(`/curriculum/${id}`);
 }
 
 export type AcademicCalendarSettings = {

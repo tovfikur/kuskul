@@ -19,6 +19,8 @@ import {
   InputLabel,
   CircularProgress,
 } from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import {
   getClasses,
   getSections,
@@ -27,6 +29,8 @@ import {
   getTimetable,
   getCurrentAcademicYear,
   createTimetableEntry,
+  updateTimetableEntry,
+  deleteTimetableEntry,
   type SchoolClass,
   type Section,
   type Subject,
@@ -51,6 +55,14 @@ export default function TimetableTab() {
   // Create Entry State
   const [openCreate, setOpenCreate] = useState(false);
   const [entryForm, setEntryForm] = useState({
+    day_of_week: 0,
+    time_slot_id: "",
+    subject_id: "",
+    staff_id: "",
+  });
+  const [editEntry, setEditEntry] = useState<TimetableEntry | null>(null);
+  const [deleteEntry, setDeleteEntry] = useState<TimetableEntry | null>(null);
+  const [editEntryForm, setEditEntryForm] = useState({
     day_of_week: 0,
     time_slot_id: "",
     subject_id: "",
@@ -107,6 +119,49 @@ export default function TimetableTab() {
         staff_id: entryForm.staff_id ? entryForm.staff_id : null,
       });
       setOpenCreate(false);
+      loadTimetable();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleOpenEdit = (row: TimetableEntry) => {
+    setEditEntry(row);
+    setEditEntryForm({
+      day_of_week: row.day_of_week,
+      time_slot_id: row.time_slot_id,
+      subject_id: row.subject_id || "",
+      staff_id: row.staff_id || "",
+    });
+  };
+
+  const handleUpdate = async () => {
+    if (!editEntry) return;
+    try {
+      await updateTimetableEntry(editEntry.id, {
+        day_of_week: editEntryForm.day_of_week,
+        time_slot_id: editEntryForm.time_slot_id,
+        subject_id: editEntryForm.subject_id ? editEntryForm.subject_id : null,
+        staff_id: editEntryForm.staff_id ? editEntryForm.staff_id : null,
+      });
+      setEditEntry(null);
+      setEditEntryForm({
+        day_of_week: 0,
+        time_slot_id: "",
+        subject_id: "",
+        staff_id: "",
+      });
+      loadTimetable();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteEntry) return;
+    try {
+      await deleteTimetableEntry(deleteEntry.id);
+      setDeleteEntry(null);
       loadTimetable();
     } catch (e) {
       console.error(e);
@@ -172,12 +227,13 @@ export default function TimetableTab() {
                   <TableCell>Subject</TableCell>
                   <TableCell>Teacher</TableCell>
                   <TableCell>Room</TableCell>
+                  <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={5} align="center">
+                    <TableCell colSpan={6} align="center">
                       <CircularProgress />
                     </TableCell>
                   </TableRow>
@@ -200,12 +256,30 @@ export default function TimetableTab() {
                           {st ? `${st.first_name} ${st.last_name}` : "-"}
                         </TableCell>
                         <TableCell>{row.room || "-"}</TableCell>
+                        <TableCell align="right">
+                          <Button
+                            size="small"
+                            startIcon={<EditIcon fontSize="small" />}
+                            onClick={() => handleOpenEdit(row)}
+                            sx={{ mr: 1 }}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size="small"
+                            color="error"
+                            startIcon={<DeleteIcon fontSize="small" />}
+                            onClick={() => setDeleteEntry(row)}
+                          >
+                            Delete
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
                 {!loading && entries.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5}>
+                    <TableCell colSpan={6}>
                       No timetable entries found.
                     </TableCell>
                   </TableRow>
@@ -291,6 +365,139 @@ export default function TimetableTab() {
           <Button onClick={() => setOpenCreate(false)}>Cancel</Button>
           <Button onClick={handleCreate} variant="contained">
             Add
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!editEntry}
+        onClose={() => {
+          setEditEntry(null);
+          setEditEntryForm({
+            day_of_week: 0,
+            time_slot_id: "",
+            subject_id: "",
+            staff_id: "",
+          });
+        }}
+      >
+        <DialogTitle>Edit Timetable Entry</DialogTitle>
+        <DialogContent sx={{ minWidth: 300 }}>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Day</InputLabel>
+            <Select
+              value={editEntryForm.day_of_week}
+              label="Day"
+              onChange={(e) =>
+                setEditEntryForm({
+                  ...editEntryForm,
+                  day_of_week: e.target.value as number,
+                })
+              }
+            >
+              {days.map((d, i) => (
+                <MenuItem key={i} value={i}>
+                  {d}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Time Slot</InputLabel>
+            <Select
+              value={editEntryForm.time_slot_id}
+              label="Time Slot"
+              onChange={(e) =>
+                setEditEntryForm({
+                  ...editEntryForm,
+                  time_slot_id: e.target.value,
+                })
+              }
+            >
+              {timeSlots.map((t) => (
+                <MenuItem key={t.id} value={t.id}>
+                  {t.name} ({t.start_time}-{t.end_time})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Subject</InputLabel>
+            <Select
+              value={editEntryForm.subject_id}
+              label="Subject"
+              onChange={(e) =>
+                setEditEntryForm({
+                  ...editEntryForm,
+                  subject_id: e.target.value,
+                })
+              }
+            >
+              {subjects.map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Teacher</InputLabel>
+            <Select
+              value={editEntryForm.staff_id}
+              label="Teacher"
+              onChange={(e) =>
+                setEditEntryForm({
+                  ...editEntryForm,
+                  staff_id: e.target.value,
+                })
+              }
+            >
+              {staffList.map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.first_name} {s.last_name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setEditEntry(null);
+              setEditEntryForm({
+                day_of_week: 0,
+                time_slot_id: "",
+                subject_id: "",
+                staff_id: "",
+              });
+            }}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleUpdate} variant="contained">
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!deleteEntry}
+        onClose={() => setDeleteEntry(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete Timetable Entry</DialogTitle>
+        <DialogContent>
+          <Box>Are you sure you want to delete this entry?</Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteEntry(null)}>Cancel</Button>
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
+            variant="contained"
+          >
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

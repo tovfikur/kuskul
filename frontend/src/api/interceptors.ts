@@ -186,11 +186,13 @@ export function setupInterceptors() {
         return Promise.reject(error);
       }
 
-      if (original.url?.includes("/auth/refresh")) {
+      const url = original.url ?? "";
+
+      if (url.includes("/auth/refresh")) {
         return Promise.reject(error);
       }
 
-      if (status === 401 && !original._retry) {
+      if (status === 401 && !original._retry && !url.includes("/auth/login")) {
         original._retry = true;
         try {
           if (!refreshPromise) {

@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.rate_limit import InMemoryRateLimiter, RateLimitRule
 from app.core.security import decode_access_token
 from app.core.audit import write_audit_log
+from app.core.seed import ensure_default_admin
 from app.db.session import SessionLocal
 
 
@@ -114,6 +115,15 @@ def create_app() -> FastAPI:
         return RedirectResponse(url="/openapi.json")
 
     app.include_router(api_router, prefix=settings.api_v1_prefix)
+
+    db = SessionLocal()
+    try:
+        ensure_default_admin(db)
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
 
     app.add_middleware(
         CORSMiddleware,

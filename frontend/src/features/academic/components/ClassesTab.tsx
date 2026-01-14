@@ -24,12 +24,21 @@ import {
   MenuItem,
   FormControlLabel,
   Switch,
+  IconButton,
+  Tooltip,
+  DialogContentText,
 } from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import {
   getClasses,
   createClass,
+  updateClass,
+  deleteClass,
   getSections,
   createSection,
+  updateSection,
+  deleteSection,
   getStreams,
   type SchoolClass,
   type Section,
@@ -40,7 +49,15 @@ export default function ClassesTab() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [streams, setStreams] = useState<Stream[]>([]);
   const [openClassDialog, setOpenClassDialog] = useState(false);
+  const [editClass, setEditClass] = useState<SchoolClass | null>(null);
+  const [deleteClassTarget, setDeleteClassTarget] =
+    useState<SchoolClass | null>(null);
   const [classForm, setClassForm] = useState({
+    name: "",
+    numeric_value: 0,
+    is_active: true,
+  });
+  const [editClassForm, setEditClassForm] = useState({
     name: "",
     numeric_value: 0,
     is_active: true,
@@ -49,6 +66,15 @@ export default function ClassesTab() {
   const [selectedClass, setSelectedClass] = useState<SchoolClass | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
   const [sectionForm, setSectionForm] = useState({
+    name: "",
+    capacity: 40,
+    stream_id: "",
+    is_active: true,
+  });
+  const [editSection, setEditSection] = useState<Section | null>(null);
+  const [deleteSectionTarget, setDeleteSectionTarget] =
+    useState<Section | null>(null);
+  const [editSectionForm, setEditSectionForm] = useState({
     name: "",
     capacity: 40,
     stream_id: "",
@@ -74,6 +100,50 @@ export default function ClassesTab() {
     try {
       await createClass(classForm);
       setOpenClassDialog(false);
+      loadClasses();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleOpenEditClass = (cls: SchoolClass) => {
+    setEditClass(cls);
+    setEditClassForm({
+      name: cls.name,
+      numeric_value: cls.numeric_value ?? 0,
+      is_active: cls.is_active,
+    });
+  };
+
+  const handleUpdateClass = async () => {
+    if (!editClass) return;
+    try {
+      await updateClass(editClass.id, {
+        name: editClassForm.name,
+        numeric_value: editClassForm.numeric_value,
+        is_active: editClassForm.is_active,
+      });
+      setEditClass(null);
+      setEditClassForm({
+        name: "",
+        numeric_value: 0,
+        is_active: true,
+      });
+      loadClasses();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleConfirmDeleteClass = async () => {
+    if (!deleteClassTarget) return;
+    try {
+      await deleteClass(deleteClassTarget.id);
+      setDeleteClassTarget(null);
+      if (selectedClass && selectedClass.id === deleteClassTarget.id) {
+        setSelectedClass(null);
+        setSections([]);
+      }
       loadClasses();
     } catch (e) {
       console.error(e);
@@ -114,6 +184,55 @@ export default function ClassesTab() {
     }
   };
 
+  const handleOpenEditSection = (sec: Section) => {
+    setEditSection(sec);
+    setEditSectionForm({
+      name: sec.name,
+      capacity: sec.capacity,
+      stream_id: sec.stream_id ?? "",
+      is_active: sec.is_active,
+    });
+  };
+
+  const handleUpdateSection = async () => {
+    if (!editSection) return;
+    try {
+      await updateSection(editSection.id, {
+        name: editSectionForm.name,
+        capacity: editSectionForm.capacity,
+        stream_id: editSectionForm.stream_id ? editSectionForm.stream_id : null,
+        is_active: editSectionForm.is_active,
+      });
+      setEditSection(null);
+      setEditSectionForm({
+        name: "",
+        capacity: 40,
+        stream_id: "",
+        is_active: true,
+      });
+      if (selectedClass) {
+        const data = await getSections(selectedClass.id);
+        setSections(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleConfirmDeleteSection = async () => {
+    if (!deleteSectionTarget) return;
+    try {
+      await deleteSection(deleteSectionTarget.id);
+      setDeleteSectionTarget(null);
+      if (selectedClass) {
+        const data = await getSections(selectedClass.id);
+        setSections(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <Box>
       <Box sx={{ mb: 2, display: "flex", justifyContent: "flex-end" }}>
@@ -128,7 +247,8 @@ export default function ClassesTab() {
               <TableCell>Name</TableCell>
               <TableCell>Class Level</TableCell>
               <TableCell>Status</TableCell>
-              <TableCell>Actions</TableCell>
+              <TableCell>Sections</TableCell>
+              <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -142,11 +262,29 @@ export default function ClassesTab() {
                     Manage Sections
                   </Button>
                 </TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Edit Class">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleOpenEditClass(row)}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete Class">
+                    <IconButton
+                      size="small"
+                      onClick={() => setDeleteClassTarget(row)}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
               </TableRow>
             ))}
             {classes.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4}>No classes found.</TableCell>
+                <TableCell colSpan={5}>No classes found.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -193,6 +331,103 @@ export default function ClassesTab() {
           <Button onClick={() => setOpenClassDialog(false)}>Cancel</Button>
           <Button onClick={handleCreateClass} variant="contained">
             Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!editClass}
+        onClose={() => {
+          setEditClass(null);
+          setEditClassForm({
+            name: "",
+            numeric_value: 0,
+            is_active: true,
+          });
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit Class</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Name"
+            fullWidth
+            margin="normal"
+            value={editClassForm.name}
+            onChange={(e) =>
+              setEditClassForm({ ...editClassForm, name: e.target.value })
+            }
+          />
+          <TextField
+            label="Class Level (number)"
+            type="number"
+            fullWidth
+            margin="normal"
+            value={editClassForm.numeric_value}
+            onChange={(e) =>
+              setEditClassForm({
+                ...editClassForm,
+                numeric_value: parseInt(e.target.value || "0"),
+              })
+            }
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={editClassForm.is_active}
+                onChange={(e) =>
+                  setEditClassForm({
+                    ...editClassForm,
+                    is_active: e.target.checked,
+                  })
+                }
+              />
+            }
+            label="Active"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setEditClass(null);
+              setEditClassForm({
+                name: "",
+                numeric_value: 0,
+                is_active: true,
+              });
+            }}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleUpdateClass} variant="contained">
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!deleteClassTarget}
+        onClose={() => setDeleteClassTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete Class</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete{" "}
+            <strong>{deleteClassTarget?.name}</strong>? This action cannot be
+            undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteClassTarget(null)}>Cancel</Button>
+          <Button
+            onClick={handleConfirmDeleteClass}
+            color="error"
+            variant="contained"
+          >
+            Delete
           </Button>
         </DialogActions>
       </Dialog>
@@ -266,7 +501,32 @@ export default function ClassesTab() {
           </Box>
           <List>
             {sections.map((sec) => (
-              <ListItem key={sec.id} divider>
+              <ListItem
+                key={sec.id}
+                divider
+                secondaryAction={
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Tooltip title="Edit Section">
+                      <IconButton
+                        edge="end"
+                        size="small"
+                        onClick={() => handleOpenEditSection(sec)}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Delete Section">
+                      <IconButton
+                        edge="end"
+                        size="small"
+                        onClick={() => setDeleteSectionTarget(sec)}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                }
+              >
                 <ListItemText
                   primary={`${sec.name} (Capacity: ${sec.capacity})`}
                   secondary={
@@ -287,6 +547,133 @@ export default function ClassesTab() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSelectedClass(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!editSection}
+        onClose={() => {
+          setEditSection(null);
+          setEditSectionForm({
+            name: "",
+            capacity: 40,
+            stream_id: "",
+            is_active: true,
+          });
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit Section</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: "flex", gap: 1, mb: 2, mt: 1 }}>
+            <TextField
+              label="Section Name"
+              size="small"
+              fullWidth
+              value={editSectionForm.name}
+              onChange={(e) =>
+                setEditSectionForm({
+                  ...editSectionForm,
+                  name: e.target.value,
+                })
+              }
+            />
+            <TextField
+              label="Capacity"
+              size="small"
+              type="number"
+              value={editSectionForm.capacity}
+              onChange={(e) =>
+                setEditSectionForm({
+                  ...editSectionForm,
+                  capacity: parseInt(e.target.value || "0"),
+                })
+              }
+              sx={{ width: 120 }}
+            />
+          </Box>
+          <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel>Stream</InputLabel>
+              <Select
+                value={editSectionForm.stream_id}
+                label="Stream"
+                onChange={(e) =>
+                  setEditSectionForm({
+                    ...editSectionForm,
+                    stream_id: e.target.value,
+                  })
+                }
+              >
+                <MenuItem value="">None</MenuItem>
+                {streams.map((st) => (
+                  <MenuItem key={st.id} value={st.id}>
+                    {st.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={editSectionForm.is_active}
+                  onChange={(e) =>
+                    setEditSectionForm({
+                      ...editSectionForm,
+                      is_active: e.target.checked,
+                    })
+                  }
+                />
+              }
+              label="Active"
+              sx={{ ml: 1 }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setEditSection(null);
+              setEditSectionForm({
+                name: "",
+                capacity: 40,
+                stream_id: "",
+                is_active: true,
+              });
+            }}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleUpdateSection} variant="contained">
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!deleteSectionTarget}
+        onClose={() => setDeleteSectionTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete Section</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete{" "}
+            <strong>{deleteSectionTarget?.name}</strong>? This action cannot be
+            undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteSectionTarget(null)}>Cancel</Button>
+          <Button
+            onClick={handleConfirmDeleteSection}
+            color="error"
+            variant="contained"
+          >
+            Delete
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

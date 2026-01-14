@@ -21,12 +21,19 @@ import {
   TableHead,
   TableRow,
   TextField,
+  IconButton,
+  Tooltip,
+  DialogContentText,
 } from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import {
   createSubjectGroup,
   getClasses,
   getStreams,
   getSubjectGroups,
+  updateSubjectGroup,
+  deleteSubjectGroup,
   type SchoolClass,
   type Stream,
   type SubjectGroup,
@@ -39,6 +46,15 @@ export default function SubjectGroupsTab() {
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
+    name: "",
+    class_id: "",
+    stream_id: "",
+    is_optional: false,
+  });
+
+  const [editGroup, setEditGroup] = useState<SubjectGroup | null>(null);
+  const [deleteGroupTarget, setDeleteGroupTarget] = useState<SubjectGroup | null>(null);
+  const [editForm, setEditForm] = useState({
     name: "",
     class_id: "",
     stream_id: "",
@@ -80,6 +96,49 @@ export default function SubjectGroupsTab() {
     }
   };
 
+  const handleOpenEdit = (g: SubjectGroup) => {
+    setEditGroup(g);
+    setEditForm({
+      name: g.name,
+      class_id: g.class_id ?? "",
+      stream_id: g.stream_id ?? "",
+      is_optional: g.is_optional,
+    });
+  };
+
+  const handleUpdate = async () => {
+    if (!editGroup) return;
+    try {
+      await updateSubjectGroup(editGroup.id, {
+        name: editForm.name,
+        class_id: editForm.class_id ? editForm.class_id : null,
+        stream_id: editForm.stream_id ? editForm.stream_id : null,
+        is_optional: editForm.is_optional,
+      });
+      setEditGroup(null);
+      setEditForm({
+        name: "",
+        class_id: "",
+        stream_id: "",
+        is_optional: false,
+      });
+      load();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteGroupTarget) return;
+    try {
+      await deleteSubjectGroup(deleteGroupTarget.id);
+      setDeleteGroupTarget(null);
+      load();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const className = (id: string | null) =>
     classes.find((c) => c.id === id)?.name || "-";
   const streamName = (id: string | null) =>
@@ -101,6 +160,7 @@ export default function SubjectGroupsTab() {
               <TableCell>Class</TableCell>
               <TableCell>Stream</TableCell>
               <TableCell>Type</TableCell>
+              <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -116,11 +176,26 @@ export default function SubjectGroupsTab() {
                     size="small"
                   />
                 </TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Edit">
+                    <IconButton size="small" onClick={() => handleOpenEdit(g)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete">
+                    <IconButton
+                      size="small"
+                      onClick={() => setDeleteGroupTarget(g)}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
               </TableRow>
             ))}
             {groups.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4}>No subject groups found.</TableCell>
+                <TableCell colSpan={5}>No subject groups found.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -188,6 +263,135 @@ export default function SubjectGroupsTab() {
           <Button onClick={() => setOpen(false)}>Cancel</Button>
           <Button onClick={handleCreate} variant="contained">
             Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!editGroup}
+        onClose={() => {
+          setEditGroup(null);
+          setEditForm({
+            name: "",
+            class_id: "",
+            stream_id: "",
+            is_optional: false,
+          });
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit Subject Group</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Group Name"
+            fullWidth
+            margin="normal"
+            value={editForm.name}
+            onChange={(e) =>
+              setEditForm({
+                ...editForm,
+                name: e.target.value,
+              })
+            }
+          />
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Class (optional)</InputLabel>
+            <Select
+              value={editForm.class_id}
+              label="Class (optional)"
+              onChange={(e) =>
+                setEditForm({
+                  ...editForm,
+                  class_id: e.target.value,
+                })
+              }
+            >
+              <MenuItem value="">None</MenuItem>
+              {classes.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Stream (optional)</InputLabel>
+            <Select
+              value={editForm.stream_id}
+              label="Stream (optional)"
+              onChange={(e) =>
+                setEditForm({
+                  ...editForm,
+                  stream_id: e.target.value,
+                })
+              }
+            >
+              <MenuItem value="">None</MenuItem>
+              {streams.map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={editForm.is_optional}
+                onChange={(e) =>
+                  setEditForm({
+                    ...editForm,
+                    is_optional: e.target.checked,
+                  })
+                }
+              />
+            }
+            label="Optional group"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setEditGroup(null);
+              setEditForm({
+                name: "",
+                class_id: "",
+                stream_id: "",
+                is_optional: false,
+              });
+            }}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleUpdate} variant="contained">
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!deleteGroupTarget}
+        onClose={() => setDeleteGroupTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete Subject Group</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete{" "}
+            <strong>{deleteGroupTarget?.name}</strong>? This action cannot be
+            undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteGroupTarget(null)}>Cancel</Button>
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
+            variant="contained"
+          >
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

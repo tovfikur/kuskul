@@ -19,11 +19,15 @@ import {
   TableRow,
   TextField,
 } from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import {
   createCurriculumUnit,
   getAcademicYears,
   getCurriculum,
   getSubjects,
+  updateCurriculumUnit,
+  deleteCurriculumUnit,
   type AcademicYear,
   type CurriculumUnit,
   type Subject,
@@ -38,6 +42,13 @@ export default function CurriculumTab() {
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
+    title: "",
+    description: "",
+    order_index: "0",
+  });
+  const [editUnit, setEditUnit] = useState<CurriculumUnit | null>(null);
+  const [deleteUnit, setDeleteUnit] = useState<CurriculumUnit | null>(null);
+  const [editForm, setEditForm] = useState({
     title: "",
     description: "",
     order_index: "0",
@@ -81,6 +92,42 @@ export default function CurriculumTab() {
       });
       setOpen(false);
       setForm({ title: "", description: "", order_index: "0" });
+      load();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleOpenEdit = (unit: CurriculumUnit) => {
+    setEditUnit(unit);
+    setEditForm({
+      title: unit.title,
+      description: unit.description || "",
+      order_index: String(unit.order_index),
+    });
+  };
+
+  const handleUpdate = async () => {
+    if (!editUnit) return;
+    try {
+      await updateCurriculumUnit(editUnit.id, {
+        title: editForm.title,
+        description: editForm.description || null,
+        order_index: parseInt(editForm.order_index || "0"),
+      });
+      setEditUnit(null);
+      setEditForm({ title: "", description: "", order_index: "0" });
+      load();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteUnit) return;
+    try {
+      await deleteCurriculumUnit(deleteUnit.id);
+      setDeleteUnit(null);
       load();
     } catch (e) {
       console.error(e);
@@ -145,6 +192,7 @@ export default function CurriculumTab() {
               <TableCell>Order</TableCell>
               <TableCell>Title</TableCell>
               <TableCell>Description</TableCell>
+              <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -153,11 +201,29 @@ export default function CurriculumTab() {
                 <TableCell>{u.order_index}</TableCell>
                 <TableCell>{u.title}</TableCell>
                 <TableCell>{u.description || "-"}</TableCell>
+                <TableCell align="right">
+                  <Button
+                    size="small"
+                    startIcon={<EditIcon fontSize="small" />}
+                    onClick={() => handleOpenEdit(u)}
+                    sx={{ mr: 1 }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="small"
+                    color="error"
+                    startIcon={<DeleteIcon fontSize="small" />}
+                    onClick={() => setDeleteUnit(u)}
+                  >
+                    Delete
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
             {units.length === 0 && (
               <TableRow>
-                <TableCell colSpan={3}>No curriculum units found.</TableCell>
+                <TableCell colSpan={4}>No curriculum units found.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -205,6 +271,92 @@ export default function CurriculumTab() {
             disabled={!form.title}
           >
             Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!editUnit}
+        onClose={() => {
+          setEditUnit(null);
+          setEditForm({ title: "", description: "", order_index: "0" });
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit Curriculum Unit</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Title"
+            fullWidth
+            margin="normal"
+            value={editForm.title}
+            onChange={(e) =>
+              setEditForm({ ...editForm, title: e.target.value })
+            }
+          />
+          <TextField
+            label="Description"
+            fullWidth
+            margin="normal"
+            multiline
+            minRows={3}
+            value={editForm.description}
+            onChange={(e) =>
+              setEditForm({ ...editForm, description: e.target.value })
+            }
+          />
+          <TextField
+            label="Order"
+            type="number"
+            fullWidth
+            margin="normal"
+            value={editForm.order_index}
+            onChange={(e) =>
+              setEditForm({ ...editForm, order_index: e.target.value })
+            }
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setEditUnit(null);
+              setEditForm({ title: "", description: "", order_index: "0" });
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleUpdate}
+            variant="contained"
+            disabled={!editForm.title}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!deleteUnit}
+        onClose={() => setDeleteUnit(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete Curriculum Unit</DialogTitle>
+        <DialogContent>
+          <Box>
+            Are you sure you want to delete{" "}
+            <strong>{deleteUnit?.title}</strong>?
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteUnit(null)}>Cancel</Button>
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
+            variant="contained"
+          >
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

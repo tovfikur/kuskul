@@ -7,6 +7,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  DialogContentText,
   FormControl,
   InputLabel,
   MenuItem,
@@ -21,11 +22,17 @@ import {
   TableHead,
   TableRow,
   TextField,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import {
   createTerm,
   getAcademicYears,
   getTerms,
+  updateTerm,
+  deleteTerm,
   type AcademicYear,
   type Term,
 } from "../../../api/academic";
@@ -35,7 +42,16 @@ export default function TermsTab() {
   const [yearId, setYearId] = useState("");
   const [terms, setTerms] = useState<Term[]>([]);
   const [open, setOpen] = useState(false);
+  const [editTermState, setEditTermState] = useState<Term | null>(null);
+  const [deleteTermState, setDeleteTermState] = useState<Term | null>(null);
   const [form, setForm] = useState({
+    name: "",
+    start_date: "",
+    end_date: "",
+    weightage: "0",
+    is_active: true,
+  });
+  const [editForm, setEditForm] = useState({
     name: "",
     start_date: "",
     end_date: "",
@@ -90,6 +106,52 @@ export default function TermsTab() {
     }
   };
 
+  const handleOpenEdit = (term: Term) => {
+    setEditTermState(term);
+    setEditForm({
+      name: term.name,
+      start_date: term.start_date.slice(0, 10),
+      end_date: term.end_date.slice(0, 10),
+      weightage: String(term.weightage ?? 0),
+      is_active: term.is_active,
+    });
+  };
+
+  const handleUpdate = async () => {
+    if (!editTermState) return;
+    try {
+      await updateTerm(editTermState.id, {
+        name: editForm.name,
+        start_date: editForm.start_date,
+        end_date: editForm.end_date,
+        weightage: parseInt(editForm.weightage || "0"),
+        is_active: editForm.is_active,
+      });
+      setEditTermState(null);
+      setEditForm({
+        name: "",
+        start_date: "",
+        end_date: "",
+        weightage: "0",
+        is_active: true,
+      });
+      loadTerms(yearId);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTermState) return;
+    try {
+      await deleteTerm(deleteTermState.id);
+      setDeleteTermState(null);
+      loadTerms(yearId);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <Box>
       <Box
@@ -134,6 +196,7 @@ export default function TermsTab() {
               <TableCell>End</TableCell>
               <TableCell>Weightage</TableCell>
               <TableCell>Status</TableCell>
+              <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -154,11 +217,29 @@ export default function TermsTab() {
                     size="small"
                   />
                 </TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Edit">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleOpenEdit(t)}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete">
+                    <IconButton
+                      size="small"
+                      onClick={() => setDeleteTermState(t)}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
               </TableRow>
             ))}
             {terms.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5}>No terms found.</TableCell>
+                <TableCell colSpan={6}>No terms found.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -188,7 +269,9 @@ export default function TermsTab() {
               margin="normal"
               InputLabelProps={{ shrink: true }}
               value={form.start_date}
-              onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, start_date: e.target.value })
+              }
             />
             <TextField
               type="date"
@@ -224,6 +307,118 @@ export default function TermsTab() {
           <Button onClick={() => setOpen(false)}>Cancel</Button>
           <Button onClick={handleCreate} variant="contained">
             Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!editTermState}
+        onClose={() => setEditTermState(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit Term / Semester</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Name"
+            fullWidth
+            margin="normal"
+            value={editForm.name}
+            onChange={(e) =>
+              setEditForm({ ...editForm, name: e.target.value })
+            }
+          />
+          <Box sx={{ display: "flex", gap: 2 }}>
+            <TextField
+              type="date"
+              label="Start Date"
+              fullWidth
+              margin="normal"
+              InputLabelProps={{ shrink: true }}
+              value={editForm.start_date}
+              onChange={(e) =>
+                setEditForm({ ...editForm, start_date: e.target.value })
+              }
+            />
+            <TextField
+              type="date"
+              label="End Date"
+              fullWidth
+              margin="normal"
+              InputLabelProps={{ shrink: true }}
+              value={editForm.end_date}
+              onChange={(e) =>
+                setEditForm({ ...editForm, end_date: e.target.value })
+              }
+            />
+          </Box>
+          <TextField
+            label="Weightage (%)"
+            type="number"
+            fullWidth
+            margin="normal"
+            value={editForm.weightage}
+            onChange={(e) =>
+              setEditForm({ ...editForm, weightage: e.target.value })
+            }
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={editForm.is_active}
+                onChange={(e) =>
+                  setEditForm({
+                    ...editForm,
+                    is_active: e.target.checked,
+                  })
+                }
+              />
+            }
+            label="Active"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setEditTermState(null);
+              setEditForm({
+                name: "",
+                start_date: "",
+                end_date: "",
+                weightage: "0",
+                is_active: true,
+              });
+            }}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleUpdate} variant="contained">
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!deleteTermState}
+        onClose={() => setDeleteTermState(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete Term / Semester</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete <strong>{deleteTermState?.name}</strong>?
+            This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTermState(null)}>Cancel</Button>
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
+            variant="contained"
+          >
+            Delete
           </Button>
         </DialogActions>
       </Dialog>
