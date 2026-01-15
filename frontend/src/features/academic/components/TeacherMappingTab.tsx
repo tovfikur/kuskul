@@ -26,6 +26,8 @@ import {
   getSections,
   getSubjects,
   getTeacherAssignments,
+  updateTeacherAssignment,
+  deleteTeacherAssignment,
   type AcademicYear,
   type SchoolClass,
   type Section,
@@ -52,6 +54,16 @@ export default function TeacherMappingTab() {
     section_id: "",
     subject_id: "",
   });
+
+  const [editAssignment, setEditAssignment] =
+    useState<TeacherAssignment | null>(null);
+  const [editForm, setEditForm] = useState({
+    staff_id: "",
+    section_id: "",
+    subject_id: "",
+  });
+  const [deleteAssignment, setDeleteAssignment] =
+    useState<TeacherAssignment | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -106,6 +118,46 @@ export default function TeacherMappingTab() {
       });
       setOpen(false);
       setForm({ staff_id: "", section_id: "", subject_id: "" });
+      loadAssignments();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleOpenEdit = (assignment: TeacherAssignment) => {
+    setEditAssignment(assignment);
+    setEditForm({
+      staff_id: assignment.staff_id,
+      section_id: assignment.section_id,
+      subject_id: assignment.subject_id,
+    });
+  };
+
+  const handleUpdate = async () => {
+    if (!editAssignment) return;
+    try {
+      await updateTeacherAssignment(editAssignment.id, {
+        staff_id: editForm.staff_id,
+        section_id: editForm.section_id,
+        subject_id: editForm.subject_id,
+      });
+      setEditAssignment(null);
+      setEditForm({
+        staff_id: "",
+        section_id: "",
+        subject_id: "",
+      });
+      loadAssignments();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteAssignment) return;
+    try {
+      await deleteTeacherAssignment(deleteAssignment.id);
+      setDeleteAssignment(null);
       loadAssignments();
     } catch (e) {
       console.error(e);
@@ -199,6 +251,7 @@ export default function TeacherMappingTab() {
               <TableCell>Subject</TableCell>
               <TableCell>Teacher</TableCell>
               <TableCell>Status</TableCell>
+              <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -214,11 +267,27 @@ export default function TeacherMappingTab() {
                     size="small"
                   />
                 </TableCell>
+                <TableCell align="right">
+                  <Button
+                    size="small"
+                    sx={{ mr: 1 }}
+                    onClick={() => handleOpenEdit(a)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="small"
+                    color="error"
+                    onClick={() => setDeleteAssignment(a)}
+                  >
+                    Delete
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
             {assignments.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4}>No mappings found.</TableCell>
+                <TableCell colSpan={5}>No mappings found.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -286,6 +355,113 @@ export default function TeacherMappingTab() {
             disabled={!form.staff_id || !form.section_id || !form.subject_id}
           >
             Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!editAssignment}
+        onClose={() => {
+          setEditAssignment(null);
+          setEditForm({
+            staff_id: "",
+            section_id: "",
+            subject_id: "",
+          });
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit Class–Subject–Teacher Mapping</DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Section</InputLabel>
+            <Select
+              value={editForm.section_id}
+              label="Section"
+              onChange={(e) =>
+                setEditForm({ ...editForm, section_id: e.target.value })
+              }
+            >
+              {sections.map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Subject</InputLabel>
+            <Select
+              value={editForm.subject_id}
+              label="Subject"
+              onChange={(e) =>
+                setEditForm({ ...editForm, subject_id: e.target.value })
+              }
+            >
+              {subjects.map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Teacher</InputLabel>
+            <Select
+              value={editForm.staff_id}
+              label="Teacher"
+              onChange={(e) =>
+                setEditForm({ ...editForm, staff_id: e.target.value })
+              }
+            >
+              {staff.map((t) => (
+                <MenuItem key={t.id} value={t.id}>
+                  {t.first_name} {t.last_name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setEditAssignment(null);
+              setEditForm({
+                staff_id: "",
+                section_id: "",
+                subject_id: "",
+              });
+            }}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleUpdate} variant="contained">
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!deleteAssignment}
+        onClose={() => setDeleteAssignment(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete Mapping</DialogTitle>
+        <DialogContent>
+          <Box>Are you sure you want to delete this mapping?</Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteAssignment(null)}>Cancel</Button>
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
+            variant="contained"
+          >
+            Delete
           </Button>
         </DialogActions>
       </Dialog>
