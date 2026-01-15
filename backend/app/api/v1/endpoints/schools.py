@@ -20,6 +20,12 @@ router = APIRouter()
 
 @router.get("", response_model=list[SchoolOut])
 def list_schools(db: Session = Depends(get_db), user=Depends(get_current_user)) -> list[SchoolOut]:
+    # If super admin, return all schools
+    from app.api.deps import is_super_admin
+    if is_super_admin(db, user.id):
+        schools = db.execute(select(School)).scalars().all()
+        return [SchoolOut(id=s.id, name=s.name, code=s.code, is_active=s.is_active) for s in schools]
+    # Otherwise, only schools with membership
     school_ids = db.execute(
         select(Membership.school_id).where(Membership.user_id == user.id, Membership.is_active.is_(True))
     ).scalars().all()
