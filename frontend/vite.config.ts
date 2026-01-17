@@ -1,4 +1,3 @@
-/// <reference types="vitest/config" />
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
@@ -29,6 +28,12 @@ export default defineConfig({
         ],
         test: {
           name: "storybook",
+          browser: {
+            enabled: true,
+            name: "chromium",
+            provider: "playwright",
+            headless: true,
+          },
           setupFiles: [".storybook/vitest.setup.ts"],
         },
       },

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
@@ -18,9 +18,11 @@ import {
   FormControl,
   InputLabel,
   CircularProgress,
+  FormControlLabel,
+  Switch,
+  TextField,
+  Typography,
 } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
 import {
   getClasses,
   getSections,
@@ -28,6 +30,7 @@ import {
   getTimeSlots,
   getTimetable,
   getCurrentAcademicYear,
+  getAcademicCalendarSettings,
   createTimetableEntry,
   updateTimetableEntry,
   deleteTimetableEntry,
@@ -51,353 +54,522 @@ export default function TimetableTab() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+  const [initLoading, setInitLoading] = useState(true);
+  const [sectionsLoading, setSectionsLoading] = useState(false);
 
-  // Create Entry State
-  const [openCreate, setOpenCreate] = useState(false);
-  const [entryForm, setEntryForm] = useState({
+  const [calendarSettings, setCalendarSettings] = useState<{
+    working_days_mask: number;
+    shift: string;
+  } | null>(null);
+  const [showAllDays, setShowAllDays] = useState(false);
+  const [currentAcademicYearId, setCurrentAcademicYearId] = useState("");
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
+  const [dialogEntry, setDialogEntry] = useState<TimetableEntry | null>(null);
+  const [dialogForm, setDialogForm] = useState({
     day_of_week: 0,
     time_slot_id: "",
     subject_id: "",
     staff_id: "",
-  });
-  const [editEntry, setEditEntry] = useState<TimetableEntry | null>(null);
-  const [deleteEntry, setDeleteEntry] = useState<TimetableEntry | null>(null);
-  const [editEntryForm, setEditEntryForm] = useState({
-    day_of_week: 0,
-    time_slot_id: "",
-    subject_id: "",
-    staff_id: "",
+    room: "",
   });
 
   useEffect(() => {
-    getClasses().then(setClasses);
-    getSubjects().then(setSubjects);
-    getStaff().then((r) => setStaffList(r.items));
-    getTimeSlots().then(setTimeSlots);
+    let active = true;
+
+    async function load() {
+      setInitLoading(true);
+      try {
+        const [cls, subs, staff, slots, year] = await Promise.all([
+          getClasses(),
+          getSubjects(),
+          getStaff(),
+          getTimeSlots(),
+          getCurrentAcademicYear(),
+        ]);
+
+        const cal = await getAcademicCalendarSettings(year.id);
+
+        if (!active) return;
+
+        setClasses(cls);
+        setSubjects(subs);
+        setStaffList(staff.items);
+        setTimeSlots(slots);
+        setCurrentAcademicYearId(year.id);
+        setCalendarSettings({
+          working_days_mask: cal.working_days_mask,
+          shift: cal.shift,
+        });
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (active) {
+          setInitLoading(false);
+        }
+      }
+    }
+
+    load();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
-    if (selectedClassId) {
-      getSections(selectedClassId).then(setSections);
-    } else {
-      setSections([]);
+    let active = true;
+    async function loadSections() {
+      if (!selectedClassId) {
+        setSections([]);
+        return;
+      }
+      setSectionsLoading(true);
+      try {
+        const data = await getSections(selectedClassId);
+        if (!active) return;
+        setSections(data);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (active) setSectionsLoading(false);
+      }
     }
+
+    loadSections();
+
+    setSelectedSectionId("");
+    setEntries([]);
+
+    return () => {
+      active = false;
+    };
   }, [selectedClassId]);
 
-  useEffect(() => {
-    if (selectedSectionId) {
-      loadTimetable();
-    } else {
-      setEntries([]);
-    }
-  }, [selectedSectionId]);
-
-  const loadTimetable = async () => {
+  const loadTimetable = useCallback(async (sectionId: string) => {
     setLoading(true);
     try {
-      // Assuming getTimetable accepts section_id query param
-      // I defined getTimetable(params) in api/academic.ts
-      const data = await getTimetable({ section_id: selectedSectionId });
+      const data = await getTimetable({ section_id: sectionId });
       setEntries(data);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleCreate = async () => {
+  useEffect(() => {
+    if (selectedSectionId) {
+      loadTimetable(selectedSectionId);
+    } else {
+      setEntries([]);
+    }
+  }, [loadTimetable, selectedSectionId]);
+
+  const handleSave = async () => {
     if (!selectedSectionId) return;
     try {
-      const year = await getCurrentAcademicYear();
-      await createTimetableEntry({
-        academic_year_id: year.id,
-        section_id: selectedSectionId,
-        day_of_week: entryForm.day_of_week,
-        time_slot_id: entryForm.time_slot_id,
-        subject_id: entryForm.subject_id ? entryForm.subject_id : null,
-        staff_id: entryForm.staff_id ? entryForm.staff_id : null,
-      });
-      setOpenCreate(false);
-      loadTimetable();
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleOpenEdit = (row: TimetableEntry) => {
-    setEditEntry(row);
-    setEditEntryForm({
-      day_of_week: row.day_of_week,
-      time_slot_id: row.time_slot_id,
-      subject_id: row.subject_id || "",
-      staff_id: row.staff_id || "",
-    });
-  };
-
-  const handleUpdate = async () => {
-    if (!editEntry) return;
-    try {
-      await updateTimetableEntry(editEntry.id, {
-        day_of_week: editEntryForm.day_of_week,
-        time_slot_id: editEntryForm.time_slot_id,
-        subject_id: editEntryForm.subject_id ? editEntryForm.subject_id : null,
-        staff_id: editEntryForm.staff_id ? editEntryForm.staff_id : null,
-      });
-      setEditEntry(null);
-      setEditEntryForm({
+      const academicYearId =
+        currentAcademicYearId || (await getCurrentAcademicYear()).id;
+      if (dialogMode === "create") {
+        await createTimetableEntry({
+          academic_year_id: academicYearId,
+          section_id: selectedSectionId,
+          day_of_week: dialogForm.day_of_week,
+          time_slot_id: dialogForm.time_slot_id,
+          subject_id: dialogForm.subject_id ? dialogForm.subject_id : null,
+          staff_id: dialogForm.staff_id ? dialogForm.staff_id : null,
+          room: dialogForm.room?.trim() ? dialogForm.room.trim() : null,
+        });
+      } else {
+        if (!dialogEntry) return;
+        await updateTimetableEntry(dialogEntry.id, {
+          day_of_week: dialogForm.day_of_week,
+          time_slot_id: dialogForm.time_slot_id,
+          subject_id: dialogForm.subject_id ? dialogForm.subject_id : null,
+          staff_id: dialogForm.staff_id ? dialogForm.staff_id : null,
+          room: dialogForm.room?.trim() ? dialogForm.room.trim() : null,
+        });
+      }
+      setDialogOpen(false);
+      setDialogEntry(null);
+      setDialogMode("create");
+      setDialogForm({
         day_of_week: 0,
         time_slot_id: "",
         subject_id: "",
         staff_id: "",
+        room: "",
       });
-      loadTimetable();
+      loadTimetable(selectedSectionId);
     } catch (e) {
       console.error(e);
     }
   };
 
-  const handleConfirmDelete = async () => {
-    if (!deleteEntry) return;
+  const openCreateForCell = (dayOfWeek: number, timeSlotId: string) => {
+    setDialogMode("create");
+    setDialogEntry(null);
+    setDialogForm({
+      day_of_week: dayOfWeek,
+      time_slot_id: timeSlotId,
+      subject_id: "",
+      staff_id: "",
+      room: "",
+    });
+    setDialogOpen(true);
+  };
+
+  const openEditForEntry = (row: TimetableEntry) => {
+    setDialogMode("edit");
+    setDialogEntry(row);
+    setDialogForm({
+      day_of_week: row.day_of_week,
+      time_slot_id: row.time_slot_id,
+      subject_id: row.subject_id || "",
+      staff_id: row.staff_id || "",
+      room: row.room || "",
+    });
+    setDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!dialogEntry) return;
     try {
-      await deleteTimetableEntry(deleteEntry.id);
-      setDeleteEntry(null);
-      loadTimetable();
+      await deleteTimetableEntry(dialogEntry.id);
+      setDialogOpen(false);
+      setDialogEntry(null);
+      setDialogMode("create");
+      loadTimetable(selectedSectionId);
     } catch (e) {
       console.error(e);
     }
   };
 
-  const days = [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
-  ];
+  const days = useMemo(
+    () => [
+      { index: 0, label: "Mon", full: "Monday" },
+      { index: 1, label: "Tue", full: "Tuesday" },
+      { index: 2, label: "Wed", full: "Wednesday" },
+      { index: 3, label: "Thu", full: "Thursday" },
+      { index: 4, label: "Fri", full: "Friday" },
+      { index: 5, label: "Sat", full: "Saturday" },
+      { index: 6, label: "Sun", full: "Sunday" },
+    ],
+    []
+  );
+
+  const visibleDays = useMemo(() => {
+    if (showAllDays) return days;
+    const mask = calendarSettings?.working_days_mask ?? 31;
+    return days.filter((d) => (mask & (1 << d.index)) !== 0);
+  }, [calendarSettings?.working_days_mask, days, showAllDays]);
+
+  const visibleTimeSlots = useMemo(() => {
+    const active = timeSlots.filter((t) => t.is_active);
+    const shift = calendarSettings?.shift;
+    if (!shift) return active;
+    const inShift = active.filter((t) => t.shift === shift);
+    return inShift.length > 0 ? inShift : active;
+  }, [calendarSettings?.shift, timeSlots]);
+
+  const subjectById = useMemo(() => {
+    const map = new Map<string, Subject>();
+    for (const s of subjects) map.set(s.id, s);
+    return map;
+  }, [subjects]);
+
+  const staffById = useMemo(() => {
+    const map = new Map<string, Staff>();
+    for (const s of staffList) map.set(s.id, s);
+    return map;
+  }, [staffList]);
+
+  const entriesByKey = useMemo(() => {
+    const map = new Map<string, TimetableEntry>();
+    for (const e of entries) {
+      map.set(`${e.day_of_week}:${e.time_slot_id}`, e);
+    }
+    return map;
+  }, [entries]);
 
   return (
     <Box>
       <Box sx={{ mb: 3, display: "flex", gap: 2 }}>
-        <FormControl sx={{ minWidth: 200 }}>
+        <FormControl sx={{ minWidth: 200 }} disabled={initLoading}>
           <InputLabel>Class</InputLabel>
           <Select
             value={selectedClassId}
             label="Class"
             onChange={(e) => setSelectedClassId(e.target.value)}
           >
-            {classes.map((c) => (
-              <MenuItem key={c.id} value={c.id}>
-                {c.name}
+            {classes.length === 0 ? (
+              <MenuItem disabled value="">
+                No classes found
               </MenuItem>
-            ))}
+            ) : (
+              classes.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))
+            )}
           </Select>
         </FormControl>
-        <FormControl sx={{ minWidth: 200 }} disabled={!selectedClassId}>
+        <FormControl
+          sx={{ minWidth: 200 }}
+          disabled={!selectedClassId || initLoading || sectionsLoading}
+        >
           <InputLabel>Section</InputLabel>
           <Select
             value={selectedSectionId}
             label="Section"
             onChange={(e) => setSelectedSectionId(e.target.value)}
           >
-            {sections.map((s) => (
-              <MenuItem key={s.id} value={s.id}>
-                {s.name}
+            {sectionsLoading ? (
+              <MenuItem disabled value="">
+                Loading sections...
               </MenuItem>
-            ))}
+            ) : sections.length === 0 ? (
+              <MenuItem disabled value="">
+                No sections found
+              </MenuItem>
+            ) : (
+              sections.map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name}
+                </MenuItem>
+              ))
+            )}
           </Select>
         </FormControl>
+        <FormControlLabel
+          sx={{ ml: "auto" }}
+          control={
+            <Switch
+              checked={showAllDays}
+              onChange={(e) => setShowAllDays(e.target.checked)}
+            />
+          }
+          label="Show all days"
+        />
       </Box>
 
-      {selectedSectionId && (
-        <>
-          <Box sx={{ mb: 2, display: "flex", justifyContent: "flex-end" }}>
-            <Button variant="contained" onClick={() => setOpenCreate(true)}>
-              Add Entry
-            </Button>
+      {initLoading ? (
+        <Paper sx={{ p: 3, borderRadius: 3 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <CircularProgress size={22} />
+            <Typography color="text.secondary">
+              Loading timetable setup...
+            </Typography>
           </Box>
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Day</TableCell>
-                  <TableCell>Time</TableCell>
-                  <TableCell>Subject</TableCell>
-                  <TableCell>Teacher</TableCell>
-                  <TableCell>Room</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading && (
+        </Paper>
+      ) : classes.length === 0 ? (
+        <Paper sx={{ p: 3, borderRadius: 3 }}>
+          <Typography fontWeight={800}>No classes yet</Typography>
+          <Typography color="text.secondary">
+            Create a class and section first, then return here to build the
+            timetable.
+          </Typography>
+        </Paper>
+      ) : !selectedClassId ? (
+        <Paper sx={{ p: 3, borderRadius: 3 }}>
+          <Typography fontWeight={800}>Select a class</Typography>
+          <Typography color="text.secondary">
+            Choose a class to load its sections and view the timetable grid.
+          </Typography>
+        </Paper>
+      ) : sectionsLoading ? (
+        <Paper sx={{ p: 3, borderRadius: 3 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <CircularProgress size={22} />
+            <Typography color="text.secondary">Loading sections...</Typography>
+          </Box>
+        </Paper>
+      ) : sections.length === 0 ? (
+        <Paper sx={{ p: 3, borderRadius: 3 }}>
+          <Typography fontWeight={800}>No sections for this class</Typography>
+          <Typography color="text.secondary">
+            Create at least one section for the selected class to build a
+            timetable.
+          </Typography>
+        </Paper>
+      ) : !selectedSectionId ? (
+        <Paper sx={{ p: 3, borderRadius: 3 }}>
+          <Typography fontWeight={800}>Select a section</Typography>
+          <Typography color="text.secondary">
+            Choose a section to display the timetable grid. Click any cell to
+            add or edit an entry.
+          </Typography>
+        </Paper>
+      ) : (
+        <>
+          <Box sx={{ mb: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Click a cell to add or edit an entry.
+            </Typography>
+          </Box>
+          {visibleDays.length === 0 ? (
+            <Paper sx={{ p: 3, borderRadius: 3 }}>
+              <Typography fontWeight={800}>
+                No working days configured
+              </Typography>
+              <Typography color="text.secondary">
+                Your academic calendar working days are empty. Enable days in
+                Calendar settings or toggle “Show all days”.
+              </Typography>
+              <Box sx={{ mt: 2, display: "flex", gap: 1 }}>
+                <Button
+                  variant="contained"
+                  onClick={() => setShowAllDays(true)}
+                >
+                  Show all days
+                </Button>
+              </Box>
+            </Paper>
+          ) : (
+            <TableContainer component={Paper} sx={{ maxHeight: 640 }}>
+              <Table stickyHeader>
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={6} align="center">
-                      <CircularProgress />
-                    </TableCell>
+                    <TableCell sx={{ width: 220 }}>Time</TableCell>
+                    {visibleDays.map((d) => (
+                      <TableCell key={d.index} align="center">
+                        {d.full}
+                      </TableCell>
+                    ))}
                   </TableRow>
-                )}
-                {!loading &&
-                  entries.map((row) => {
-                    const slot = timeSlots.find(
-                      (t) => t.id === row.time_slot_id
-                    );
-                    const sub = subjects.find((s) => s.id === row.subject_id);
-                    const st = staffList.find((s) => s.id === row.staff_id);
-                    return (
-                      <TableRow key={row.id}>
-                        <TableCell>{days[row.day_of_week]}</TableCell>
+                </TableHead>
+                <TableBody>
+                  {loading && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={1 + visibleDays.length}
+                        align="center"
+                      >
+                        <CircularProgress />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {!loading &&
+                    visibleTimeSlots.map((slot) => (
+                      <TableRow key={slot.id} hover>
                         <TableCell>
-                          {slot ? `${slot.start_time} - ${slot.end_time}` : "-"}
+                          <Typography fontWeight={700}>{slot.name}</Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {slot.start_time} - {slot.end_time}
+                          </Typography>
                         </TableCell>
-                        <TableCell>{sub?.name || "-"}</TableCell>
-                        <TableCell>
-                          {st ? `${st.first_name} ${st.last_name}` : "-"}
-                        </TableCell>
-                        <TableCell>{row.room || "-"}</TableCell>
-                        <TableCell align="right">
-                          <Button
-                            size="small"
-                            startIcon={<EditIcon fontSize="small" />}
-                            onClick={() => handleOpenEdit(row)}
-                            sx={{ mr: 1 }}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            size="small"
-                            color="error"
-                            startIcon={<DeleteIcon fontSize="small" />}
-                            onClick={() => setDeleteEntry(row)}
-                          >
-                            Delete
-                          </Button>
-                        </TableCell>
+                        {visibleDays.map((d) => {
+                          const entry = entriesByKey.get(
+                            `${d.index}:${slot.id}`
+                          );
+                          const subject = entry?.subject_id
+                            ? subjectById.get(entry.subject_id)
+                            : undefined;
+                          const staff = entry?.staff_id
+                            ? staffById.get(entry.staff_id)
+                            : undefined;
+                          const primary = subject?.name || "-";
+                          const secondaryParts: string[] = [];
+                          if (staff) {
+                            secondaryParts.push(
+                              `${staff.first_name} ${staff.last_name}`
+                            );
+                          }
+                          if (entry?.room) {
+                            secondaryParts.push(entry.room);
+                          }
+                          const secondary =
+                            secondaryParts.length > 0
+                              ? secondaryParts.join(" • ")
+                              : "";
+
+                          return (
+                            <TableCell
+                              key={d.index}
+                              sx={{
+                                cursor: "pointer",
+                                verticalAlign: "top",
+                                minWidth: 180,
+                                bgcolor: entry ? "action.hover" : "transparent",
+                                "&:hover": {
+                                  bgcolor: entry
+                                    ? "action.selected"
+                                    : "action.hover",
+                                },
+                              }}
+                              onClick={() => {
+                                if (entry) {
+                                  openEditForEntry(entry);
+                                } else {
+                                  openCreateForCell(d.index, slot.id);
+                                }
+                              }}
+                            >
+                              <Typography fontWeight={700}>
+                                {primary}
+                              </Typography>
+                              {secondary ? (
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  {secondary}
+                                </Typography>
+                              ) : null}
+                            </TableCell>
+                          );
+                        })}
                       </TableRow>
-                    );
-                  })}
-                {!loading && entries.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6}>
-                      No timetable entries found.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                    ))}
+                  {!loading && visibleTimeSlots.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={1 + visibleDays.length}
+                        sx={{ py: 3 }}
+                      >
+                        No active time slots found.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </>
       )}
 
-      <Dialog open={openCreate} onClose={() => setOpenCreate(false)}>
-        <DialogTitle>Add Timetable Entry</DialogTitle>
-        <DialogContent sx={{ minWidth: 300 }}>
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Day</InputLabel>
-            <Select
-              value={entryForm.day_of_week}
-              label="Day"
-              onChange={(e) =>
-                setEntryForm({
-                  ...entryForm,
-                  day_of_week: e.target.value as number,
-                })
-              }
-            >
-              {days.map((d, i) => (
-                <MenuItem key={i} value={i}>
-                  {d}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Time Slot</InputLabel>
-            <Select
-              value={entryForm.time_slot_id}
-              label="Time Slot"
-              onChange={(e) =>
-                setEntryForm({ ...entryForm, time_slot_id: e.target.value })
-              }
-            >
-              {timeSlots.map((t) => (
-                <MenuItem key={t.id} value={t.id}>
-                  {t.name} ({t.start_time}-{t.end_time})
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Subject</InputLabel>
-            <Select
-              value={entryForm.subject_id}
-              label="Subject"
-              onChange={(e) =>
-                setEntryForm({ ...entryForm, subject_id: e.target.value })
-              }
-            >
-              {subjects.map((s) => (
-                <MenuItem key={s.id} value={s.id}>
-                  {s.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Teacher</InputLabel>
-            <Select
-              value={entryForm.staff_id}
-              label="Teacher"
-              onChange={(e) =>
-                setEntryForm({ ...entryForm, staff_id: e.target.value })
-              }
-            >
-              {staffList.map((s) => (
-                <MenuItem key={s.id} value={s.id}>
-                  {s.first_name} {s.last_name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenCreate(false)}>Cancel</Button>
-          <Button onClick={handleCreate} variant="contained">
-            Add
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       <Dialog
-        open={!!editEntry}
+        open={dialogOpen}
         onClose={() => {
-          setEditEntry(null);
-          setEditEntryForm({
-            day_of_week: 0,
-            time_slot_id: "",
-            subject_id: "",
-            staff_id: "",
-          });
+          setDialogOpen(false);
+          setDialogEntry(null);
+          setDialogMode("create");
         }}
       >
-        <DialogTitle>Edit Timetable Entry</DialogTitle>
+        <DialogTitle>
+          {dialogMode === "create"
+            ? "Add Timetable Entry"
+            : "Edit Timetable Entry"}
+        </DialogTitle>
         <DialogContent sx={{ minWidth: 300 }}>
           <FormControl fullWidth margin="normal">
             <InputLabel>Day</InputLabel>
             <Select
-              value={editEntryForm.day_of_week}
+              value={dialogForm.day_of_week}
               label="Day"
               onChange={(e) =>
-                setEditEntryForm({
-                  ...editEntryForm,
+                setDialogForm({
+                  ...dialogForm,
                   day_of_week: e.target.value as number,
                 })
               }
             >
-              {days.map((d, i) => (
-                <MenuItem key={i} value={i}>
-                  {d}
+              {days.map((d) => (
+                <MenuItem key={d.index} value={d.index}>
+                  {d.full}
                 </MenuItem>
               ))}
             </Select>
@@ -405,16 +577,13 @@ export default function TimetableTab() {
           <FormControl fullWidth margin="normal">
             <InputLabel>Time Slot</InputLabel>
             <Select
-              value={editEntryForm.time_slot_id}
+              value={dialogForm.time_slot_id}
               label="Time Slot"
               onChange={(e) =>
-                setEditEntryForm({
-                  ...editEntryForm,
-                  time_slot_id: e.target.value,
-                })
+                setDialogForm({ ...dialogForm, time_slot_id: e.target.value })
               }
             >
-              {timeSlots.map((t) => (
+              {visibleTimeSlots.map((t) => (
                 <MenuItem key={t.id} value={t.id}>
                   {t.name} ({t.start_time}-{t.end_time})
                 </MenuItem>
@@ -424,15 +593,13 @@ export default function TimetableTab() {
           <FormControl fullWidth margin="normal">
             <InputLabel>Subject</InputLabel>
             <Select
-              value={editEntryForm.subject_id}
+              value={dialogForm.subject_id}
               label="Subject"
               onChange={(e) =>
-                setEditEntryForm({
-                  ...editEntryForm,
-                  subject_id: e.target.value,
-                })
+                setDialogForm({ ...dialogForm, subject_id: e.target.value })
               }
             >
+              <MenuItem value="">(None)</MenuItem>
               {subjects.map((s) => (
                 <MenuItem key={s.id} value={s.id}>
                   {s.name}
@@ -443,15 +610,13 @@ export default function TimetableTab() {
           <FormControl fullWidth margin="normal">
             <InputLabel>Teacher</InputLabel>
             <Select
-              value={editEntryForm.staff_id}
+              value={dialogForm.staff_id}
               label="Teacher"
               onChange={(e) =>
-                setEditEntryForm({
-                  ...editEntryForm,
-                  staff_id: e.target.value,
-                })
+                setDialogForm({ ...dialogForm, staff_id: e.target.value })
               }
             >
+              <MenuItem value="">(None)</MenuItem>
               {staffList.map((s) => (
                 <MenuItem key={s.id} value={s.id}>
                   {s.first_name} {s.last_name}
@@ -459,45 +624,36 @@ export default function TimetableTab() {
               ))}
             </Select>
           </FormControl>
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Room"
+            value={dialogForm.room}
+            onChange={(e) =>
+              setDialogForm({
+                ...dialogForm,
+                room: e.target.value,
+              })
+            }
+          />
         </DialogContent>
         <DialogActions>
           <Button
             onClick={() => {
-              setEditEntry(null);
-              setEditEntryForm({
-                day_of_week: 0,
-                time_slot_id: "",
-                subject_id: "",
-                staff_id: "",
-              });
+              setDialogOpen(false);
+              setDialogEntry(null);
+              setDialogMode("create");
             }}
           >
             Cancel
           </Button>
-          <Button onClick={handleUpdate} variant="contained">
-            Save
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={!!deleteEntry}
-        onClose={() => setDeleteEntry(null)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>Delete Timetable Entry</DialogTitle>
-        <DialogContent>
-          <Box>Are you sure you want to delete this entry?</Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteEntry(null)}>Cancel</Button>
-          <Button
-            onClick={handleConfirmDelete}
-            color="error"
-            variant="contained"
-          >
-            Delete
+          {dialogMode === "edit" ? (
+            <Button color="error" onClick={handleDelete}>
+              Delete
+            </Button>
+          ) : null}
+          <Button onClick={handleSave} variant="contained">
+            {dialogMode === "create" ? "Add" : "Save"}
           </Button>
         </DialogActions>
       </Dialog>

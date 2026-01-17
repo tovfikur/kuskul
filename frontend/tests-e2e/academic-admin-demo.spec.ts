@@ -5,7 +5,9 @@ const ADMIN_PASSWORD = "password123";
 const DEMO_SCHOOL_NAME = "Demo School";
 const DEMO_ACADEMIC_YEAR = "2024";
 
-test("Super Admin can see demo data in academic dashboard", async ({ page }) => {
+test("Super Admin can see demo data in academic dashboard", async ({
+  page,
+}) => {
   // Go to login page
   await page.goto("/login");
 
