@@ -39,4 +39,8 @@ class StaffAttendance(Base):
     attendance_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
     staff_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("staff.id"), index=True, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="present")
+    check_in_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    check_out_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    method: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    device_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

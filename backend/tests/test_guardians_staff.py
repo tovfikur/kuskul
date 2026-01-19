@@ -55,7 +55,16 @@ def test_staff_crud_and_list_filters(client):
     created = client.post(
         "/api/v1/staff",
         headers=headers,
-        json={"full_name": "Teacher One", "designation": "teacher", "department": "science", "status": "active"},
+        json={
+            "full_name": "Teacher One",
+            "employee_id": "EMP-001",
+            "designation": "teacher",
+            "department": "science",
+            "status": "active",
+            "emergency_contact_name": "Emergency Person",
+            "emergency_contact_phone": "999",
+            "emergency_contact_relation": "spouse",
+        },
     )
     assert created.status_code == 200
     staff_id = created.json()["id"]
@@ -71,3 +80,63 @@ def test_staff_crud_and_list_filters(client):
     assert updated.status_code == 200
     assert updated.json()["status"] == "inactive"
 
+
+def test_staff_qualification_performance_document_and_qr(client):
+    headers = _bootstrap(client)
+
+    created = client.post(
+        "/api/v1/staff",
+        headers=headers,
+        json={"full_name": "Staff Two", "designation": "admin", "department": "office", "status": "active"},
+    )
+    assert created.status_code == 200
+    staff_id = created.json()["id"]
+
+    q = client.post(
+        f"/api/v1/staff/{staff_id}/qualifications",
+        headers=headers,
+        json={"title": "B.Ed", "institution": "Uni"},
+    )
+    assert q.status_code == 200
+    q_id = q.json()["id"]
+
+    q_list = client.get(f"/api/v1/staff/{staff_id}/qualifications", headers=headers)
+    assert q_list.status_code == 200
+    assert any(x["id"] == q_id for x in q_list.json())
+
+    perf = client.post(
+        f"/api/v1/staff/{staff_id}/performance",
+        headers=headers,
+        json={"rating": 4, "summary": "Good performance"},
+    )
+    assert perf.status_code == 200
+    perf_id = perf.json()["id"]
+
+    perf_list = client.get(f"/api/v1/staff/{staff_id}/performance", headers=headers)
+    assert perf_list.status_code == 200
+    assert any(x["id"] == perf_id for x in perf_list.json())
+
+    upload = client.post(
+        f"/api/v1/staff/{staff_id}/documents/upload",
+        headers=headers,
+        files={"file": ("contract.txt", b"hello", "text/plain")},
+    )
+    assert upload.status_code == 200
+    doc_id = upload.json()["id"]
+
+    docs = client.get(f"/api/v1/staff/{staff_id}/documents", headers=headers)
+    assert docs.status_code == 200
+    assert any(x["id"] == doc_id for x in docs.json())
+
+    qr = client.get(f"/api/v1/staff/{staff_id}/qr", headers=headers)
+    assert qr.status_code == 200
+    assert "image/svg+xml" in (qr.headers.get("content-type") or "")
+
+    del_q = client.delete(f"/api/v1/staff/{staff_id}/qualifications/{q_id}", headers=headers)
+    assert del_q.status_code == 200
+
+    del_perf = client.delete(f"/api/v1/staff/{staff_id}/performance/{perf_id}", headers=headers)
+    assert del_perf.status_code == 200
+
+    del_doc = client.delete(f"/api/v1/staff/{staff_id}/documents/{doc_id}", headers=headers)
+    assert del_doc.status_code == 200

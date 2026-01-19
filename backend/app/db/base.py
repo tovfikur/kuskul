@@ -10,7 +10,7 @@ from app.models.guardian import Guardian
 from app.models.school import School
 from app.models.school_class import SchoolClass
 from app.models.section import Section
-from app.models.staff import Staff
+from app.models.staff import Staff, StaffPerformanceRecord, StaffQualification
 from app.models.student import Student
 from app.models.student_guardian import StudentGuardian
 from app.models.subject import Subject

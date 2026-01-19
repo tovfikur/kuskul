@@ -541,9 +541,7 @@ export default function TimetableTab() {
                           const primary = subject?.name || "-";
                           const secondaryParts: string[] = [];
                           if (staff) {
-                            secondaryParts.push(
-                              `${staff.first_name} ${staff.last_name}`,
-                            );
+                            secondaryParts.push(staff.full_name);
                           }
                           if (entry?.room) {
                             secondaryParts.push(entry.room);
@@ -723,7 +721,7 @@ export default function TimetableTab() {
               <MenuItem value="">(None)</MenuItem>
               {staffList.map((s) => (
                 <MenuItem key={s.id} value={s.id}>
-                  {s.first_name} {s.last_name}
+                  {s.full_name}
                 </MenuItem>
               ))}
             </Select>

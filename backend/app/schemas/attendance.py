@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -19,6 +19,10 @@ class StaffAttendanceOut(BaseModel):
     attendance_date: date
     staff_id: uuid.UUID
     status: str
+    check_in_at: Optional[datetime] = None
+    check_out_at: Optional[datetime] = None
+    method: Optional[str] = None
+    device_id: Optional[str] = None
 
 
 class StudentAttendanceMarkItem(BaseModel):
@@ -41,3 +45,10 @@ class StaffAttendanceMarkItem(BaseModel):
 class MarkStaffAttendanceRequest(BaseModel):
     attendance_date: date
     items: list[StaffAttendanceMarkItem] = Field(min_length=1)
+
+
+class StaffAttendanceCheckRequest(BaseModel):
+    staff_id: Optional[uuid.UUID] = None
+    qr_payload: Optional[str] = None
+    method: str = Field(default="qr", max_length=32)
+    device_id: Optional[str] = Field(default=None, max_length=100)

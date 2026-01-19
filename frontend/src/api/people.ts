@@ -78,14 +78,60 @@ export type StudentDocument = {
 export interface Staff {
   id: string;
   school_id?: string;
-  full_name?: string;
-  first_name: string;
-  last_name: string;
-  employee_id: string;
+  full_name: string;
+  employee_id?: string | null;
   email?: string;
   phone?: string;
-  is_active: boolean;
-  job_title?: string;
+  designation?: string | null;
+  department?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+  emergency_contact_relation?: string | null;
+  date_of_joining?: string | null;
+  status: string;
+  photo_url?: string | null;
+}
+
+export interface StaffQualification {
+  id: string;
+  school_id: string;
+  staff_id: string;
+  title: string;
+  institution?: string | null;
+  issued_on?: string | null;
+  expires_on?: string | null;
+  credential_id?: string | null;
+}
+
+export interface StaffPerformanceRecord {
+  id: string;
+  school_id: string;
+  staff_id: string;
+  period_start?: string | null;
+  period_end?: string | null;
+  rating?: number | null;
+  summary?: string | null;
+  created_by_user_id: string;
+}
+
+export interface StaffAttendanceRecord {
+  id: string;
+  attendance_date: string;
+  staff_id: string;
+  status: string;
+  check_in_at?: string | null;
+  check_out_at?: string | null;
+  method?: string | null;
+  device_id?: string | null;
+}
+
+export interface StaffDocument {
+  id: string;
+  school_id: string;
+  uploaded_by_user_id: string;
+  entity_type?: string | null;
+  entity_id?: string | null;
+  filename: string;
 }
 
 export interface User {
@@ -444,6 +490,165 @@ export async function getStaff(
     params: { page, limit },
   });
   return resp.data;
+}
+
+export async function getStaffMember(staffId: string): Promise<Staff> {
+  const resp = await api.get(`/staff/${staffId}`);
+  return resp.data;
+}
+
+export async function createStaff(payload: {
+  full_name: string;
+  employee_id?: string | null;
+  designation?: string | null;
+  department?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+  emergency_contact_relation?: string | null;
+  date_of_joining?: string | null;
+  status?: string;
+}): Promise<Staff> {
+  const resp = await api.post("/staff", payload);
+  return resp.data;
+}
+
+export async function updateStaff(
+  staffId: string,
+  payload: Partial<{
+    full_name: string;
+    employee_id: string | null;
+    designation: string | null;
+    department: string | null;
+    email: string | null;
+    phone: string | null;
+    emergency_contact_name: string | null;
+    emergency_contact_phone: string | null;
+    emergency_contact_relation: string | null;
+    date_of_joining: string | null;
+    status: string;
+    photo_url: string | null;
+  }>,
+): Promise<Staff> {
+  const resp = await api.put(`/staff/${staffId}`, payload);
+  return resp.data;
+}
+
+export async function deleteStaff(staffId: string): Promise<void> {
+  await api.delete(`/staff/${staffId}`);
+}
+
+export async function getStaffAttendance(
+  staffId: string,
+  params?: { start_date?: string; end_date?: string },
+): Promise<StaffAttendanceRecord[]> {
+  const resp = await api.get(`/staff/${staffId}/attendance`, { params });
+  return resp.data;
+}
+
+export async function staffCheckIn(payload: {
+  staff_id?: string;
+  qr_payload?: string;
+  method?: string;
+  device_id?: string | null;
+}): Promise<StaffAttendanceRecord> {
+  const resp = await api.post("/attendance/staff/check-in", payload);
+  return resp.data;
+}
+
+export async function staffCheckOut(payload: {
+  staff_id?: string;
+  qr_payload?: string;
+  method?: string;
+  device_id?: string | null;
+}): Promise<StaffAttendanceRecord> {
+  const resp = await api.post("/attendance/staff/check-out", payload);
+  return resp.data;
+}
+
+export async function getStaffQualifications(
+  staffId: string,
+): Promise<StaffQualification[]> {
+  const resp = await api.get(`/staff/${staffId}/qualifications`);
+  return resp.data;
+}
+
+export async function createStaffQualification(
+  staffId: string,
+  payload: {
+    title: string;
+    institution?: string | null;
+    issued_on?: string | null;
+    expires_on?: string | null;
+    credential_id?: string | null;
+  },
+): Promise<StaffQualification> {
+  const resp = await api.post(`/staff/${staffId}/qualifications`, payload);
+  return resp.data;
+}
+
+export async function deleteStaffQualification(
+  staffId: string,
+  qualificationId: string,
+): Promise<void> {
+  await api.delete(`/staff/${staffId}/qualifications/${qualificationId}`);
+}
+
+export async function getStaffPerformance(
+  staffId: string,
+): Promise<StaffPerformanceRecord[]> {
+  const resp = await api.get(`/staff/${staffId}/performance`);
+  return resp.data;
+}
+
+export async function createStaffPerformance(
+  staffId: string,
+  payload: {
+    period_start?: string | null;
+    period_end?: string | null;
+    rating?: number | null;
+    summary?: string | null;
+  },
+): Promise<StaffPerformanceRecord> {
+  const resp = await api.post(`/staff/${staffId}/performance`, payload);
+  return resp.data;
+}
+
+export async function deleteStaffPerformance(
+  staffId: string,
+  recordId: string,
+): Promise<void> {
+  await api.delete(`/staff/${staffId}/performance/${recordId}`);
+}
+
+export async function getStaffDocuments(
+  staffId: string,
+): Promise<StaffDocument[]> {
+  const resp = await api.get(`/staff/${staffId}/documents`);
+  return resp.data;
+}
+
+export async function uploadStaffDocument(
+  staffId: string,
+  file: File,
+): Promise<StaffDocument> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const resp = await api.post(`/staff/${staffId}/documents/upload`, formData);
+  return resp.data;
+}
+
+export async function deleteStaffDocument(
+  staffId: string,
+  documentId: string,
+): Promise<void> {
+  await api.delete(`/staff/${staffId}/documents/${documentId}`);
+}
+
+export async function downloadStaffQr(staffId: string): Promise<Blob> {
+  const resp = await api.get(`/staff/${staffId}/qr`, { responseType: "blob" });
+  return resp.data as Blob;
 }
 
 export async function getUsers(

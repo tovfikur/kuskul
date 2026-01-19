@@ -245,7 +245,7 @@ export default function TeacherMappingTab() {
     subjects.find((s) => s.id === id)?.name || id;
   const staffName = (id: string) => {
     const t = staff.find((s) => s.id === id);
-    return t ? `${t.first_name} ${t.last_name}` : id;
+    return t ? t.full_name : id;
   };
 
   return (

@@ -47,6 +47,7 @@ def list_leaves(
     school_id=Depends(get_active_school_id),
     status: Optional[str] = None,
     user_type: Optional[str] = None,
+    staff_id: Optional[uuid.UUID] = None,
 ) -> list[LeaveOut]:
     _ensure_membership(db, user.id, school_id)
     q = select(Leave).where(Leave.school_id == school_id)
@@ -54,6 +55,8 @@ def list_leaves(
         q = q.where(Leave.status == status)
     if user_type:
         q = q.where(Leave.user_type == user_type)
+    if staff_id:
+        q = q.where(Leave.staff_id == staff_id)
     rows = db.execute(q.order_by(Leave.created_at.desc())).scalars().all()
     return [_out(l) for l in rows]
 

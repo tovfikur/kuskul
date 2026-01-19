@@ -119,3 +119,33 @@ def test_teacher_assignments_and_attendance(client):
     assert staff_att.status_code == 200
     assert len(staff_att.json()) == 1
 
+
+def test_staff_attendance_qr_check_in_out(client):
+    headers = _bootstrap(client)
+
+    staff = client.post(
+        "/api/v1/staff",
+        headers=headers,
+        json={"full_name": "QR Staff", "designation": "teacher", "department": "math"},
+    )
+    assert staff.status_code == 200
+    staff_id = staff.json()["id"]
+
+    qr = client.get(f"/api/v1/staff/{staff_id}/qr", headers=headers)
+    assert qr.status_code == 200
+
+    check_in = client.post(
+        "/api/v1/attendance/staff/check-in",
+        headers=headers,
+        json={"staff_id": staff_id, "method": "qr", "device_id": "dev1"},
+    )
+    assert check_in.status_code == 200
+    assert check_in.json()["check_in_at"] is not None
+
+    check_out = client.post(
+        "/api/v1/attendance/staff/check-out",
+        headers=headers,
+        json={"staff_id": staff_id, "method": "qr", "device_id": "dev1"},
+    )
+    assert check_out.status_code == 200
+    assert check_out.json()["check_out_at"] is not None
