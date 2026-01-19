@@ -41,6 +41,9 @@ export default function TeacherMappingTab() {
   const [yearId, setYearId] = useState("");
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
+  const [sectionsCache, setSectionsCache] = useState<Record<string, Section[]>>(
+    {}
+  );
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [staff, setStaffState] = useState<Staff[]>([]);
   const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
@@ -49,6 +52,8 @@ export default function TeacherMappingTab() {
   const [sectionId, setSectionId] = useState("");
 
   const [open, setOpen] = useState(false);
+  const [createClassId, setCreateClassId] = useState("");
+  const [createSections, setCreateSections] = useState<Section[]>([]);
   const [form, setForm] = useState({
     staff_id: "",
     section_id: "",
@@ -57,6 +62,8 @@ export default function TeacherMappingTab() {
 
   const [editAssignment, setEditAssignment] =
     useState<TeacherAssignment | null>(null);
+  const [editClassId, setEditClassId] = useState("");
+  const [editSections, setEditSections] = useState<Section[]>([]);
   const [editForm, setEditForm] = useState({
     staff_id: "",
     section_id: "",
@@ -89,8 +96,49 @@ export default function TeacherMappingTab() {
       setSectionId("");
       return;
     }
-    getSections(classId).then(setSections).catch(console.error);
+    getSections(classId)
+      .then((data) => {
+        setSections(data);
+        setSectionsCache((prev) => ({ ...prev, [classId]: data }));
+      })
+      .catch(console.error);
   }, [classId]);
+
+  useEffect(() => {
+    if (!createClassId) {
+      setCreateSections([]);
+      return;
+    }
+    const cached = sectionsCache[createClassId];
+    if (cached) {
+      setCreateSections(cached);
+      return;
+    }
+    getSections(createClassId)
+      .then((data) => {
+        setCreateSections(data);
+        setSectionsCache((prev) => ({ ...prev, [createClassId]: data }));
+      })
+      .catch(console.error);
+  }, [createClassId, sectionsCache]);
+
+  useEffect(() => {
+    if (!editClassId) {
+      setEditSections([]);
+      return;
+    }
+    const cached = sectionsCache[editClassId];
+    if (cached) {
+      setEditSections(cached);
+      return;
+    }
+    getSections(editClassId)
+      .then((data) => {
+        setEditSections(data);
+        setSectionsCache((prev) => ({ ...prev, [editClassId]: data }));
+      })
+      .catch(console.error);
+  }, [editClassId, sectionsCache]);
 
   const loadAssignments = async () => {
     if (!yearId) {
@@ -117,6 +165,8 @@ export default function TeacherMappingTab() {
         subject_id: form.subject_id,
       });
       setOpen(false);
+      setCreateClassId("");
+      setCreateSections([]);
       setForm({ staff_id: "", section_id: "", subject_id: "" });
       loadAssignments();
     } catch (e) {
@@ -124,8 +174,29 @@ export default function TeacherMappingTab() {
     }
   };
 
+  const handleOpenCreate = () => {
+    const initialClassId = classId || "";
+    setCreateClassId(initialClassId);
+    setCreateSections(initialClassId ? sectionsCache[initialClassId] || sections : []);
+    setForm({ staff_id: "", section_id: "", subject_id: "" });
+    setOpen(true);
+  };
+
   const handleOpenEdit = (assignment: TeacherAssignment) => {
+    const knownClassId =
+      (classId &&
+        sections.some((s) => s.id === assignment.section_id) &&
+        classId) ||
+      Object.entries(sectionsCache).find(([, secs]) =>
+        secs.some((s) => s.id === assignment.section_id)
+      )?.[0] ||
+      "";
+
     setEditAssignment(assignment);
+    setEditClassId(knownClassId);
+    setEditSections(
+      knownClassId ? sectionsCache[knownClassId] || sections : []
+    );
     setEditForm({
       staff_id: assignment.staff_id,
       section_id: assignment.section_id,
@@ -165,7 +236,11 @@ export default function TeacherMappingTab() {
   };
 
   const sectionName = (id: string) =>
-    sections.find((s) => s.id === id)?.name || id;
+    sections.find((s) => s.id === id)?.name ||
+    Object.values(sectionsCache)
+      .flat()
+      .find((s) => s.id === id)?.name ||
+    id;
   const subjectName = (id: string) =>
     subjects.find((s) => s.id === id)?.name || id;
   const staffName = (id: string) => {
@@ -236,7 +311,7 @@ export default function TeacherMappingTab() {
 
         <Button
           variant="contained"
-          onClick={() => setOpen(true)}
+          onClick={handleOpenCreate}
           disabled={!yearId}
         >
           Add Mapping
@@ -296,20 +371,45 @@ export default function TeacherMappingTab() {
 
       <Dialog
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false);
+          setCreateClassId("");
+          setCreateSections([]);
+          setForm({ staff_id: "", section_id: "", subject_id: "" });
+        }}
         maxWidth="sm"
         fullWidth
       >
         <DialogTitle>Add Class–Subject–Teacher Mapping</DialogTitle>
         <DialogContent>
           <FormControl fullWidth margin="normal">
+            <InputLabel>Class</InputLabel>
+            <Select
+              value={createClassId}
+              label="Class"
+              onChange={(e) => {
+                const next = e.target.value;
+                setCreateClassId(next);
+                setForm((prev) => ({ ...prev, section_id: "" }));
+              }}
+            >
+              {classes.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl fullWidth margin="normal">
             <InputLabel>Section</InputLabel>
             <Select
               value={form.section_id}
               label="Section"
               onChange={(e) => setForm({ ...form, section_id: e.target.value })}
+              disabled={!createClassId}
             >
-              {sections.map((s) => (
+              {createSections.map((s) => (
                 <MenuItem key={s.id} value={s.id}>
                   {s.name}
                 </MenuItem>
@@ -348,11 +448,25 @@ export default function TeacherMappingTab() {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              setOpen(false);
+              setCreateClassId("");
+              setCreateSections([]);
+              setForm({ staff_id: "", section_id: "", subject_id: "" });
+            }}
+          >
+            Cancel
+          </Button>
           <Button
             onClick={handleCreate}
             variant="contained"
-            disabled={!form.staff_id || !form.section_id || !form.subject_id}
+            disabled={
+              !createClassId ||
+              !form.staff_id ||
+              !form.section_id ||
+              !form.subject_id
+            }
           >
             Create
           </Button>
@@ -363,6 +477,8 @@ export default function TeacherMappingTab() {
         open={!!editAssignment}
         onClose={() => {
           setEditAssignment(null);
+          setEditClassId("");
+          setEditSections([]);
           setEditForm({
             staff_id: "",
             section_id: "",
@@ -375,6 +491,25 @@ export default function TeacherMappingTab() {
         <DialogTitle>Edit Class–Subject–Teacher Mapping</DialogTitle>
         <DialogContent>
           <FormControl fullWidth margin="normal">
+            <InputLabel>Class</InputLabel>
+            <Select
+              value={editClassId}
+              label="Class"
+              onChange={(e) => {
+                const next = e.target.value;
+                setEditClassId(next);
+                setEditForm((prev) => ({ ...prev, section_id: "" }));
+              }}
+            >
+              {classes.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl fullWidth margin="normal">
             <InputLabel>Section</InputLabel>
             <Select
               value={editForm.section_id}
@@ -382,8 +517,9 @@ export default function TeacherMappingTab() {
               onChange={(e) =>
                 setEditForm({ ...editForm, section_id: e.target.value })
               }
+              disabled={!editClassId}
             >
-              {sections.map((s) => (
+              {editSections.map((s) => (
                 <MenuItem key={s.id} value={s.id}>
                   {s.name}
                 </MenuItem>
@@ -429,6 +565,8 @@ export default function TeacherMappingTab() {
           <Button
             onClick={() => {
               setEditAssignment(null);
+              setEditClassId("");
+              setEditSections([]);
               setEditForm({
                 staff_id: "",
                 section_id: "",

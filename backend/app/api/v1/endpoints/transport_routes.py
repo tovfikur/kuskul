@@ -70,7 +70,7 @@ def get_route_students(route_id: uuid.UUID, db: Session = Depends(get_db), schoo
     if not student_ids:
         return []
     students = db.execute(select(Student).where(Student.id.in_(student_ids), Student.school_id == school_id)).scalars().all()
-    return [StudentOut(id=s.id, school_id=s.school_id, first_name=s.first_name, last_name=s.last_name, admission_no=s.admission_no, gender=s.gender, date_of_birth=s.date_of_birth, status=s.status, photo_url=s.photo_url) for s in students]
+    return [StudentOut.model_validate(s) for s in students]
 
 
 @router.get("/{route_id}", response_model=TransportRouteOut)

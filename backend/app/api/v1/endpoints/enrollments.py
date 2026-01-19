@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -51,6 +51,48 @@ def list_enrollments(
         q = q.where(Enrollment.class_id == class_id)
     if section_id:
         q = q.where(Enrollment.section_id == section_id)
+    rows = db.execute(q).scalars().all()
+    return [_out(e) for e in rows]
+
+
+@router.get("/by-students", response_model=list[EnrollmentOut])
+def list_enrollments_by_students(
+    student_ids: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+    school_id=Depends(get_active_school_id),
+    academic_year_id: Optional[uuid.UUID] = None,
+) -> list[EnrollmentOut]:
+    ids: list[uuid.UUID] = []
+    for part in student_ids.split(","):
+        v = part.strip()
+        if not v:
+            continue
+        ids.append(uuid.UUID(v))
+    if not ids:
+        return []
+
+    year_id = academic_year_id
+    if not year_id:
+        year = db.scalar(
+            select(AcademicYear).where(
+                AcademicYear.school_id == school_id,
+                AcademicYear.is_current.is_(True),
+            )
+        )
+        if not year:
+            return []
+        year_id = year.id
+
+    q = (
+        select(Enrollment)
+        .join(Student, Student.id == Enrollment.student_id)
+        .where(
+            Student.school_id == school_id,
+            Enrollment.academic_year_id == year_id,
+            Enrollment.student_id.in_(ids),
+        )
+        .order_by(Enrollment.created_at.desc())
+    )
     rows = db.execute(q).scalars().all()
     return [_out(e) for e in rows]
 
@@ -180,4 +222,3 @@ def detain_student(
     e.status = "detained"
     db.commit()
     return {"status": "ok"}
-

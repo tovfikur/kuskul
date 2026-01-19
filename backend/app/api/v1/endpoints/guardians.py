@@ -25,6 +25,8 @@ def _out(g: Guardian) -> GuardianOut:
         full_name=g.full_name,
         phone=g.phone,
         email=g.email,
+        occupation=g.occupation,
+        id_number=g.id_number,
         emergency_contact_name=g.emergency_contact_name,
         emergency_contact_phone=g.emergency_contact_phone,
         address=g.address,
@@ -73,6 +75,8 @@ def create_guardian(
         full_name=payload.full_name,
         phone=payload.phone,
         email=str(payload.email) if payload.email else None,
+        occupation=payload.occupation,
+        id_number=payload.id_number,
         emergency_contact_name=payload.emergency_contact_name,
         emergency_contact_phone=payload.emergency_contact_phone,
         address=payload.address,
@@ -128,20 +132,7 @@ def get_guardian_students(
         .where(StudentGuardian.guardian_id == guardian_id, Student.school_id == school_id)
         .order_by(Student.first_name.asc())
     ).scalars().all()
-    return [
-        StudentOut(
-            id=s.id,
-            school_id=s.school_id,
-            first_name=s.first_name,
-            last_name=s.last_name,
-            admission_no=s.admission_no,
-            gender=s.gender,
-            date_of_birth=s.date_of_birth,
-            status=s.status,
-            photo_url=s.photo_url,
-        )
-        for s in students
-    ]
+    return [StudentOut.model_validate(s) for s in students]
 
 
 @router.post("/{guardian_id}/photo", dependencies=[Depends(require_permission("guardians:write"))])

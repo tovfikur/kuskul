@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
@@ -11,6 +12,7 @@ import {
   Divider,
   Drawer,
   FormControl,
+  FormControlLabel,
   Grid,
   IconButton,
   InputAdornment,
@@ -42,16 +44,21 @@ import {
 } from "@mui/icons-material";
 import {
   getClasses,
+  getCurrentAcademicYear,
   getSections,
+  type AcademicYear,
   type SchoolClass,
   type Section,
 } from "../../api/academic";
 import {
   bulkImportStudentsCsv,
+  createGuardian,
+  createEnrollment,
   createStudent,
   deleteStudent,
   downloadStudentIdCard,
   exportStudentsCsv,
+  getEnrollmentsByStudents,
   getStudent,
   getStudentAttendance,
   getStudentAttendanceSummary,
@@ -59,7 +66,13 @@ import {
   getStudentFeePayments,
   getStudentTimetable,
   getStudents,
+  linkGuardianToStudent,
+  uploadGuardianPhoto,
+  uploadStudentDocument,
+  uploadStudentPhoto,
+  updateEnrollment,
   updateStudent,
+  type Enrollment,
   type FeeDue,
   type FeePayment,
   type Student,
@@ -98,8 +111,89 @@ function statusChipColor(status: string) {
 
 const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+function nullIfBlank(v: string) {
+  const t = v.trim();
+  return t ? t : null;
+}
+
+const emptyStudentForm = {
+  first_name: "",
+  last_name: "",
+  admission_no: "",
+  gender: "",
+  date_of_birth: "",
+  full_name_bc: "",
+  place_of_birth: "",
+  nationality: "",
+  religion: "",
+  blood_group: "",
+  admission_date: "",
+  admission_status: "pending",
+  medium: "",
+  shift: "",
+  previous_school_name: "",
+  previous_class: "",
+  transfer_certificate_no: "",
+  present_address: "",
+  permanent_address: "",
+  city: "",
+  thana: "",
+  postal_code: "",
+  emergency_contact_name: "",
+  emergency_contact_phone: "",
+  known_allergies: "",
+  chronic_illness: "",
+  physical_disabilities: "",
+  special_needs: "",
+  doctor_name: "",
+  doctor_phone: "",
+  vaccination_status: "",
+  birth_certificate_no: "",
+  national_id_no: "",
+  passport_no: "",
+  fee_category: "",
+  scholarship_type: "",
+  portal_username: "",
+  portal_access_student: false,
+  portal_access_parent: false,
+  remarks: "",
+  rfid_nfc_no: "",
+  hostel_status: "",
+  library_card_no: "",
+  status: "active",
+};
+
+const emptyEnrollmentForm = { class_id: "", section_id: "", roll_number: "" };
+
+const emptyFatherForm = {
+  full_name: "",
+  occupation: "",
+  phone: "",
+  email: "",
+  id_number: "",
+};
+
+const emptyMotherForm = {
+  full_name: "",
+  occupation: "",
+  phone: "",
+  email: "",
+  id_number: "",
+};
+
+const emptyGuardianForm = {
+  full_name: "",
+  relation: "guardian",
+  phone: "",
+  email: "",
+  occupation: "",
+  id_number: "",
+  address: "",
+};
+
 export default function StudentsPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const sectionsByClassIdRef = useRef<Record<string, Section[]>>({});
 
   const [students, setStudents] = useState<Student[]>([]);
   const [total, setTotal] = useState(0);
@@ -114,6 +208,12 @@ export default function StudentsPage() {
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
 
+  const [currentAcademicYear, setCurrentAcademicYear] =
+    useState<AcademicYear | null>(null);
+  const [sectionsByClassId, setSectionsByClassId] = useState<
+    Record<string, Section[]>
+  >({});
+
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
 
@@ -122,6 +222,8 @@ export default function StudentsPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
+  const [dialogTab, setDialogTab] = useState(0);
+  const [dialogLoading, setDialogLoading] = useState(false);
   const [dialogSaving, setDialogSaving] = useState(false);
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [form, setForm] = useState<{
@@ -130,15 +232,81 @@ export default function StudentsPage() {
     admission_no: string;
     gender: string;
     date_of_birth: string;
+    full_name_bc: string;
+    place_of_birth: string;
+    nationality: string;
+    religion: string;
+    blood_group: string;
+    admission_date: string;
+    admission_status: string;
+    medium: string;
+    shift: string;
+    previous_school_name: string;
+    previous_class: string;
+    transfer_certificate_no: string;
+    present_address: string;
+    permanent_address: string;
+    city: string;
+    thana: string;
+    postal_code: string;
+    emergency_contact_name: string;
+    emergency_contact_phone: string;
+    known_allergies: string;
+    chronic_illness: string;
+    physical_disabilities: string;
+    special_needs: string;
+    doctor_name: string;
+    doctor_phone: string;
+    vaccination_status: string;
+    birth_certificate_no: string;
+    national_id_no: string;
+    passport_no: string;
+    fee_category: string;
+    scholarship_type: string;
+    portal_username: string;
+    portal_access_student: boolean;
+    portal_access_parent: boolean;
+    remarks: string;
+    rfid_nfc_no: string;
+    hostel_status: string;
+    library_card_no: string;
     status: string;
-  }>({
-    first_name: "",
-    last_name: "",
-    admission_no: "",
-    gender: "",
-    date_of_birth: "",
-    status: "active",
-  });
+  }>({ ...emptyStudentForm });
+  const [enrollmentForm, setEnrollmentForm] = useState<{
+    class_id: string;
+    section_id: string;
+    roll_number: string;
+  }>({ ...emptyEnrollmentForm });
+
+  const [studentPhotoFile, setStudentPhotoFile] = useState<File | null>(null);
+  const [previousTcFile, setPreviousTcFile] = useState<File | null>(null);
+
+  const [fatherForm, setFatherForm] = useState<{
+    full_name: string;
+    occupation: string;
+    phone: string;
+    email: string;
+    id_number: string;
+  }>({ ...emptyFatherForm });
+  const [motherForm, setMotherForm] = useState<{
+    full_name: string;
+    occupation: string;
+    phone: string;
+    email: string;
+    id_number: string;
+  }>({ ...emptyMotherForm });
+  const [guardianForm, setGuardianForm] = useState<{
+    full_name: string;
+    relation: string;
+    phone: string;
+    email: string;
+    occupation: string;
+    id_number: string;
+    address: string;
+  }>({ ...emptyGuardianForm });
+  const [fatherPhotoFile, setFatherPhotoFile] = useState<File | null>(null);
+  const [motherPhotoFile, setMotherPhotoFile] = useState<File | null>(null);
+  const [guardianPhotoFile, setGuardianPhotoFile] = useState<File | null>(null);
 
   const [drawerStudentId, setDrawerStudentId] = useState<string | null>(null);
   const [drawerTab, setDrawerTab] = useState(0);
@@ -154,7 +322,7 @@ export default function StudentsPage() {
   const [feeDues, setFeeDues] = useState<FeeDue[] | null>(null);
   const [feePayments, setFeePayments] = useState<FeePayment[] | null>(null);
   const [timetable, setTimetable] = useState<StudentTimetableEntry[] | null>(
-    null
+    null,
   );
 
   const dateRange30d = useMemo(() => {
@@ -166,13 +334,31 @@ export default function StudentsPage() {
 
   const filteredCounts = useMemo(() => {
     const active = students.filter(
-      (s) => s.status?.toLowerCase() === "active"
+      (s) => s.status?.toLowerCase() === "active",
     ).length;
     const inactive = students.filter(
-      (s) => s.status?.toLowerCase() === "inactive"
+      (s) => s.status?.toLowerCase() === "inactive",
     ).length;
     return { active, inactive };
   }, [students]);
+
+  const enrollmentSectionOptions = useMemo(() => {
+    if (!enrollmentForm.class_id) return [];
+    return sectionsByClassId[enrollmentForm.class_id] ?? [];
+  }, [enrollmentForm.class_id, sectionsByClassId]);
+
+  const ensureSectionsForClass = useCallback(async (targetClassId: string) => {
+    if (!targetClassId) return;
+    if (sectionsByClassIdRef.current[targetClassId]) return;
+    try {
+      const list = await getSections(targetClassId);
+      const active = list.filter((s) => s.is_active);
+      sectionsByClassIdRef.current[targetClassId] = active;
+      setSectionsByClassId((p) => ({ ...p, [targetClassId]: active }));
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
 
   const loadStudents = useCallback(async () => {
     setLoading(true);
@@ -190,6 +376,7 @@ export default function StudentsPage() {
       setTotal(res.total);
     } catch (err) {
       console.error("Failed to load students", err);
+      showToast({ severity: "error", message: "Failed to load students" });
     } finally {
       setLoading(false);
     }
@@ -200,6 +387,18 @@ export default function StudentsPage() {
       try {
         const list = await getClasses();
         setClasses(list.filter((c) => c.is_active));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    load();
+  }, []);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const year = await getCurrentAcademicYear();
+        setCurrentAcademicYear(year);
       } catch (e) {
         console.error(e);
       }
@@ -235,6 +434,27 @@ export default function StudentsPage() {
     load();
   }, [classId, sectionId]);
 
+  useEffect(() => {
+    if (!enrollmentForm.class_id) {
+      if (enrollmentForm.section_id) {
+        setEnrollmentForm((p) => ({ ...p, section_id: "" }));
+      }
+      return;
+    }
+    ensureSectionsForClass(enrollmentForm.class_id);
+    const list = sectionsByClassIdRef.current[enrollmentForm.class_id] ?? [];
+    if (
+      enrollmentForm.section_id &&
+      !list.some((s) => s.id === enrollmentForm.section_id)
+    ) {
+      setEnrollmentForm((p) => ({ ...p, section_id: "" }));
+    }
+  }, [
+    enrollmentForm.class_id,
+    enrollmentForm.section_id,
+    ensureSectionsForClass,
+  ]);
+
   async function openDrawer(studentId: string) {
     setDrawerStudentId(studentId);
     setDrawerTab(0);
@@ -262,10 +482,10 @@ export default function StudentsPage() {
         try {
           const [summary, records] = await Promise.all([
             getStudentAttendanceSummary(drawerStudentId, dateRange30d).catch(
-              () => null
+              () => null,
             ),
             getStudentAttendance(drawerStudentId, dateRange30d).catch(
-              () => null
+              () => null,
             ),
           ]);
           setAttendanceSummary(summary);
@@ -289,7 +509,7 @@ export default function StudentsPage() {
       if (drawerTab === 3 && !timetable) {
         try {
           const tt = await getStudentTimetable(drawerStudentId).catch(
-            () => null
+            () => null,
           );
           setTimetable(tt);
         } catch (e) {
@@ -312,29 +532,114 @@ export default function StudentsPage() {
   function openCreateDialog() {
     setDialogMode("create");
     setEditingStudentId(null);
-    setForm({
-      first_name: "",
-      last_name: "",
-      admission_no: "",
-      gender: "",
-      date_of_birth: "",
-      status: "active",
+    setDialogTab(0);
+    setDialogLoading(false);
+    setForm({ ...emptyStudentForm });
+    const defaultClassId = classId || classes[0]?.id || "";
+    setEnrollmentForm({
+      ...emptyEnrollmentForm,
+      class_id: defaultClassId,
+      section_id: "",
     });
+    if (defaultClassId) ensureSectionsForClass(defaultClassId);
+    if (!currentAcademicYear) {
+      getCurrentAcademicYear()
+        .then((year) => setCurrentAcademicYear(year))
+        .catch((e) => console.error(e));
+    }
+    setStudentPhotoFile(null);
+    setPreviousTcFile(null);
+    setFatherForm({ ...emptyFatherForm });
+    setMotherForm({ ...emptyMotherForm });
+    setGuardianForm({ ...emptyGuardianForm });
+    setFatherPhotoFile(null);
+    setMotherPhotoFile(null);
+    setGuardianPhotoFile(null);
     setDialogOpen(true);
   }
 
-  function openEditDialog(s: Student) {
+  async function openEditDialog(s: Student) {
     setDialogMode("edit");
     setEditingStudentId(s.id);
-    setForm({
-      first_name: s.first_name ?? "",
-      last_name: s.last_name ?? "",
-      admission_no: s.admission_no ?? "",
-      gender: s.gender ?? "",
-      date_of_birth: s.date_of_birth ?? "",
-      status: s.status ?? "active",
-    });
+    setDialogTab(0);
     setDialogOpen(true);
+    setDialogLoading(true);
+    setStudentPhotoFile(null);
+    setPreviousTcFile(null);
+    setFatherForm({ ...emptyFatherForm });
+    setMotherForm({ ...emptyMotherForm });
+    setGuardianForm({ ...emptyGuardianForm });
+    setFatherPhotoFile(null);
+    setMotherPhotoFile(null);
+    setGuardianPhotoFile(null);
+    try {
+      const full = await getStudent(s.id);
+      setForm({
+        first_name: full.first_name ?? "",
+        last_name: full.last_name ?? "",
+        admission_no: full.admission_no ?? "",
+        gender: full.gender ?? "",
+        date_of_birth: full.date_of_birth ?? "",
+        full_name_bc: full.full_name_bc ?? "",
+        place_of_birth: full.place_of_birth ?? "",
+        nationality: full.nationality ?? "",
+        religion: full.religion ?? "",
+        blood_group: full.blood_group ?? "",
+        admission_date: full.admission_date ?? "",
+        admission_status: full.admission_status ?? "pending",
+        medium: full.medium ?? "",
+        shift: full.shift ?? "",
+        previous_school_name: full.previous_school_name ?? "",
+        previous_class: full.previous_class ?? "",
+        transfer_certificate_no: full.transfer_certificate_no ?? "",
+        present_address: full.present_address ?? "",
+        permanent_address: full.permanent_address ?? "",
+        city: full.city ?? "",
+        thana: full.thana ?? "",
+        postal_code: full.postal_code ?? "",
+        emergency_contact_name: full.emergency_contact_name ?? "",
+        emergency_contact_phone: full.emergency_contact_phone ?? "",
+        known_allergies: full.known_allergies ?? "",
+        chronic_illness: full.chronic_illness ?? "",
+        physical_disabilities: full.physical_disabilities ?? "",
+        special_needs: full.special_needs ?? "",
+        doctor_name: full.doctor_name ?? "",
+        doctor_phone: full.doctor_phone ?? "",
+        vaccination_status: full.vaccination_status ?? "",
+        birth_certificate_no: full.birth_certificate_no ?? "",
+        national_id_no: full.national_id_no ?? "",
+        passport_no: full.passport_no ?? "",
+        fee_category: full.fee_category ?? "",
+        scholarship_type: full.scholarship_type ?? "",
+        portal_username: full.portal_username ?? "",
+        portal_access_student: full.portal_access_student ?? false,
+        portal_access_parent: full.portal_access_parent ?? false,
+        remarks: full.remarks ?? "",
+        rfid_nfc_no: full.rfid_nfc_no ?? "",
+        hostel_status: full.hostel_status ?? "",
+        library_card_no: full.library_card_no ?? "",
+        status: full.status ?? "active",
+      });
+
+      const yearId = currentAcademicYear?.id;
+      const enrollments: Enrollment[] = await getEnrollmentsByStudents(
+        [s.id],
+        yearId,
+      ).catch(() => []);
+      const e = enrollments[0];
+      const targetClassId = e?.class_id ?? "";
+      setEnrollmentForm({
+        class_id: targetClassId,
+        section_id: e?.section_id ?? "",
+        roll_number: e?.roll_number != null ? String(e.roll_number) : "",
+      });
+      if (targetClassId) ensureSectionsForClass(targetClassId);
+    } catch (e) {
+      console.error(e);
+      showToast({ severity: "error", message: "Failed to load student" });
+    } finally {
+      setDialogLoading(false);
+    }
   }
 
   async function handleSaveStudent() {
@@ -342,25 +647,248 @@ export default function StudentsPage() {
       showToast({ severity: "error", message: "First name is required" });
       return;
     }
+    if (!enrollmentForm.class_id) {
+      showToast({ severity: "error", message: "Class is required" });
+      return;
+    }
+    if (dialogMode === "create" && !currentAcademicYear?.id) {
+      showToast({
+        severity: "error",
+        message: "Current academic year is not set",
+      });
+      return;
+    }
     setDialogSaving(true);
     try {
       const payload = {
         first_name: form.first_name.trim(),
-        last_name: form.last_name.trim() || null,
-        admission_no: form.admission_no.trim() || null,
+        last_name: nullIfBlank(form.last_name),
+        admission_no: nullIfBlank(form.admission_no),
         gender: form.gender || null,
         date_of_birth: form.date_of_birth || null,
+        full_name_bc: nullIfBlank(form.full_name_bc),
+        place_of_birth: nullIfBlank(form.place_of_birth),
+        nationality: nullIfBlank(form.nationality),
+        religion: nullIfBlank(form.religion),
+        blood_group: nullIfBlank(form.blood_group),
+        admission_date: form.admission_date || null,
+        admission_status: form.admission_status || "pending",
+        medium: nullIfBlank(form.medium),
+        shift: nullIfBlank(form.shift),
+        previous_school_name: nullIfBlank(form.previous_school_name),
+        previous_class: nullIfBlank(form.previous_class),
+        transfer_certificate_no: nullIfBlank(form.transfer_certificate_no),
+        present_address: nullIfBlank(form.present_address),
+        permanent_address: nullIfBlank(form.permanent_address),
+        city: nullIfBlank(form.city),
+        thana: nullIfBlank(form.thana),
+        postal_code: nullIfBlank(form.postal_code),
+        emergency_contact_name: nullIfBlank(form.emergency_contact_name),
+        emergency_contact_phone: nullIfBlank(form.emergency_contact_phone),
+        known_allergies: nullIfBlank(form.known_allergies),
+        chronic_illness: nullIfBlank(form.chronic_illness),
+        physical_disabilities: nullIfBlank(form.physical_disabilities),
+        special_needs: nullIfBlank(form.special_needs),
+        doctor_name: nullIfBlank(form.doctor_name),
+        doctor_phone: nullIfBlank(form.doctor_phone),
+        vaccination_status: nullIfBlank(form.vaccination_status),
+        birth_certificate_no: nullIfBlank(form.birth_certificate_no),
+        national_id_no: nullIfBlank(form.national_id_no),
+        passport_no: nullIfBlank(form.passport_no),
+        fee_category: nullIfBlank(form.fee_category),
+        scholarship_type: nullIfBlank(form.scholarship_type),
+        portal_username: nullIfBlank(form.portal_username),
+        portal_access_student: form.portal_access_student,
+        portal_access_parent: form.portal_access_parent,
+        remarks: nullIfBlank(form.remarks),
+        rfid_nfc_no: nullIfBlank(form.rfid_nfc_no),
+        hostel_status: nullIfBlank(form.hostel_status),
+        library_card_no: nullIfBlank(form.library_card_no),
         status: form.status || "active",
       };
+      const rollNumberRaw = enrollmentForm.roll_number.trim();
+      const rollNumber = rollNumberRaw ? Number(rollNumberRaw) : null;
+      const roll = Number.isFinite(rollNumber) ? rollNumber : null;
+
       if (dialogMode === "create") {
-        await createStudent(payload);
+        const created = await createStudent(payload);
+
+        await Promise.all([
+          studentPhotoFile
+            ? uploadStudentPhoto(created.id, studentPhotoFile)
+            : Promise.resolve(),
+          previousTcFile
+            ? uploadStudentDocument(created.id, previousTcFile)
+            : Promise.resolve(),
+        ]);
+
+        const guardiansToCreate: Array<{
+          relation: string;
+          is_primary: boolean;
+          payload: Parameters<typeof createGuardian>[0];
+          photoFile: File | null;
+        }> = [
+          {
+            relation: "father",
+            is_primary: true,
+            payload: {
+              full_name: fatherForm.full_name.trim(),
+              occupation: nullIfBlank(fatherForm.occupation),
+              phone: nullIfBlank(fatherForm.phone),
+              email: nullIfBlank(fatherForm.email),
+              id_number: nullIfBlank(fatherForm.id_number),
+            },
+            photoFile: fatherPhotoFile,
+          },
+          {
+            relation: "mother",
+            is_primary: false,
+            payload: {
+              full_name: motherForm.full_name.trim(),
+              occupation: nullIfBlank(motherForm.occupation),
+              phone: nullIfBlank(motherForm.phone),
+              email: nullIfBlank(motherForm.email),
+              id_number: nullIfBlank(motherForm.id_number),
+            },
+            photoFile: motherPhotoFile,
+          },
+          {
+            relation: guardianForm.relation || "guardian",
+            is_primary: false,
+            payload: {
+              full_name: guardianForm.full_name.trim(),
+              occupation: nullIfBlank(guardianForm.occupation),
+              phone: nullIfBlank(guardianForm.phone),
+              email: nullIfBlank(guardianForm.email),
+              id_number: nullIfBlank(guardianForm.id_number),
+              address: nullIfBlank(guardianForm.address),
+            },
+            photoFile: guardianPhotoFile,
+          },
+        ];
+
+        for (const g of guardiansToCreate) {
+          if (!g.payload.full_name) continue;
+          const createdGuardian = await createGuardian(g.payload);
+          await Promise.all([
+            g.photoFile
+              ? uploadGuardianPhoto(createdGuardian.id, g.photoFile)
+              : Promise.resolve(),
+            linkGuardianToStudent(created.id, {
+              guardian_id: createdGuardian.id,
+              relation: g.relation,
+              is_primary: g.is_primary,
+            }),
+          ]);
+        }
+
+        await createEnrollment({
+          student_id: created.id,
+          academic_year_id: currentAcademicYear!.id,
+          class_id: enrollmentForm.class_id,
+          section_id: enrollmentForm.section_id || null,
+          roll_number: roll,
+        });
+        showToast({ severity: "success", message: "Student created" });
       } else if (editingStudentId) {
         await updateStudent(editingStudentId, payload);
+        await Promise.all([
+          studentPhotoFile
+            ? uploadStudentPhoto(editingStudentId, studentPhotoFile)
+            : Promise.resolve(),
+          previousTcFile
+            ? uploadStudentDocument(editingStudentId, previousTcFile)
+            : Promise.resolve(),
+        ]);
+
+        const guardiansToCreate: Array<{
+          relation: string;
+          is_primary: boolean;
+          payload: Parameters<typeof createGuardian>[0];
+          photoFile: File | null;
+        }> = [
+          {
+            relation: "father",
+            is_primary: true,
+            payload: {
+              full_name: fatherForm.full_name.trim(),
+              occupation: nullIfBlank(fatherForm.occupation),
+              phone: nullIfBlank(fatherForm.phone),
+              email: nullIfBlank(fatherForm.email),
+              id_number: nullIfBlank(fatherForm.id_number),
+            },
+            photoFile: fatherPhotoFile,
+          },
+          {
+            relation: "mother",
+            is_primary: false,
+            payload: {
+              full_name: motherForm.full_name.trim(),
+              occupation: nullIfBlank(motherForm.occupation),
+              phone: nullIfBlank(motherForm.phone),
+              email: nullIfBlank(motherForm.email),
+              id_number: nullIfBlank(motherForm.id_number),
+            },
+            photoFile: motherPhotoFile,
+          },
+          {
+            relation: guardianForm.relation || "guardian",
+            is_primary: false,
+            payload: {
+              full_name: guardianForm.full_name.trim(),
+              occupation: nullIfBlank(guardianForm.occupation),
+              phone: nullIfBlank(guardianForm.phone),
+              email: nullIfBlank(guardianForm.email),
+              id_number: nullIfBlank(guardianForm.id_number),
+              address: nullIfBlank(guardianForm.address),
+            },
+            photoFile: guardianPhotoFile,
+          },
+        ];
+
+        for (const g of guardiansToCreate) {
+          if (!g.payload.full_name) continue;
+          const createdGuardian = await createGuardian(g.payload);
+          await Promise.all([
+            g.photoFile
+              ? uploadGuardianPhoto(createdGuardian.id, g.photoFile)
+              : Promise.resolve(),
+            linkGuardianToStudent(editingStudentId, {
+              guardian_id: createdGuardian.id,
+              relation: g.relation,
+              is_primary: g.is_primary,
+            }),
+          ]);
+        }
+
+        const yearId = currentAcademicYear?.id;
+        const enrollments: Enrollment[] = await getEnrollmentsByStudents(
+          [editingStudentId],
+          yearId,
+        ).catch(() => []);
+        const current = enrollments[0];
+        if (current) {
+          await updateEnrollment(current.id, {
+            class_id: enrollmentForm.class_id,
+            section_id: enrollmentForm.section_id || null,
+            roll_number: roll,
+          });
+        } else if (yearId) {
+          await createEnrollment({
+            student_id: editingStudentId,
+            academic_year_id: yearId,
+            class_id: enrollmentForm.class_id,
+            section_id: enrollmentForm.section_id || null,
+            roll_number: roll,
+          });
+        }
+        showToast({ severity: "success", message: "Student updated" });
       }
       setDialogOpen(false);
       loadStudents();
     } catch (e) {
       console.error(e);
+      showToast({ severity: "error", message: "Failed to save student" });
     } finally {
       setDialogSaving(false);
     }
@@ -421,7 +949,7 @@ export default function StudentsPage() {
   async function handleDownloadIdCard(s: Student) {
     try {
       const blob = await downloadStudentIdCard(s.id);
-      downloadBlob(blob, `id_card_${s.id}.txt`);
+      downloadBlob(blob, `id_card_${s.id}.html`);
     } catch (e) {
       console.error(e);
     }
@@ -787,102 +1315,1109 @@ export default function StudentsPage() {
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         fullWidth
-        maxWidth="sm"
+        maxWidth="md"
       >
         <DialogTitle>
           {dialogMode === "create" ? "Add Student" : "Edit Student"}
         </DialogTitle>
         <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 0.5 }}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="First Name"
-                fullWidth
-                margin="normal"
-                value={form.first_name}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, first_name: e.target.value }))
-                }
-                required
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Last Name"
-                fullWidth
-                margin="normal"
-                value={form.last_name}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, last_name: e.target.value }))
-                }
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Admission No"
-                fullWidth
-                margin="normal"
-                value={form.admission_no}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, admission_no: e.target.value }))
-                }
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Gender</InputLabel>
-                <Select
-                  value={form.gender}
-                  label="Gender"
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, gender: e.target.value }))
-                  }
-                >
-                  <MenuItem value="">Unspecified</MenuItem>
-                  <MenuItem value="male">Male</MenuItem>
-                  <MenuItem value="female">Female</MenuItem>
-                  <MenuItem value="other">Other</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Date of Birth"
-                type="date"
-                fullWidth
-                margin="normal"
-                InputLabelProps={{ shrink: true }}
-                value={form.date_of_birth}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, date_of_birth: e.target.value }))
-                }
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={form.status}
-                  label="Status"
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, status: e.target.value }))
-                  }
-                >
-                  <MenuItem value="active">Active</MenuItem>
-                  <MenuItem value="inactive">Inactive</MenuItem>
-                  <MenuItem value="suspended">Suspended</MenuItem>
-                  <MenuItem value="alumni">Alumni</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
+          <Tabs
+            value={dialogTab}
+            onChange={(_e, v) => setDialogTab(v)}
+            sx={{ mt: 1 }}
+            variant="scrollable"
+            scrollButtons="auto"
+          >
+            <Tab label="Basics" />
+            <Tab label="Enrollment" />
+            <Tab label="Admission" />
+            <Tab label="Address" />
+            <Tab label="Health & IDs" />
+            <Tab label="Portal & Files" />
+            <Tab label="Guardians" />
+          </Tabs>
+
+          {dialogLoading ? (
+            <Box sx={{ p: 4, display: "flex", justifyContent: "center" }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <>
+              {dialogTab === 0 && (
+                <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="First Name"
+                      fullWidth
+                      margin="normal"
+                      value={form.first_name}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, first_name: e.target.value }))
+                      }
+                      required
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Last Name"
+                      fullWidth
+                      margin="normal"
+                      value={form.last_name}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, last_name: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Admission No"
+                      fullWidth
+                      margin="normal"
+                      value={form.admission_no}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, admission_no: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Full Name (Birth Cert)"
+                      fullWidth
+                      margin="normal"
+                      value={form.full_name_bc}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, full_name_bc: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <FormControl fullWidth margin="normal">
+                      <InputLabel>Gender</InputLabel>
+                      <Select
+                        value={form.gender}
+                        label="Gender"
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, gender: e.target.value }))
+                        }
+                      >
+                        <MenuItem value="">Unspecified</MenuItem>
+                        <MenuItem value="male">Male</MenuItem>
+                        <MenuItem value="female">Female</MenuItem>
+                        <MenuItem value="other">Other</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Date of Birth"
+                      type="date"
+                      fullWidth
+                      margin="normal"
+                      InputLabelProps={{ shrink: true }}
+                      value={form.date_of_birth}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          date_of_birth: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <FormControl fullWidth margin="normal">
+                      <InputLabel>Status</InputLabel>
+                      <Select
+                        value={form.status}
+                        label="Status"
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, status: e.target.value }))
+                        }
+                      >
+                        <MenuItem value="active">Active</MenuItem>
+                        <MenuItem value="inactive">Inactive</MenuItem>
+                        <MenuItem value="suspended">Suspended</MenuItem>
+                        <MenuItem value="alumni">Alumni</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+              )}
+
+              {dialogTab === 1 && (
+                <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Academic Year"
+                      fullWidth
+                      margin="normal"
+                      value={currentAcademicYear?.name || ""}
+                      disabled
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Roll Number"
+                      type="number"
+                      fullWidth
+                      margin="normal"
+                      value={enrollmentForm.roll_number}
+                      onChange={(e) =>
+                        setEnrollmentForm((p) => ({
+                          ...p,
+                          roll_number: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <FormControl fullWidth margin="normal" required>
+                      <InputLabel>Class</InputLabel>
+                      <Select
+                        value={enrollmentForm.class_id}
+                        label="Class"
+                        onChange={(e) =>
+                          setEnrollmentForm((p) => ({
+                            ...p,
+                            class_id: e.target.value,
+                            section_id: "",
+                          }))
+                        }
+                      >
+                        <MenuItem value="">Select class</MenuItem>
+                        {classes.map((c) => (
+                          <MenuItem key={c.id} value={c.id}>
+                            {c.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <FormControl
+                      fullWidth
+                      margin="normal"
+                      disabled={!enrollmentForm.class_id}
+                    >
+                      <InputLabel>Section</InputLabel>
+                      <Select
+                        value={enrollmentForm.section_id}
+                        label="Section"
+                        onChange={(e) =>
+                          setEnrollmentForm((p) => ({
+                            ...p,
+                            section_id: e.target.value,
+                          }))
+                        }
+                      >
+                        <MenuItem value="">Unassigned</MenuItem>
+                        {enrollmentSectionOptions.map((s) => (
+                          <MenuItem key={s.id} value={s.id}>
+                            {s.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+              )}
+
+              {dialogTab === 2 && (
+                <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Admission Date"
+                      type="date"
+                      fullWidth
+                      margin="normal"
+                      InputLabelProps={{ shrink: true }}
+                      value={form.admission_date}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          admission_date: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <FormControl fullWidth margin="normal">
+                      <InputLabel>Admission Status</InputLabel>
+                      <Select
+                        value={form.admission_status}
+                        label="Admission Status"
+                        onChange={(e) =>
+                          setForm((p) => ({
+                            ...p,
+                            admission_status: e.target.value,
+                          }))
+                        }
+                      >
+                        <MenuItem value="pending">Pending</MenuItem>
+                        <MenuItem value="approved">Approved</MenuItem>
+                        <MenuItem value="rejected">Rejected</MenuItem>
+                        <MenuItem value="withdrawn">Withdrawn</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Medium"
+                      fullWidth
+                      margin="normal"
+                      value={form.medium}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, medium: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Shift"
+                      fullWidth
+                      margin="normal"
+                      value={form.shift}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, shift: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Previous School Name"
+                      fullWidth
+                      margin="normal"
+                      value={form.previous_school_name}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          previous_school_name: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Previous Class"
+                      fullWidth
+                      margin="normal"
+                      value={form.previous_class}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          previous_class: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Transfer Certificate No"
+                      fullWidth
+                      margin="normal"
+                      value={form.transfer_certificate_no}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          transfer_certificate_no: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Fee Category"
+                      fullWidth
+                      margin="normal"
+                      value={form.fee_category}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, fee_category: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Scholarship Type"
+                      fullWidth
+                      margin="normal"
+                      value={form.scholarship_type}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          scholarship_type: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="RFID / NFC No"
+                      fullWidth
+                      margin="normal"
+                      value={form.rfid_nfc_no}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, rfid_nfc_no: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Hostel Status"
+                      fullWidth
+                      margin="normal"
+                      value={form.hostel_status}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          hostel_status: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Library Card No"
+                      fullWidth
+                      margin="normal"
+                      value={form.library_card_no}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          library_card_no: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField
+                      label="Remarks"
+                      fullWidth
+                      margin="normal"
+                      value={form.remarks}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, remarks: e.target.value }))
+                      }
+                      multiline
+                      minRows={3}
+                    />
+                  </Grid>
+                </Grid>
+              )}
+
+              {dialogTab === 3 && (
+                <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField
+                      label="Present Address"
+                      fullWidth
+                      margin="normal"
+                      value={form.present_address}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          present_address: e.target.value,
+                        }))
+                      }
+                      multiline
+                      minRows={2}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField
+                      label="Permanent Address"
+                      fullWidth
+                      margin="normal"
+                      value={form.permanent_address}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          permanent_address: e.target.value,
+                        }))
+                      }
+                      multiline
+                      minRows={2}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="City"
+                      fullWidth
+                      margin="normal"
+                      value={form.city}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, city: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="Thana"
+                      fullWidth
+                      margin="normal"
+                      value={form.thana}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, thana: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="Postal Code"
+                      fullWidth
+                      margin="normal"
+                      value={form.postal_code}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, postal_code: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Emergency Contact Name"
+                      fullWidth
+                      margin="normal"
+                      value={form.emergency_contact_name}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          emergency_contact_name: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Emergency Contact Phone"
+                      fullWidth
+                      margin="normal"
+                      value={form.emergency_contact_phone}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          emergency_contact_phone: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                </Grid>
+              )}
+
+              {dialogTab === 4 && (
+                <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Place of Birth"
+                      fullWidth
+                      margin="normal"
+                      value={form.place_of_birth}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          place_of_birth: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Nationality"
+                      fullWidth
+                      margin="normal"
+                      value={form.nationality}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, nationality: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Religion"
+                      fullWidth
+                      margin="normal"
+                      value={form.religion}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, religion: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Blood Group"
+                      fullWidth
+                      margin="normal"
+                      value={form.blood_group}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, blood_group: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Known Allergies"
+                      fullWidth
+                      margin="normal"
+                      value={form.known_allergies}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          known_allergies: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Chronic Illness"
+                      fullWidth
+                      margin="normal"
+                      value={form.chronic_illness}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          chronic_illness: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Physical Disabilities"
+                      fullWidth
+                      margin="normal"
+                      value={form.physical_disabilities}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          physical_disabilities: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Special Needs"
+                      fullWidth
+                      margin="normal"
+                      value={form.special_needs}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          special_needs: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Doctor Name"
+                      fullWidth
+                      margin="normal"
+                      value={form.doctor_name}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, doctor_name: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Doctor Phone"
+                      fullWidth
+                      margin="normal"
+                      value={form.doctor_phone}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, doctor_phone: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Vaccination Status"
+                      fullWidth
+                      margin="normal"
+                      value={form.vaccination_status}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          vaccination_status: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Birth Certificate No"
+                      fullWidth
+                      margin="normal"
+                      value={form.birth_certificate_no}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          birth_certificate_no: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="National ID No"
+                      fullWidth
+                      margin="normal"
+                      value={form.national_id_no}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          national_id_no: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Passport No"
+                      fullWidth
+                      margin="normal"
+                      value={form.passport_no}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, passport_no: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                </Grid>
+              )}
+
+              {dialogTab === 5 && (
+                <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Portal Username"
+                      fullWidth
+                      margin="normal"
+                      value={form.portal_username}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          portal_username: e.target.value,
+                        }))
+                      }
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={form.portal_access_student}
+                          onChange={(e) =>
+                            setForm((p) => ({
+                              ...p,
+                              portal_access_student: e.target.checked,
+                            }))
+                          }
+                        />
+                      }
+                      label="Portal access (student)"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={form.portal_access_parent}
+                          onChange={(e) =>
+                            setForm((p) => ({
+                              ...p,
+                              portal_access_parent: e.target.checked,
+                            }))
+                          }
+                        />
+                      }
+                      label="Portal access (parent)"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <Box
+                      sx={{
+                        mt: 2,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 1,
+                      }}
+                    >
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        startIcon={<UploadFile />}
+                      >
+                        Select Student Photo
+                        <input
+                          type="file"
+                          hidden
+                          accept="image/*"
+                          onChange={(e) =>
+                            setStudentPhotoFile(e.target.files?.[0] ?? null)
+                          }
+                        />
+                      </Button>
+                      {studentPhotoFile ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {studentPhotoFile.name}
+                        </Typography>
+                      ) : null}
+
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        startIcon={<UploadFile />}
+                      >
+                        Upload Transfer Certificate
+                        <input
+                          type="file"
+                          hidden
+                          onChange={(e) =>
+                            setPreviousTcFile(e.target.files?.[0] ?? null)
+                          }
+                        />
+                      </Button>
+                      {previousTcFile ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {previousTcFile.name}
+                        </Typography>
+                      ) : null}
+                    </Box>
+                  </Grid>
+                </Grid>
+              )}
+
+              {dialogTab === 6 && (
+                <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                  <Grid size={{ xs: 12 }}>
+                    <Typography variant="subtitle2" sx={{ mt: 1 }}>
+                      Father
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Full Name"
+                      fullWidth
+                      margin="normal"
+                      value={fatherForm.full_name}
+                      onChange={(e) =>
+                        setFatherForm((p) => ({
+                          ...p,
+                          full_name: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Occupation"
+                      fullWidth
+                      margin="normal"
+                      value={fatherForm.occupation}
+                      onChange={(e) =>
+                        setFatherForm((p) => ({
+                          ...p,
+                          occupation: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="Phone"
+                      fullWidth
+                      margin="normal"
+                      value={fatherForm.phone}
+                      onChange={(e) =>
+                        setFatherForm((p) => ({ ...p, phone: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="Email"
+                      fullWidth
+                      margin="normal"
+                      value={fatherForm.email}
+                      onChange={(e) =>
+                        setFatherForm((p) => ({ ...p, email: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="ID Number"
+                      fullWidth
+                      margin="normal"
+                      value={fatherForm.id_number}
+                      onChange={(e) =>
+                        setFatherForm((p) => ({
+                          ...p,
+                          id_number: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <Button
+                      component="label"
+                      variant="outlined"
+                      startIcon={<UploadFile />}
+                    >
+                      Father Photo
+                      <input
+                        type="file"
+                        hidden
+                        accept="image/*"
+                        onChange={(e) =>
+                          setFatherPhotoFile(e.target.files?.[0] ?? null)
+                        }
+                      />
+                    </Button>
+                    {fatherPhotoFile ? (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 0.5 }}
+                      >
+                        {fatherPhotoFile.name}
+                      </Typography>
+                    ) : null}
+                  </Grid>
+
+                  <Grid size={{ xs: 12 }}>
+                    <Typography variant="subtitle2" sx={{ mt: 2 }}>
+                      Mother
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Full Name"
+                      fullWidth
+                      margin="normal"
+                      value={motherForm.full_name}
+                      onChange={(e) =>
+                        setMotherForm((p) => ({
+                          ...p,
+                          full_name: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <TextField
+                      label="Occupation"
+                      fullWidth
+                      margin="normal"
+                      value={motherForm.occupation}
+                      onChange={(e) =>
+                        setMotherForm((p) => ({
+                          ...p,
+                          occupation: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="Phone"
+                      fullWidth
+                      margin="normal"
+                      value={motherForm.phone}
+                      onChange={(e) =>
+                        setMotherForm((p) => ({ ...p, phone: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="Email"
+                      fullWidth
+                      margin="normal"
+                      value={motherForm.email}
+                      onChange={(e) =>
+                        setMotherForm((p) => ({ ...p, email: e.target.value }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="ID Number"
+                      fullWidth
+                      margin="normal"
+                      value={motherForm.id_number}
+                      onChange={(e) =>
+                        setMotherForm((p) => ({
+                          ...p,
+                          id_number: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <Button
+                      component="label"
+                      variant="outlined"
+                      startIcon={<UploadFile />}
+                    >
+                      Mother Photo
+                      <input
+                        type="file"
+                        hidden
+                        accept="image/*"
+                        onChange={(e) =>
+                          setMotherPhotoFile(e.target.files?.[0] ?? null)
+                        }
+                      />
+                    </Button>
+                    {motherPhotoFile ? (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 0.5 }}
+                      >
+                        {motherPhotoFile.name}
+                      </Typography>
+                    ) : null}
+                  </Grid>
+
+                  <Grid size={{ xs: 12 }}>
+                    <Typography variant="subtitle2" sx={{ mt: 2 }}>
+                      Guardian
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="Full Name"
+                      fullWidth
+                      margin="normal"
+                      value={guardianForm.full_name}
+                      onChange={(e) =>
+                        setGuardianForm((p) => ({
+                          ...p,
+                          full_name: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="Relation"
+                      fullWidth
+                      margin="normal"
+                      value={guardianForm.relation}
+                      onChange={(e) =>
+                        setGuardianForm((p) => ({
+                          ...p,
+                          relation: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="Phone"
+                      fullWidth
+                      margin="normal"
+                      value={guardianForm.phone}
+                      onChange={(e) =>
+                        setGuardianForm((p) => ({
+                          ...p,
+                          phone: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="Email"
+                      fullWidth
+                      margin="normal"
+                      value={guardianForm.email}
+                      onChange={(e) =>
+                        setGuardianForm((p) => ({
+                          ...p,
+                          email: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="Occupation"
+                      fullWidth
+                      margin="normal"
+                      value={guardianForm.occupation}
+                      onChange={(e) =>
+                        setGuardianForm((p) => ({
+                          ...p,
+                          occupation: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      label="ID Number"
+                      fullWidth
+                      margin="normal"
+                      value={guardianForm.id_number}
+                      onChange={(e) =>
+                        setGuardianForm((p) => ({
+                          ...p,
+                          id_number: e.target.value,
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField
+                      label="Address"
+                      fullWidth
+                      margin="normal"
+                      value={guardianForm.address}
+                      onChange={(e) =>
+                        setGuardianForm((p) => ({
+                          ...p,
+                          address: e.target.value,
+                        }))
+                      }
+                      multiline
+                      minRows={2}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <Button
+                      component="label"
+                      variant="outlined"
+                      startIcon={<UploadFile />}
+                    >
+                      Guardian Photo
+                      <input
+                        type="file"
+                        hidden
+                        accept="image/*"
+                        onChange={(e) =>
+                          setGuardianPhotoFile(e.target.files?.[0] ?? null)
+                        }
+                      />
+                    </Button>
+                    {guardianPhotoFile ? (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 0.5 }}
+                      >
+                        {guardianPhotoFile.name}
+                      </Typography>
+                    ) : null}
+                  </Grid>
+                </Grid>
+              )}
+            </>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
           <Button
             onClick={handleSaveStudent}
             variant="contained"
-            disabled={dialogSaving}
+            disabled={dialogSaving || dialogLoading}
           >
             {dialogSaving ? <CircularProgress size={20} /> : "Save"}
           </Button>

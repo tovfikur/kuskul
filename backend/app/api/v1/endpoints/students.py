@@ -1,6 +1,8 @@
 import uuid
 import csv
 import io
+import html
+import segno
 from datetime import date, datetime, time, timezone
 from typing import Optional
 
@@ -13,8 +15,13 @@ from app.api.deps import get_active_school_id, get_current_user, require_permiss
 from app.core.problems import not_found, problem
 from app.db.session import get_db
 from app.models.document import Document
+from app.models.academic_year import AcademicYear
 from app.models.enrollment import Enrollment
 from app.models.guardian import Guardian
+from app.models.school import School
+from app.models.school_class import SchoolClass
+from app.models.section import Section
+from app.models.setting import Setting
 from app.models.student import Student
 from app.models.student_guardian import StudentGuardian
 from app.models.teacher_assignment import StudentAttendance
@@ -31,17 +38,11 @@ router = APIRouter(dependencies=[Depends(require_permission("students:read"))])
 
 
 def _out(s: Student) -> StudentOut:
-    return StudentOut(
-        id=s.id,
-        school_id=s.school_id,
-        first_name=s.first_name,
-        last_name=s.last_name,
-        admission_no=s.admission_no,
-        gender=s.gender,
-        date_of_birth=s.date_of_birth,
-        status=s.status,
-        photo_url=s.photo_url,
-    )
+    return StudentOut.model_validate(s)
+
+
+def _admission_no(now: datetime, student_id: uuid.UUID) -> str:
+    return f"ADM-{now.strftime('%Y%m%d')}-{str(student_id).split('-', 1)[0].upper()}"
 
 
 @router.get("", response_model=dict)
@@ -92,19 +93,61 @@ def get_student(student_id: uuid.UUID, db: Session = Depends(get_db), school_id=
 @router.post("", response_model=StudentOut, dependencies=[Depends(require_permission("students:write"))])
 def create_student(payload: StudentCreate, db: Session = Depends(get_db), school_id=Depends(get_active_school_id)) -> StudentOut:
     now = datetime.now(timezone.utc)
+    admission_no = payload.admission_no.strip() if payload.admission_no else None
     s = Student(
         school_id=school_id,
         first_name=payload.first_name,
         last_name=payload.last_name,
-        admission_no=payload.admission_no,
+        admission_no=admission_no,
         gender=payload.gender,
         date_of_birth=payload.date_of_birth,
+        full_name_bc=payload.full_name_bc,
+        place_of_birth=payload.place_of_birth,
+        nationality=payload.nationality,
+        religion=payload.religion,
+        blood_group=payload.blood_group,
+        admission_date=payload.admission_date,
+        admission_status=payload.admission_status,
+        medium=payload.medium,
+        shift=payload.shift,
+        previous_school_name=payload.previous_school_name,
+        previous_class=payload.previous_class,
+        transfer_certificate_no=payload.transfer_certificate_no,
+        present_address=payload.present_address,
+        permanent_address=payload.permanent_address,
+        city=payload.city,
+        thana=payload.thana,
+        postal_code=payload.postal_code,
+        emergency_contact_name=payload.emergency_contact_name,
+        emergency_contact_phone=payload.emergency_contact_phone,
+        known_allergies=payload.known_allergies,
+        chronic_illness=payload.chronic_illness,
+        physical_disabilities=payload.physical_disabilities,
+        special_needs=payload.special_needs,
+        doctor_name=payload.doctor_name,
+        doctor_phone=payload.doctor_phone,
+        vaccination_status=payload.vaccination_status,
+        birth_certificate_no=payload.birth_certificate_no,
+        national_id_no=payload.national_id_no,
+        passport_no=payload.passport_no,
+        fee_category=payload.fee_category,
+        scholarship_type=payload.scholarship_type,
+        portal_username=payload.portal_username,
+        portal_access_student=payload.portal_access_student,
+        portal_access_parent=payload.portal_access_parent,
+        remarks=payload.remarks,
+        rfid_nfc_no=payload.rfid_nfc_no,
+        hostel_status=payload.hostel_status,
+        library_card_no=payload.library_card_no,
         status=payload.status,
         created_at=now,
     )
     db.add(s)
     db.commit()
     db.refresh(s)
+    if not s.admission_no:
+        s.admission_no = _admission_no(now, s.id)
+        db.commit()
     return _out(s)
 
 
@@ -237,6 +280,8 @@ def get_student_guardians(
             full_name=g.full_name,
             phone=g.phone,
             email=g.email,
+            occupation=g.occupation,
+            id_number=g.id_number,
             emergency_contact_name=g.emergency_contact_name,
             emergency_contact_phone=g.emergency_contact_phone,
             address=g.address,
@@ -466,8 +511,432 @@ def generate_student_id_card(
     s = db.get(Student, student_id)
     if not s or s.school_id != school_id:
         raise not_found("Student not found")
-    content = f"ID CARD\nStudent: {s.first_name} {s.last_name or ''}\nAdmission: {s.admission_no or ''}\nStudent ID: {s.id}\n".encode(
-        "utf-8"
-    )
-    headers = {"Content-Disposition": f'attachment; filename="id_card_{s.id}.txt"'}
-    return StreamingResponse(iter([content]), media_type="text/plain", headers=headers)
+
+    school = db.get(School, school_id)
+    school_name = school.name if school else "School"
+    school_code = school.code if school else ""
+
+    settings_rows = db.execute(
+        select(Setting).where(
+            Setting.school_id == school_id,
+            Setting.key.in_(
+                [
+                    "school.profile.address",
+                    "school.profile.phone",
+                    "school.profile.website",
+                    "school.profile.logo_url",
+                ]
+            ),
+        )
+    ).scalars().all()
+    settings_map = {row.key: row.value for row in settings_rows}
+    school_address = (settings_map.get("school.profile.address") or "").strip()
+    school_phone = (settings_map.get("school.profile.phone") or "").strip()
+    school_website = (settings_map.get("school.profile.website") or "").strip()
+    school_logo_url = (settings_map.get("school.profile.logo_url") or "").strip()
+
+    year = db.scalar(select(AcademicYear).where(AcademicYear.school_id == school_id, AcademicYear.is_current.is_(True)))
+    enrollment = None
+    if year:
+        enrollment = db.scalar(
+            select(Enrollment)
+            .where(
+                Enrollment.student_id == s.id,
+                Enrollment.academic_year_id == year.id,
+                Enrollment.status == "active",
+            )
+            .order_by(Enrollment.created_at.desc())
+        )
+    if not enrollment:
+        enrollment = db.scalar(
+            select(Enrollment)
+            .where(Enrollment.student_id == s.id, Enrollment.status == "active")
+            .order_by(Enrollment.created_at.desc())
+        )
+
+    class_name = ""
+    section_name = ""
+    roll_number = ""
+    if enrollment:
+        c = db.get(SchoolClass, enrollment.class_id)
+        class_name = c.name if c else ""
+        if enrollment.section_id:
+            sec = db.get(Section, enrollment.section_id)
+            section_name = sec.name if sec else ""
+        roll_number = str(enrollment.roll_number) if enrollment.roll_number is not None else ""
+
+    def esc(v: Optional[str]) -> str:
+        return html.escape((v or "").strip())
+
+    student_name = " ".join([part for part in [s.first_name, s.last_name or ""] if part]).strip()
+    dob = s.date_of_birth.isoformat() if s.date_of_birth else ""
+    issue_date = datetime.now(timezone.utc).date().isoformat()
+    qr_payload = "|".join(
+        [part for part in ["KUSKUL", school_code or "", str(s.id), s.admission_no or ""] if part.strip()]
+    ).strip()
+    qr_display = esc(qr_payload)
+    qr_svg = ""
+    try:
+        qr = segno.make(qr_payload, error="m")
+        buf = io.BytesIO()
+        qr.save(buf, kind="svg", scale=4, border=1)
+        qr_svg = buf.getvalue().decode("utf-8")
+        if qr_svg.startswith("<?xml"):
+            qr_svg = qr_svg.split("?>", 1)[1]
+        qr_svg = qr_svg.strip()
+    except Exception:
+        qr_svg = ""
+
+    html_doc = f"""<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ID Card - {esc(student_name)}</title>
+    <style>
+      :root {{
+        --card-w: 85.60mm;
+        --card-h: 53.98mm;
+        --border: #d0d5dd;
+        --text: #101828;
+        --muted: #475467;
+        --brand: #0b5fff;
+        --bg: #ffffff;
+      }}
+      * {{ box-sizing: border-box; }}
+      body {{
+        margin: 0;
+        padding: 16px;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        color: var(--text);
+        background: #f5f7fb;
+      }}
+      .sheet {{
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        align-items: flex-start;
+      }}
+      .card {{
+        width: var(--card-w);
+        height: var(--card-h);
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        position: relative;
+        box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12);
+      }}
+      .front .topbar {{
+        height: 12mm;
+        background: linear-gradient(90deg, rgba(11,95,255,1) 0%, rgba(25,160,255,1) 100%);
+      }}
+      .front .header {{
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 12mm;
+        display: flex;
+        align-items: center;
+        padding: 4mm;
+        gap: 3mm;
+        color: #fff;
+      }}
+      .logo {{
+        width: 9mm;
+        height: 9mm;
+        border-radius: 4mm;
+        background: rgba(255,255,255,0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        flex: 0 0 auto;
+      }}
+      .logo img {{
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }}
+      .school {{
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        line-height: 1.1;
+      }}
+      .school .name {{
+        font-weight: 800;
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }}
+      .school .sub {{
+        font-size: 10px;
+        opacity: 0.9;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }}
+      .front .content {{
+        position: absolute;
+        top: 12mm;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 3.5mm 4mm 3.5mm 4mm;
+        display: grid;
+        grid-template-columns: 18mm 1fr;
+        gap: 3.5mm;
+      }}
+      .photo {{
+        width: 18mm;
+        height: 22mm;
+        border: 1px solid var(--border);
+        border-radius: 3mm;
+        overflow: hidden;
+        background: #eef2ff;
+      }}
+      .photo img {{
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }}
+      .photo .ph {{
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--muted);
+        font-size: 10px;
+        padding: 2mm;
+        text-align: center;
+      }}
+      .fields {{
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2mm 3mm;
+        align-content: start;
+      }}
+      .field {{
+        min-width: 0;
+      }}
+      .label {{
+        font-size: 9px;
+        color: var(--muted);
+        letter-spacing: 0.02em;
+      }}
+      .value {{
+        font-size: 10.5px;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }}
+      .value.mono {{
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-weight: 600;
+      }}
+      .nameLine {{
+        grid-column: 1 / -1;
+      }}
+      .nameLine .value {{
+        font-size: 12px;
+        font-weight: 900;
+      }}
+      .badge {{
+        position: absolute;
+        bottom: 3mm;
+        right: 3mm;
+        font-size: 9px;
+        padding: 1.4mm 2.5mm;
+        border-radius: 999px;
+        background: rgba(11,95,255,0.10);
+        color: var(--brand);
+        border: 1px solid rgba(11,95,255,0.25);
+      }}
+      .back {{
+        padding: 4mm;
+        display: grid;
+        grid-template-columns: 1fr 20mm;
+        gap: 4mm;
+        height: 100%;
+      }}
+      .back .left {{
+        display: flex;
+        flex-direction: column;
+        gap: 2mm;
+        min-width: 0;
+      }}
+      .back .row {{
+        display: flex;
+        gap: 2mm;
+        line-height: 1.15;
+        min-width: 0;
+      }}
+      .back .row .k {{
+        width: 18mm;
+        flex: 0 0 auto;
+        font-size: 9px;
+        color: var(--muted);
+      }}
+      .back .row .v {{
+        font-size: 9.5px;
+        font-weight: 700;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }}
+      .back .row .v.wrap {{
+        white-space: normal;
+      }}
+      .qr {{
+        border: 1px dashed var(--border);
+        border-radius: 3mm;
+        padding: 2mm;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 2mm;
+      }}
+      .qr .box {{
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 2mm;
+      }}
+      .qr .box svg {{
+        width: 100%;
+        height: 100%;
+      }}
+      .qr .txt {{
+        font-size: 8px;
+        color: var(--muted);
+        word-break: break-all;
+      }}
+      .sign {{
+        margin-top: auto;
+        display: flex;
+        justify-content: space-between;
+        gap: 4mm;
+      }}
+      .sig {{
+        width: 34mm;
+        border-top: 1px solid var(--border);
+        padding-top: 1mm;
+        font-size: 8.5px;
+        color: var(--muted);
+        text-align: center;
+      }}
+      @media print {{
+        body {{ padding: 0; background: #fff; }}
+        .card {{ box-shadow: none; }}
+        .sheet {{ gap: 0; }}
+        .front {{ break-after: page; }}
+      }}
+    </style>
+  </head>
+  <body>
+    <div class="sheet">
+      <div class="card front">
+        <div class="topbar"></div>
+        <div class="header">
+          <div class="logo">
+            {f'<img src="{esc(school_logo_url)}" alt="Logo" />' if school_logo_url else '<span style="font-weight:800;font-size:10px;">ID</span>'}
+          </div>
+          <div class="school">
+            <div class="name">{esc(school_name)}</div>
+            <div class="sub">Student Identity Card</div>
+          </div>
+        </div>
+        <div class="content">
+          <div class="photo">
+            {f'<img src="{esc(s.photo_url)}" alt="Student photo" />' if s.photo_url else '<div class="ph">Photo</div>'}
+          </div>
+          <div class="fields">
+            <div class="field nameLine">
+              <div class="label">Student Name</div>
+              <div class="value">{esc(student_name)}</div>
+            </div>
+            <div class="field">
+              <div class="label">Admission No</div>
+              <div class="value mono">{esc(s.admission_no or "")}</div>
+            </div>
+            <div class="field">
+              <div class="label">Roll No</div>
+              <div class="value mono">{esc(roll_number)}</div>
+            </div>
+            <div class="field">
+              <div class="label">Class</div>
+              <div class="value">{esc(class_name)}</div>
+            </div>
+            <div class="field">
+              <div class="label">Section</div>
+              <div class="value">{esc(section_name)}</div>
+            </div>
+            <div class="field">
+              <div class="label">Date of Birth</div>
+              <div class="value mono">{esc(dob)}</div>
+            </div>
+            <div class="field">
+              <div class="label">Blood Group</div>
+              <div class="value">{esc(s.blood_group or "")}</div>
+            </div>
+          </div>
+        </div>
+        <div class="badge">{esc((year.name if year else "") or "Active")}</div>
+      </div>
+
+      <div class="card">
+        <div class="back">
+          <div class="left">
+            <div class="row">
+              <div class="k">School</div>
+              <div class="v">{esc(school_name)}</div>
+            </div>
+            <div class="row">
+              <div class="k">Address</div>
+              <div class="v wrap">{esc(school_address)}</div>
+            </div>
+            <div class="row">
+              <div class="k">Phone</div>
+              <div class="v">{esc(school_phone)}</div>
+            </div>
+            <div class="row">
+              <div class="k">Website</div>
+              <div class="v">{esc(school_website)}</div>
+            </div>
+            <div class="row">
+              <div class="k">Emergency</div>
+              <div class="v">{esc(s.emergency_contact_phone or "")}</div>
+            </div>
+            <div class="row">
+              <div class="k">Issued</div>
+              <div class="v mono">{esc(issue_date)}</div>
+            </div>
+            <div class="sign">
+              <div class="sig">Student Signature</div>
+              <div class="sig">Authorized Signature</div>
+            </div>
+          </div>
+          <div class="qr">
+            <div class="box">{qr_svg if qr_svg else '<div class="txt">QR</div>'}</div>
+            <div class="txt">{qr_display}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+"""
+
+    content = html_doc.encode("utf-8")
+    headers = {"Content-Disposition": f'attachment; filename="id_card_{s.id}.html"'}
+    return StreamingResponse(iter([content]), media_type="text/html; charset=utf-8", headers=headers)

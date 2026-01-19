@@ -22,7 +22,10 @@ import {
   Switch,
   TextField,
   Typography,
+  IconButton,
 } from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import {
   getClasses,
   getSections,
@@ -41,12 +44,16 @@ import {
   type TimetableEntry,
 } from "../../../api/academic";
 import { getStaff, type Staff } from "../../../api/people";
+import { showToast } from "../../../app/toast";
 
 export default function TimetableTab() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [selectedClassId, setSelectedClassId] = useState("");
   const [selectedSectionId, setSelectedSectionId] = useState("");
+
+  const effectiveClassId = selectedClassId || classes[0]?.id || "";
+  const effectiveSectionId = selectedSectionId || sections[0]?.id || "";
 
   const [entries, setEntries] = useState<TimetableEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,6 +81,7 @@ export default function TimetableTab() {
     staff_id: "",
     room: "",
   });
+  const [deleteTarget, setDeleteTarget] = useState<TimetableEntry | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -121,13 +129,18 @@ export default function TimetableTab() {
   useEffect(() => {
     let active = true;
     async function loadSections() {
-      if (!selectedClassId) {
+      if (!effectiveClassId) {
         setSections([]);
+        setSelectedSectionId("");
+        setEntries([]);
         return;
       }
+      setSections([]);
+      setSelectedSectionId("");
+      setEntries([]);
       setSectionsLoading(true);
       try {
-        const data = await getSections(selectedClassId);
+        const data = await getSections(effectiveClassId);
         if (!active) return;
         setSections(data);
       } catch (e) {
@@ -139,13 +152,10 @@ export default function TimetableTab() {
 
     loadSections();
 
-    setSelectedSectionId("");
-    setEntries([]);
-
     return () => {
       active = false;
     };
-  }, [selectedClassId]);
+  }, [effectiveClassId]);
 
   const loadTimetable = useCallback(async (sectionId: string) => {
     setLoading(true);
@@ -160,22 +170,22 @@ export default function TimetableTab() {
   }, []);
 
   useEffect(() => {
-    if (selectedSectionId) {
-      loadTimetable(selectedSectionId);
+    if (effectiveSectionId) {
+      loadTimetable(effectiveSectionId);
     } else {
       setEntries([]);
     }
-  }, [loadTimetable, selectedSectionId]);
+  }, [effectiveSectionId, loadTimetable]);
 
   const handleSave = async () => {
-    if (!selectedSectionId) return;
+    if (!effectiveSectionId) return;
     try {
       const academicYearId =
         currentAcademicYearId || (await getCurrentAcademicYear()).id;
       if (dialogMode === "create") {
         await createTimetableEntry({
           academic_year_id: academicYearId,
-          section_id: selectedSectionId,
+          section_id: effectiveSectionId,
           day_of_week: dialogForm.day_of_week,
           time_slot_id: dialogForm.time_slot_id,
           subject_id: dialogForm.subject_id ? dialogForm.subject_id : null,
@@ -202,7 +212,7 @@ export default function TimetableTab() {
         staff_id: "",
         room: "",
       });
-      loadTimetable(selectedSectionId);
+      loadTimetable(effectiveSectionId);
     } catch (e) {
       console.error(e);
     }
@@ -214,6 +224,19 @@ export default function TimetableTab() {
     setDialogForm({
       day_of_week: dayOfWeek,
       time_slot_id: timeSlotId,
+      subject_id: "",
+      staff_id: "",
+      room: "",
+    });
+    setDialogOpen(true);
+  };
+
+  const openCreate = () => {
+    setDialogMode("create");
+    setDialogEntry(null);
+    setDialogForm({
+      day_of_week: visibleDays[0]?.index ?? 0,
+      time_slot_id: visibleTimeSlots[0]?.id ?? "",
       subject_id: "",
       staff_id: "",
       room: "",
@@ -234,14 +257,15 @@ export default function TimetableTab() {
     setDialogOpen(true);
   };
 
-  const handleDelete = async () => {
-    if (!dialogEntry) return;
+  const handleDelete = async (entry: TimetableEntry) => {
     try {
-      await deleteTimetableEntry(dialogEntry.id);
+      await deleteTimetableEntry(entry.id);
       setDialogOpen(false);
       setDialogEntry(null);
       setDialogMode("create");
-      loadTimetable(selectedSectionId);
+      if (effectiveSectionId) {
+        loadTimetable(effectiveSectionId);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -257,7 +281,7 @@ export default function TimetableTab() {
       { index: 5, label: "Sat", full: "Saturday" },
       { index: 6, label: "Sun", full: "Sunday" },
     ],
-    []
+    [],
   );
 
   const visibleDays = useMemo(() => {
@@ -300,9 +324,12 @@ export default function TimetableTab() {
         <FormControl sx={{ minWidth: 200 }} disabled={initLoading}>
           <InputLabel>Class</InputLabel>
           <Select
-            value={selectedClassId}
+            value={effectiveClassId}
             label="Class"
-            onChange={(e) => setSelectedClassId(e.target.value)}
+            onChange={(e) => {
+              setSelectedClassId(String(e.target.value));
+              setSelectedSectionId("");
+            }}
           >
             {classes.length === 0 ? (
               <MenuItem disabled value="">
@@ -319,13 +346,13 @@ export default function TimetableTab() {
         </FormControl>
         <FormControl
           sx={{ minWidth: 200 }}
-          disabled={!selectedClassId || initLoading || sectionsLoading}
+          disabled={!effectiveClassId || initLoading || sectionsLoading}
         >
           <InputLabel>Section</InputLabel>
           <Select
-            value={selectedSectionId}
+            value={effectiveSectionId}
             label="Section"
-            onChange={(e) => setSelectedSectionId(e.target.value)}
+            onChange={(e) => setSelectedSectionId(String(e.target.value))}
           >
             {sectionsLoading ? (
               <MenuItem disabled value="">
@@ -344,16 +371,60 @@ export default function TimetableTab() {
             )}
           </Select>
         </FormControl>
-        <FormControlLabel
-          sx={{ ml: "auto" }}
-          control={
-            <Switch
-              checked={showAllDays}
-              onChange={(e) => setShowAllDays(e.target.checked)}
-            />
-          }
-          label="Show all days"
-        />
+        <Box
+          sx={{
+            ml: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+            flexWrap: "wrap",
+          }}
+        >
+          <Button
+            variant="contained"
+            disabled={
+              initLoading ||
+              sectionsLoading ||
+              !effectiveSectionId ||
+              visibleTimeSlots.length === 0
+            }
+            onClick={() => {
+              if (!effectiveClassId) {
+                showToast({
+                  severity: "info",
+                  message: "Select a class first.",
+                });
+                return;
+              }
+              if (!effectiveSectionId) {
+                showToast({
+                  severity: "info",
+                  message: "Select a section first.",
+                });
+                return;
+              }
+              if (visibleTimeSlots.length === 0) {
+                showToast({
+                  severity: "warning",
+                  message: "Create an active time slot first.",
+                });
+                return;
+              }
+              openCreate();
+            }}
+          >
+            Add Entry
+          </Button>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={showAllDays}
+                onChange={(e) => setShowAllDays(e.target.checked)}
+              />
+            }
+            label="Show all days"
+          />
+        </Box>
       </Box>
 
       {initLoading ? (
@@ -373,7 +444,7 @@ export default function TimetableTab() {
             timetable.
           </Typography>
         </Paper>
-      ) : !selectedClassId ? (
+      ) : !effectiveClassId ? (
         <Paper sx={{ p: 3, borderRadius: 3 }}>
           <Typography fontWeight={800}>Select a class</Typography>
           <Typography color="text.secondary">
@@ -395,7 +466,7 @@ export default function TimetableTab() {
             timetable.
           </Typography>
         </Paper>
-      ) : !selectedSectionId ? (
+      ) : !effectiveSectionId ? (
         <Paper sx={{ p: 3, borderRadius: 3 }}>
           <Typography fontWeight={800}>Select a section</Typography>
           <Typography color="text.secondary">
@@ -405,19 +476,15 @@ export default function TimetableTab() {
         </Paper>
       ) : (
         <>
-          <Box sx={{ mb: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              Click a cell to add or edit an entry.
-            </Typography>
-          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Click a cell to add or edit an entry.
+          </Typography>
           {visibleDays.length === 0 ? (
             <Paper sx={{ p: 3, borderRadius: 3 }}>
               <Typography fontWeight={800}>
-                No working days configured
-              </Typography>
-              <Typography color="text.secondary">
-                Your academic calendar working days are empty. Enable days in
-                Calendar settings or toggle “Show all days”.
+                No working days configured Your academic calendar working days
+                are empty. Enable days in Calendar settings or toggle “Show all
+                days”.
               </Typography>
               <Box sx={{ mt: 2, display: "flex", gap: 1 }}>
                 <Button
@@ -463,7 +530,7 @@ export default function TimetableTab() {
                         </TableCell>
                         {visibleDays.map((d) => {
                           const entry = entriesByKey.get(
-                            `${d.index}:${slot.id}`
+                            `${d.index}:${slot.id}`,
                           );
                           const subject = entry?.subject_id
                             ? subjectById.get(entry.subject_id)
@@ -475,7 +542,7 @@ export default function TimetableTab() {
                           const secondaryParts: string[] = [];
                           if (staff) {
                             secondaryParts.push(
-                              `${staff.first_name} ${staff.last_name}`
+                              `${staff.first_name} ${staff.last_name}`,
                             );
                           }
                           if (entry?.room) {
@@ -508,9 +575,46 @@ export default function TimetableTab() {
                                 }
                               }}
                             >
-                              <Typography fontWeight={700}>
-                                {primary}
-                              </Typography>
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  gap: 1,
+                                }}
+                              >
+                                <Typography fontWeight={700}>
+                                  {primary}
+                                </Typography>
+                                {entry ? (
+                                  <Box
+                                    sx={{
+                                      display: "flex",
+                                      alignItems: "flex-start",
+                                      gap: 0.5,
+                                    }}
+                                  >
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openEditForEntry(entry);
+                                      }}
+                                    >
+                                      <EditIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeleteTarget(entry);
+                                      }}
+                                    >
+                                      <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                  </Box>
+                                ) : null}
+                              </Box>
                               {secondary ? (
                                 <Typography
                                   variant="body2"
@@ -648,12 +752,46 @@ export default function TimetableTab() {
             Cancel
           </Button>
           {dialogMode === "edit" ? (
-            <Button color="error" onClick={handleDelete}>
+            <Button
+              color="error"
+              onClick={() => {
+                if (dialogEntry) setDeleteTarget(dialogEntry);
+              }}
+            >
               Delete
             </Button>
           ) : null}
           <Button onClick={handleSave} variant="contained">
             {dialogMode === "create" ? "Add" : "Save"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete timetable entry</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this timetable entry?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => {
+              if (!deleteTarget) return;
+              const target = deleteTarget;
+              setDeleteTarget(null);
+              handleDelete(target);
+            }}
+          >
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

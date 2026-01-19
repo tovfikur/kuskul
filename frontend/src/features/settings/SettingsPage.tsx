@@ -1,8 +1,24 @@
-import { Box, Typography, Paper, Grid, Button } from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Box,
+  Typography,
+  Paper,
+  Grid,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  TextField,
+  CircularProgress,
+} from "@mui/material";
 import { Link } from "react-router-dom";
+import { api } from "../../api/client";
+import { showToast } from "../../app/toast";
 
 export default function SettingsPage() {
-  const sections = [
+  const sections = useMemo(
+    () => [
     {
       title: "System Users",
       path: "/settings/users",
@@ -10,16 +26,81 @@ export default function SettingsPage() {
     },
     {
       title: "School Profile",
-      path: "#",
+      path: "",
       desc: "Update school details and logo",
     },
     {
       title: "Notifications",
-      path: "#",
+      path: "",
       desc: "Configure SMS and Email gateways",
     },
-    { title: "Backups", path: "#", desc: "System backups and restore" },
-  ];
+    { title: "Backups", path: "", desc: "System backups and restore" },
+    ],
+    []
+  );
+
+  const [schoolProfileOpen, setSchoolProfileOpen] = useState(false);
+  const [schoolProfileLoading, setSchoolProfileLoading] = useState(false);
+  const [schoolProfileSaving, setSchoolProfileSaving] = useState(false);
+  const [schoolProfileForm, setSchoolProfileForm] = useState({
+    address: "",
+    phone: "",
+    website: "",
+    logo_url: "",
+  });
+
+  useEffect(() => {
+    if (!schoolProfileOpen) return;
+    setSchoolProfileLoading(true);
+    api
+      .get("/settings")
+      .then((resp) => {
+        const rows = (resp.data as Array<{ key: string; value: string }>).map(
+          (r) => ({ key: r.key, value: r.value })
+        );
+        const map = new Map(rows.map((r) => [r.key, r.value]));
+        setSchoolProfileForm({
+          address: map.get("school.profile.address") ?? "",
+          phone: map.get("school.profile.phone") ?? "",
+          website: map.get("school.profile.website") ?? "",
+          logo_url: map.get("school.profile.logo_url") ?? "",
+        });
+      })
+      .catch((e) => {
+        console.error(e);
+        showToast({
+          severity: "error",
+          message: "Failed to load school profile",
+        });
+      })
+      .finally(() => setSchoolProfileLoading(false));
+  }, [schoolProfileOpen]);
+
+  async function saveSchoolProfile() {
+    setSchoolProfileSaving(true);
+    try {
+      await Promise.all([
+        api.put("/settings/school.profile.address", {
+          value: schoolProfileForm.address,
+        }),
+        api.put("/settings/school.profile.phone", {
+          value: schoolProfileForm.phone,
+        }),
+        api.put("/settings/school.profile.website", {
+          value: schoolProfileForm.website,
+        }),
+        api.put("/settings/school.profile.logo_url", {
+          value: schoolProfileForm.logo_url,
+        }),
+      ]);
+      setSchoolProfileOpen(false);
+    } catch (e) {
+      console.error(e);
+      showToast({ severity: "error", message: "Failed to save school profile" });
+    } finally {
+      setSchoolProfileSaving(false);
+    }
+  }
 
   return (
     <Box>
@@ -45,18 +126,111 @@ export default function SettingsPage() {
                   {item.desc}
                 </Typography>
               </Box>
-              <Button
-                component={Link}
-                to={item.path}
-                variant="outlined"
-                size="small"
-              >
-                Manage
-              </Button>
+              {item.path ? (
+                <Button
+                  component={Link}
+                  to={item.path}
+                  variant="outlined"
+                  size="small"
+                >
+                  Manage
+                </Button>
+              ) : item.title === "School Profile" ? (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => setSchoolProfileOpen(true)}
+                >
+                  Manage
+                </Button>
+              ) : (
+                <Button variant="outlined" size="small" disabled>
+                  Coming soon
+                </Button>
+              )}
             </Paper>
           </Grid>
         ))}
       </Grid>
+
+      <Dialog
+        open={schoolProfileOpen}
+        onClose={() => setSchoolProfileOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>School Profile</DialogTitle>
+        <DialogContent>
+          {schoolProfileLoading ? (
+            <Box sx={{ p: 4, display: "flex", justifyContent: "center" }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <Box sx={{ pt: 1 }}>
+              <TextField
+                label="School Address"
+                fullWidth
+                margin="normal"
+                value={schoolProfileForm.address}
+                onChange={(e) =>
+                  setSchoolProfileForm((p) => ({
+                    ...p,
+                    address: e.target.value,
+                  }))
+                }
+                multiline
+                minRows={2}
+              />
+              <TextField
+                label="School Phone"
+                fullWidth
+                margin="normal"
+                value={schoolProfileForm.phone}
+                onChange={(e) =>
+                  setSchoolProfileForm((p) => ({
+                    ...p,
+                    phone: e.target.value,
+                  }))
+                }
+              />
+              <TextField
+                label="School Website"
+                fullWidth
+                margin="normal"
+                value={schoolProfileForm.website}
+                onChange={(e) =>
+                  setSchoolProfileForm((p) => ({
+                    ...p,
+                    website: e.target.value,
+                  }))
+                }
+              />
+              <TextField
+                label="Logo URL"
+                fullWidth
+                margin="normal"
+                value={schoolProfileForm.logo_url}
+                onChange={(e) =>
+                  setSchoolProfileForm((p) => ({
+                    ...p,
+                    logo_url: e.target.value,
+                  }))
+                }
+              />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSchoolProfileOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={saveSchoolProfile}
+            disabled={schoolProfileLoading || schoolProfileSaving}
+          >
+            {schoolProfileSaving ? <CircularProgress size={20} /> : "Save"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
