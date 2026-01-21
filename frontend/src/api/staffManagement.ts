@@ -192,6 +192,7 @@ export interface Staff {
   employee_id: string;
   first_name: string;
   last_name: string;
+  full_name: string;
   email: string;
   phone?: string;
   department_id?: string;
@@ -199,6 +200,42 @@ export interface Staff {
   date_of_joining?: string;
   status: string;
   profile_photo_url?: string;
+  
+  // Personal
+  gender?: string;
+  date_of_birth?: string;
+  blood_group?: string;
+  nationality?: string;
+  marital_status?: string;
+  religion?: string;
+
+  // Address
+  address?: string; // Backend field
+  present_address?: string; // Mapped
+  permanent_address?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country?: string;
+
+  // Emergency
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relation?: string;
+
+  // Employment
+  employment_type?: string;
+
+  // Qualifications
+  highest_qualification?: string;
+  specialization?: string;
+  experience_years?: number;
+
+  // Bank
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_ifsc?: string;
+
   created_at: string;
   updated_at?: string;
 }
@@ -213,6 +250,36 @@ export interface StaffCreate {
   designation_id?: string;
   date_of_joining?: string;
   status?: string;
+  
+  gender?: string;
+  date_of_birth?: string;
+  blood_group?: string;
+  nationality?: string;
+  marital_status?: string;
+  religion?: string;
+
+  present_address?: string;
+  permanent_address?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country?: string;
+
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relation?: string;
+
+  employment_type?: string;
+
+  highest_qualification?: string;
+  specialization?: string;
+  experience_years?: number;
+
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_ifsc?: string;
+
+  profile_photo_url?: string;
 }
 
 export interface StaffUpdate {
@@ -225,6 +292,36 @@ export interface StaffUpdate {
   designation_id?: string;
   date_of_joining?: string;
   status?: string;
+  
+  gender?: string;
+  date_of_birth?: string;
+  blood_group?: string;
+  nationality?: string;
+  marital_status?: string;
+  religion?: string;
+
+  present_address?: string;
+  permanent_address?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country?: string;
+
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relation?: string;
+
+  employment_type?: string;
+
+  highest_qualification?: string;
+  specialization?: string;
+  experience_years?: number;
+
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_ifsc?: string;
+
+  profile_photo_url?: string;
 }
 
 export async function listStaff(params?: {
@@ -252,4 +349,43 @@ export async function updateStaff(id: string, data: StaffUpdate) {
 
 export async function deleteStaff(id: string) {
   return safeRequest({ method: "DELETE", url: `/staff/${id}` });
+}
+
+// ============================================================================
+// STAFF ATTENDANCE
+// ============================================================================
+
+export interface StaffAttendance {
+  id: string;
+  attendance_date: string;
+  staff_id: string;
+  status: "present" | "absent" | "late" | "half_day" | "on_leave";
+  check_in_at?: string;
+  check_out_at?: string;
+  method?: string;
+  device_id?: string;
+}
+
+export interface MarkStaffAttendanceRequest {
+  attendance_date: string;
+  items: {
+    staff_id: string;
+    status: string;
+  }[];
+}
+
+export async function getStaffAttendanceByDate(date: string) {
+  return safeRequest({ method: "GET", url: `/attendance/staff/date/${date}` }); // FIXED: Corrected path
+}
+
+export async function markStaffAttendance(data: MarkStaffAttendanceRequest) {
+  return safeRequest({ method: "POST", url: "/attendance/staff/mark", data });
+}
+
+export async function staffCheckIn(staff_id: string, method: string = "manual") {
+  return safeRequest({ method: "POST", url: "/attendance/staff/check-in", data: { staff_id, method } });
+}
+
+export async function staffCheckOut(staff_id: string, method: string = "manual") {
+  return safeRequest({ method: "POST", url: "/attendance/staff/check-out", data: { staff_id, method } });
 }

@@ -18,19 +18,10 @@ import {
   IconButton,
   Chip,
   Avatar,
-  Grid,
   Card,
   CardContent,
   Alert,
   InputAdornment,
-  Stepper,
-  Step,
-  StepLabel,
-  FormControl,
-  FormLabel,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
 } from "@mui/material";
 import {
   Add,
@@ -218,6 +209,41 @@ export default function DirectoryTab() {
       designation_id: staffMember.designation_id,
       date_of_joining: staffMember.date_of_joining,
       status: staffMember.status,
+      
+      // Personal
+      gender: staffMember.gender,
+      date_of_birth: staffMember.date_of_birth,
+      blood_group: staffMember.blood_group,
+      nationality: staffMember.nationality,
+      marital_status: staffMember.marital_status,
+      religion: staffMember.religion,
+
+      // Address
+      present_address: staffMember.present_address || staffMember.address,
+      permanent_address: staffMember.permanent_address,
+      city: staffMember.city,
+      state: staffMember.state,
+      postal_code: staffMember.postal_code,
+      country: staffMember.country,
+
+      // Emergency
+      emergency_contact_name: staffMember.emergency_contact_name,
+      emergency_contact_phone: staffMember.emergency_contact_phone,
+      emergency_contact_relation: staffMember.emergency_contact_relation,
+
+      // Employment
+      employment_type: staffMember.employment_type,
+
+      // Qualifications
+      highest_qualification: staffMember.highest_qualification,
+      specialization: staffMember.specialization,
+      experience_years: staffMember.experience_years,
+
+      // Bank
+      bank_name: staffMember.bank_name,
+      bank_account_number: staffMember.bank_account_number,
+      bank_ifsc: staffMember.bank_ifsc,
+
       profile_photo_url: staffMember.profile_photo_url,
     });
     setPreviewPhoto(staffMember.profile_photo_url || null);
@@ -234,15 +260,14 @@ export default function DirectoryTab() {
     }
 
     const apiData: any = {
-      employee_id: formData.employee_id,
-      first_name: formData.first_name,
-      last_name: formData.last_name,
-      email: formData.email,
-      phone: formData.phone || undefined,
+      ...formData,
+      // Ensure specific fields are undefined if empty strings to match backend optionality
       department_id: formData.department_id || undefined,
       designation_id: formData.designation_id || undefined,
       date_of_joining: formData.date_of_joining || undefined,
-      status: formData.status || "active",
+      phone: formData.phone || undefined,
+      date_of_birth: formData.date_of_birth || undefined,
+      experience_years: formData.experience_years || undefined,
     };
 
     const result = editingStaff
@@ -468,6 +493,27 @@ export default function DirectoryTab() {
                   <Typography variant="body2" fontWeight={activeStep === i ? 600 : 400}>{step.label}</Typography>
                 </Box>
               ))}
+              
+              {/* Sidebar Submit Button */}
+              <Box sx={{ mt: 4, pt: 4, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+                <Button 
+                  fullWidth 
+                  variant="contained" 
+                  onClick={handleSave}
+                  startIcon={<Save />}
+                  sx={{ 
+                    bgcolor: "white", 
+                    color: "#1976d2",
+                    fontWeight: 600,
+                    py: 1.5,
+                    "&:hover": { bgcolor: "rgba(255,255,255,0.9)", transform: "translateY(-2px)" },
+                    transition: "all 0.2s",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
+                  }}
+                >
+                  {editingStaff ? "Update Staff" : "Create Staff"}
+                </Button>
+              </Box>
             </Box>
           </Box>
 
@@ -631,24 +677,26 @@ export default function DirectoryTab() {
 
               {/* Step 4: Bank */}
               {activeStep === 4 && (
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 }}>
-                  <FormField label="Bank Name">
-                    <TextField fullWidth size="small" value={formData.bank_name || ""} onChange={(e) => updateField("bank_name", e.target.value)} placeholder="e.g., Dutch Bangla Bank" />
-                  </FormField>
-                  <FormField label="Account Number">
-                    <TextField fullWidth size="small" value={formData.bank_account_number || ""} onChange={(e) => updateField("bank_account_number", e.target.value)} />
-                  </FormField>
-                  <FormField label="Branch / Routing Number">
-                    <TextField fullWidth size="small" value={formData.bank_ifsc || ""} onChange={(e) => updateField("bank_ifsc", e.target.value)} />
-                  </FormField>
-                  <Box sx={{ gridColumn: "1 / -1" }}>
-                    <Alert severity="info" sx={{ mt: 2 }}>Bank details are securely stored for payroll processing.</Alert>
+                <Box>
+                  <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 }}>
+                    <FormField label="Bank Name">
+                      <TextField fullWidth size="small" value={formData.bank_name || ""} onChange={(e) => updateField("bank_name", e.target.value)} placeholder="e.g., Dutch Bangla Bank" />
+                    </FormField>
+                    <FormField label="Account Number">
+                      <TextField fullWidth size="small" value={formData.bank_account_number || ""} onChange={(e) => updateField("bank_account_number", e.target.value)} />
+                    </FormField>
+                    <FormField label="Branch / Routing Number">
+                      <TextField fullWidth size="small" value={formData.bank_ifsc || ""} onChange={(e) => updateField("bank_ifsc", e.target.value)} />
+                    </FormField>
+                    <Box sx={{ gridColumn: "1 / -1" }}>
+                      <Alert severity="info" sx={{ mt: 2 }}>Bank details are securely stored for payroll processing.</Alert>
+                    </Box>
                   </Box>
                 </Box>
               )}
             </Box>
 
-            {/* Navigation Buttons */}
+            {/* Navigation Buttons (Footer) */}
             <Box sx={{ display: "flex", justifyContent: "space-between", mt: 3, pt: 3, borderTop: "1px solid #e0e0e0" }}>
               <Button
                 startIcon={<ArrowBack />}
@@ -659,15 +707,12 @@ export default function DirectoryTab() {
                 Previous
               </Button>
               <Box sx={{ display: "flex", gap: 2 }}>
-                {activeStep < steps.length - 1 ? (
+                {activeStep < steps.length - 1 && (
                   <Button variant="contained" endIcon={<ArrowForward />} onClick={() => setActiveStep(s => s + 1)}>
                     Next
                   </Button>
-                ) : (
-                  <Button variant="contained" startIcon={<Save />} onClick={handleSave} sx={{ background: "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)" }}>
-                    {editingStaff ? "Update Staff" : "Create Staff"}
-                  </Button>
                 )}
+                {/* Submit button is now inside the Bank tab (last step) */}
               </Box>
             </Box>
           </Box>

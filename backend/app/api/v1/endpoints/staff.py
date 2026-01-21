@@ -38,21 +38,63 @@ router = APIRouter(dependencies=[Depends(require_permission("staff:read"))])
 
 
 def _out(s: Staff) -> StaffOut:
+    # Split full_name for frontend convenience
+    first_name = s.full_name
+    last_name = ""
+    if s.full_name and " " in s.full_name:
+        parts = s.full_name.split(" ", 1)
+        first_name = parts[0]
+        last_name = parts[1]
+        
     return StaffOut(
         id=s.id,
         school_id=s.school_id,
         full_name=s.full_name,
+        first_name=first_name,
+        last_name=last_name,
         employee_id=s.employee_id,
-        designation=s.designation,
+        
+        department_id=s.department_id,
+        designation_id=s.designation_id,
         department=s.department,
+        designation=s.designation,
+        
         email=s.email,
         phone=s.phone,
+        
+        gender=s.gender,
+        date_of_birth=s.date_of_birth,
+        blood_group=s.blood_group,
+        nationality=s.nationality,
+        marital_status=s.marital_status,
+        religion=s.religion,
+        
+        address=s.address,
+        present_address=s.address, # Map to frontend expectation
+        permanent_address=s.permanent_address,
+        city=s.city,
+        state=s.state,
+        postal_code=s.postal_code,
+        country=s.country,
+        
         emergency_contact_name=s.emergency_contact_name,
         emergency_contact_phone=s.emergency_contact_phone,
         emergency_contact_relation=s.emergency_contact_relation,
+        
         date_of_joining=s.date_of_joining,
+        employment_type=s.employment_type,
         status=s.status,
+        
+        highest_qualification=s.highest_qualification,
+        specialization=s.specialization,
+        experience_years=s.experience_years,
+        
+        bank_name=s.bank_name,
+        bank_account_number=s.bank_account_number,
+        bank_ifsc=s.bank_ifsc,
+        
         photo_url=s.photo_url,
+        profile_photo_url=s.photo_url, # Map to frontend expectation
     )
 
 
@@ -97,19 +139,60 @@ def get_staff(staff_id: uuid.UUID, db: Session = Depends(get_db), school_id=Depe
 @router.post("", response_model=StaffOut, dependencies=[Depends(require_permission("staff:write"))])
 def create_staff(payload: StaffCreate, db: Session = Depends(get_db), school_id=Depends(get_active_school_id)) -> StaffOut:
     now = datetime.now(timezone.utc)
+    
+    # Handle full_name logic
+    full_name = payload.full_name
+    if not full_name and payload.first_name and payload.last_name:
+        full_name = f"{payload.first_name} {payload.last_name}"
+    elif not full_name:
+        # Fallback if neither provided (though schemas make one required ideally)
+        if payload.first_name:
+            full_name = payload.first_name
+        else:
+            raise problem(status_code=400, title="Bad Request", detail="Name is required")
+
+    # Map address
+    address = payload.present_address if payload.present_address else None
+    
+    # Map photo
+    photo_url = payload.profile_photo_url if payload.profile_photo_url else payload.photo_url
+
     s = Staff(
         school_id=school_id,
-        full_name=payload.full_name,
+        full_name=full_name,
         employee_id=payload.employee_id,
+        
+        # Link IDs
+        department_id=payload.department_id,
+        designation_id=payload.designation_id,
+        
+        # Legacy strings (optional)
         designation=payload.designation,
         department=payload.department,
+        
         email=str(payload.email) if payload.email else None,
         phone=payload.phone,
+        
+        # Personal Info
+        gender=payload.gender,
+        date_of_birth=payload.date_of_birth,
+        blood_group=payload.blood_group,
+        nationality=payload.nationality,
+        
+        # Address
+        address=address,
+        city=payload.city,
+        state=payload.state,
+        postal_code=payload.postal_code,
+        
         emergency_contact_name=payload.emergency_contact_name,
         emergency_contact_phone=payload.emergency_contact_phone,
         emergency_contact_relation=payload.emergency_contact_relation,
+        
         date_of_joining=payload.date_of_joining,
         status=payload.status,
+        photo_url=photo_url,
+        
         created_at=now,
     )
     db.add(s)
@@ -125,11 +208,34 @@ def update_staff(
     s = db.get(Staff, staff_id)
     if not s or s.school_id != school_id:
         raise not_found("Staff not found")
+    
     data = payload.model_dump(exclude_unset=True)
+    
+    # Handle name updates
+    if "first_name" in data or "last_name" in data:
+        # If updating names, reconstruct full_name
+        first = data.get("first_name") or (s.full_name.split(" ")[0] if " " in s.full_name else s.full_name)
+        last = data.get("last_name") or (s.full_name.split(" ", 1)[1] if " " in s.full_name else "")
+        s.full_name = f"{first} {last}".strip()
+    elif "full_name" in data:
+        s.full_name = data["full_name"]
+        
+    # Handle email
     if "email" in data:
-        data["email"] = str(data["email"]) if data["email"] else None
+        s.email = str(data["email"]) if data["email"] else None
+        
+    # Map fields
+    if "present_address" in data:
+        s.address = data["present_address"]
+    
+    if "profile_photo_url" in data:
+        s.photo_url = data["profile_photo_url"]
+        
+    # Update other fields directly if they exist on model
     for k, v in data.items():
-        setattr(s, k, v)
+        if hasattr(s, k) and k not in ["first_name", "last_name", "present_address", "profile_photo_url", "full_name", "email"]:
+            setattr(s, k, v)
+            
     db.commit()
     return _out(s)
 

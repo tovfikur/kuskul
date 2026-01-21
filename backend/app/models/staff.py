@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, date
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Uuid
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Uuid, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -38,18 +38,34 @@ class Staff(Base):
     gender: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     blood_group: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     nationality: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    marital_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    religion: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     
     # Address (NEW)
-    address: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(String(500), nullable=True) # Used as Present Address
+    permanent_address: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     state: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     postal_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    
+    # Qualification Summary
+    highest_qualification: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    specialization: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    experience_years: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     
     # Employment details
     date_of_joining: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    employment_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     is_teaching_staff: Mapped[bool] = mapped_column(String(10), nullable=False, default="true")  # true/false as string for compatibility
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
-    photo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    
+    # Bank Details
+    bank_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    bank_account_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    bank_ifsc: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    
+    photo_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
