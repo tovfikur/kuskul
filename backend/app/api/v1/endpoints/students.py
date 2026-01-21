@@ -33,6 +33,7 @@ from app.schemas.documents import DocumentOut
 from app.schemas.guardians import LinkGuardianRequest, GuardianOut
 from app.schemas.attendance import StudentAttendanceOut
 from app.schemas.students import StudentCreate, StudentOut, StudentUpdate
+from app.schemas.students_batch import StudentsBatchRequest
 
 router = APIRouter(dependencies=[Depends(require_permission("students:read"))])
 
@@ -53,6 +54,7 @@ def list_students(
     limit: int = 20,
     class_id: Optional[uuid.UUID] = None,
     section_id: Optional[uuid.UUID] = None,
+    academic_year_id: Optional[uuid.UUID] = None,
     search: Optional[str] = None,
     status: Optional[str] = None,
     gender: Optional[str] = None,
@@ -72,10 +74,20 @@ def list_students(
         base = base.where(Student.gender == gender)
     if class_id or section_id:
         base = base.join(Enrollment, Enrollment.student_id == Student.id)
+        if academic_year_id is None:
+            current_year_id = db.scalar(
+                select(AcademicYear.id).where(AcademicYear.school_id == school_id, AcademicYear.is_current.is_(True)).limit(1)
+            )
+            academic_year_id = current_year_id
+        if academic_year_id is not None:
+            base = base.where(Enrollment.academic_year_id == academic_year_id)
+        base = base.where(Enrollment.status == "active")
         if class_id:
             base = base.where(Enrollment.class_id == class_id)
         if section_id:
             base = base.where(Enrollment.section_id == section_id)
+
+        base = base.distinct()
 
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
     rows = db.execute(base.order_by(Student.first_name.asc()).offset(offset).limit(limit)).scalars().all()
@@ -90,12 +102,28 @@ def get_student(student_id: uuid.UUID, db: Session = Depends(get_db), school_id=
     return _out(s)
 
 
+@router.post("/batch", response_model=list[StudentOut])
+def get_students_batch(
+    payload: StudentsBatchRequest,
+    db: Session = Depends(get_db),
+    school_id=Depends(get_active_school_id),
+) -> list[StudentOut]:
+    ids = list(dict.fromkeys(payload.student_ids))
+    if not ids:
+        return []
+    rows = db.execute(select(Student).where(Student.school_id == school_id, Student.id.in_(ids))).scalars().all()
+    by_id = {s.id: s for s in rows}
+    ordered = [by_id.get(i) for i in ids]
+    return [_out(s) for s in ordered if s is not None]
+
+
 @router.post("", response_model=StudentOut, dependencies=[Depends(require_permission("students:write"))])
 def create_student(payload: StudentCreate, db: Session = Depends(get_db), school_id=Depends(get_active_school_id)) -> StudentOut:
     now = datetime.now(timezone.utc)
     admission_no = payload.admission_no.strip() if payload.admission_no else None
     s = Student(
         school_id=school_id,
+        user_id=payload.user_id,
         first_name=payload.first_name,
         last_name=payload.last_name,
         admission_no=admission_no,

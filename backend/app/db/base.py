@@ -24,6 +24,7 @@ from app.models.leave import Leave
 from app.models.time_slot import TimeSlot
 from app.models.timetable_entry import TimetableEntry
 from app.models.exam import Exam
+from app.models.exam_type_master import ExamTypeMaster
 from app.models.exam_schedule import ExamSchedule
 from app.models.grade import Grade
 from app.models.mark import Mark
@@ -56,3 +57,12 @@ from app.models.attendance_excuse import AttendanceExcuse
 from app.models.discipline_record import DisciplineRecord
 from app.models.appointment_request import AppointmentRequest
 from app.models.user import User
+from app.models.online_exam import (
+    OnlineExamAnswer,
+    OnlineExamAttempt,
+    OnlineExamConfig,
+    OnlineExamConfigQuestion,
+    OnlineExamProctorEvent,
+    QuestionBankCategory,
+    QuestionBankQuestion,
+)

@@ -48,7 +48,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     command: >
-      sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"
+      sh -c "npm ci && rm -rf node_modules/.vite && npm run dev -- --host 0.0.0.0 --port 5173 --force"
     depends_on:
       - api
 

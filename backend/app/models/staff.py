@@ -16,14 +16,38 @@ class Staff(Base):
 
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
     employee_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    
+    # Organizational structure (NEW - using FKs)
+    department_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("departments.id"), nullable=True, index=True)
+    designation_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("designations.id"), nullable=True, index=True)
+    reporting_to_staff_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("staff.id"), nullable=True)
+    
+    # Legacy fields (kept for backward compatibility)
     designation: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    
+    # Contact information
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     emergency_contact_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     emergency_contact_phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     emergency_contact_relation: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    
+    # Personal information (NEW)
+    date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    gender: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    blood_group: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    nationality: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    
+    # Address (NEW)
+    address: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    state: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    postal_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    
+    # Employment details
     date_of_joining: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    is_teaching_staff: Mapped[bool] = mapped_column(String(10), nullable=False, default="true")  # true/false as string for compatibility
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     photo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 

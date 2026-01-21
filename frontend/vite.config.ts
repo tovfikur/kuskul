@@ -12,11 +12,25 @@ const dirname =
 // More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
 export default defineConfig({
   plugins: [react()],
+  server: {
+    watch: {
+      usePolling: true,
+      interval: 250,
+    },
+  },
   test: {
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          include: ["src/**/*.test.{ts,tsx}", "src/**/*.spec.{ts,tsx}"],
+          exclude: ["src/stories/**", "tests-e2e/**"],
+        },
+      },
       {
         extends: true,
         plugins: [

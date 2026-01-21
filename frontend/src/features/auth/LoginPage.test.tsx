@@ -15,6 +15,6 @@ test('renders login form', () => {
   )
 
   expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
-  expect(screen.getByLabelText('Email')).toBeInTheDocument()
-  expect(screen.getByLabelText('Password')).toBeInTheDocument()
+  expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
+  expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
 })

@@ -84,6 +84,7 @@ def _compute_total_fee(db: Session, school_id: uuid.UUID, academic_year_id: uuid
 def list_dues(
     db: Session = Depends(get_db),
     school_id=Depends(get_active_school_id),
+    academic_year_id: Optional[uuid.UUID] = None,
     class_id: Optional[uuid.UUID] = None,
     status: Optional[str] = None,
 ) -> list[FeeDueOut]:
@@ -93,10 +94,21 @@ def list_dues(
         .where(Student.school_id == school_id)
         .order_by(FeeDue.updated_at.desc())
     )
+    if academic_year_id:
+        q = q.where(FeeDue.academic_year_id == academic_year_id)
     if status:
         q = q.where(FeeDue.status == status)
     if class_id:
-        q = q.join(Enrollment, Enrollment.student_id == Student.id).where(Enrollment.class_id == class_id)
+        q = (
+            q.join(
+                Enrollment,
+                (Enrollment.student_id == Student.id)
+                & (Enrollment.academic_year_id == FeeDue.academic_year_id)
+                & (Enrollment.status == "active"),
+            )
+            .where(Enrollment.class_id == class_id)
+            .distinct()
+        )
     rows = db.execute(q).scalars().all()
     return [_out(d) for d in rows]
 
@@ -138,7 +150,9 @@ def calculate_dues(
     if not year or year.school_id != school_id:
         raise not_found("Academic year not found")
 
-    enrollments = db.execute(select(Enrollment).where(Enrollment.academic_year_id == academic_year_id)).scalars().all()
+    enrollments = db.execute(
+        select(Enrollment).where(Enrollment.academic_year_id == academic_year_id, Enrollment.status == "active")
+    ).scalars().all()
     now = datetime.now(timezone.utc)
     today = date.today()
     updated = 0
@@ -198,27 +212,46 @@ def send_fee_reminders() -> None:
 
 
 @router.get("/statistics")
-def get_fee_statistics(db: Session = Depends(get_db), school_id=Depends(get_active_school_id)) -> dict[str, int]:
-    total_due = db.scalar(
+def get_fee_statistics(
+    db: Session = Depends(get_db),
+    school_id=Depends(get_active_school_id),
+    academic_year_id: Optional[uuid.UUID] = None,
+) -> dict[str, int]:
+    due_q = (
         select(func.coalesce(func.sum(FeeDue.due_amount), 0))
         .join(Student, Student.id == FeeDue.student_id)
         .where(Student.school_id == school_id)
-    ) or 0
-    total_paid = db.scalar(
+    )
+    paid_q = (
         select(func.coalesce(func.sum(FeeDue.paid_amount), 0))
         .join(Student, Student.id == FeeDue.student_id)
         .where(Student.school_id == school_id)
+    )
+    if academic_year_id:
+        due_q = due_q.where(FeeDue.academic_year_id == academic_year_id)
+        paid_q = paid_q.where(FeeDue.academic_year_id == academic_year_id)
+
+    total_due = db.scalar(
+        due_q
     ) or 0
+    total_paid = db.scalar(paid_q) or 0
     return {"due": int(total_due), "paid": int(total_paid)}
 
 
 @router.get("/defaulters", response_model=list[FeeDueOut])
-def get_fee_defaulters(db: Session = Depends(get_db), school_id=Depends(get_active_school_id)) -> list[FeeDueOut]:
-    rows = db.execute(
+def get_fee_defaulters(
+    db: Session = Depends(get_db),
+    school_id=Depends(get_active_school_id),
+    academic_year_id: Optional[uuid.UUID] = None,
+) -> list[FeeDueOut]:
+    q = (
         select(FeeDue)
         .join(Student, Student.id == FeeDue.student_id)
         .where(Student.school_id == school_id, FeeDue.due_amount > 0)
         .order_by(FeeDue.due_amount.desc())
-    ).scalars().all()
+    )
+    if academic_year_id:
+        q = q.where(FeeDue.academic_year_id == academic_year_id)
+    rows = db.execute(q).scalars().all()
     return [_out(d) for d in rows]
 

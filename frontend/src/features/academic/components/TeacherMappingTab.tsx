@@ -42,7 +42,7 @@ export default function TeacherMappingTab() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [sectionsCache, setSectionsCache] = useState<Record<string, Section[]>>(
-    {}
+    {},
   );
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [staff, setStaffState] = useState<Staff[]>([]);
@@ -177,7 +177,9 @@ export default function TeacherMappingTab() {
   const handleOpenCreate = () => {
     const initialClassId = classId || "";
     setCreateClassId(initialClassId);
-    setCreateSections(initialClassId ? sectionsCache[initialClassId] || sections : []);
+    setCreateSections(
+      initialClassId ? sectionsCache[initialClassId] || sections : [],
+    );
     setForm({ staff_id: "", section_id: "", subject_id: "" });
     setOpen(true);
   };
@@ -188,14 +190,14 @@ export default function TeacherMappingTab() {
         sections.some((s) => s.id === assignment.section_id) &&
         classId) ||
       Object.entries(sectionsCache).find(([, secs]) =>
-        secs.some((s) => s.id === assignment.section_id)
+        secs.some((s) => s.id === assignment.section_id),
       )?.[0] ||
       "";
 
     setEditAssignment(assignment);
     setEditClassId(knownClassId);
     setEditSections(
-      knownClassId ? sectionsCache[knownClassId] || sections : []
+      knownClassId ? sectionsCache[knownClassId] || sections : [],
     );
     setEditForm({
       staff_id: assignment.staff_id,
@@ -441,7 +443,7 @@ export default function TeacherMappingTab() {
             >
               {staff.map((t) => (
                 <MenuItem key={t.id} value={t.id}>
-                  {t.first_name} {t.last_name}
+                  {t.full_name}
                 </MenuItem>
               ))}
             </Select>
@@ -555,7 +557,7 @@ export default function TeacherMappingTab() {
             >
               {staff.map((t) => (
                 <MenuItem key={t.id} value={t.id}>
-                  {t.first_name} {t.last_name}
+                  {t.full_name}
                 </MenuItem>
               ))}
             </Select>

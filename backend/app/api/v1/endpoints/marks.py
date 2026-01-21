@@ -94,11 +94,9 @@ def enter_marks(
         if item.is_absent:
             marks_obtained = None
         else:
-            if item.marks_obtained is None:
-                raise problem(status_code=400, title="Bad Request", detail="marks_obtained is required when is_absent=false")
-            if item.marks_obtained > sched.max_marks:
-                raise problem(status_code=400, title="Bad Request", detail="marks_obtained exceeds max_marks")
             marks_obtained = item.marks_obtained
+            if marks_obtained is not None and marks_obtained > sched.max_marks:
+                raise problem(status_code=400, title="Bad Request", detail="marks_obtained exceeds max_marks")
 
         existing = db.scalar(
             select(Mark).where(Mark.exam_schedule_id == payload.exam_schedule_id, Mark.student_id == item.student_id)

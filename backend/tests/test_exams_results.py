@@ -85,3 +85,62 @@ def test_exam_schedule_marks_results_flow(client):
     publish = client.post(f"/api/v1/exams/{exam_id}/publish", headers=headers)
     assert publish.status_code == 200
 
+
+def test_exam_types_and_exam_type_code_flow(client):
+    headers = _bootstrap(client)
+
+    year = client.post(
+        "/api/v1/academic-years",
+        headers=headers,
+        json={"name": "2024", "start_date": "2024-01-01", "end_date": "2024-12-31", "is_current": True},
+    )
+    assert year.status_code == 200
+    year_id = year.json()["id"]
+
+    types = client.get("/api/v1/exams/types", headers=headers)
+    assert types.status_code == 200
+    rows = types.json()
+    assert isinstance(rows, list)
+    assert any(t["code"] == "final" for t in rows)
+
+    created = client.post(
+        "/api/v1/exams",
+        headers=headers,
+        json={
+            "academic_year_id": year_id,
+            "name": "Final Exam",
+            "exam_type_code": "final",
+            "start_date": "2024-11-01",
+            "end_date": "2024-11-15",
+        },
+    )
+    assert created.status_code == 200
+    body = created.json()
+    assert body["exam_type_code"] == "final"
+    assert body["exam_type"] == "Final"
+    assert body["status"] == "draft"
+    assert body["included_in_final_result"] is True
+    assert body["counts_for_gpa"] is True
+    assert body["is_result_editable"] is True
+
+    exam_id = body["id"]
+    upd = client.put(
+        f"/api/v1/exams/{exam_id}",
+        headers=headers,
+        json={"status": "scheduled", "weight_percentage": 50, "aggregation_method": "sum"},
+    )
+    assert upd.status_code == 200
+    upd_body = upd.json()
+    assert upd_body["status"] == "scheduled"
+    assert upd_body["weight_percentage"] == 50
+    assert upd_body["aggregation_method"] == "sum"
+
+    publish = client.post(f"/api/v1/exams/{exam_id}/publish", headers=headers)
+    assert publish.status_code == 200
+    after = client.get(f"/api/v1/exams/{exam_id}", headers=headers)
+    assert after.status_code == 200
+    after_body = after.json()
+    assert after_body["is_published"] is True
+    assert after_body["status"] == "published"
+    assert after_body["result_publish_date"] is not None
+

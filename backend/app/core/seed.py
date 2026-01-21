@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
+from app.models.exam_type_master import ExamTypeMaster
 from app.models.membership import Membership
 from app.models.role import Role
 from app.models.school import School
@@ -43,6 +45,8 @@ def ensure_default_roles(db: Session) -> None:
                 "exams:write",
                 "exam_schedules:read",
                 "exam_schedules:write",
+                "online_exams:read",
+                "online_exams:write",
                 "marks:read",
                 "marks:write",
                 "results:read",
@@ -100,6 +104,8 @@ def ensure_default_roles(db: Session) -> None:
                 "discipline:write",
                 "appointments:read",
                 "appointments:write",
+                "logistics:read",
+                "logistics:write",
             ]
         },
         "teacher": {
@@ -116,6 +122,8 @@ def ensure_default_roles(db: Session) -> None:
                 "timetable:read",
                 "exams:read",
                 "exam_schedules:read",
+                "online_exams:read",
+                "online_exams:write",
                 "marks:read",
                 "results:read",
                 "grades:read",
@@ -164,6 +172,7 @@ def ensure_default_roles(db: Session) -> None:
                 "events:read",
                 "holidays:read",
                 "import_export:read",
+                "online_exams:take",
             ]
         },
         "parent": {
@@ -200,11 +209,117 @@ def ensure_default_roles(db: Session) -> None:
     db.flush()
 
 
+def ensure_default_exam_types(db: Session) -> None:
+    bind = db.get_bind()
+    if not inspect(bind).has_table("exam_type_master"):
+        return
+
+    now = datetime.now(timezone.utc)
+    seed = [
+        {
+            "code": "class_test",
+            "label": "Class Test",
+            "frequency_hint": "Weekly",
+            "weight_min": 5,
+            "weight_max": 15,
+        },
+        {
+            "code": "quiz",
+            "label": "Quiz",
+            "frequency_hint": "Weekly (short assessment)",
+            "weight_min": 5,
+            "weight_max": 10,
+        },
+        {
+            "code": "assignment",
+            "label": "Assignment",
+            "frequency_hint": "Monthly",
+            "weight_min": 5,
+            "weight_max": 15,
+        },
+        {
+            "code": "monthly_test",
+            "label": "Monthly Test",
+            "frequency_hint": "Monthly",
+            "weight_min": 10,
+            "weight_max": 20,
+        },
+        {
+            "code": "mid_term",
+            "label": "Mid-Term",
+            "frequency_hint": "Once per term",
+            "weight_min": 30,
+            "weight_max": 40,
+        },
+        {
+            "code": "final",
+            "label": "Final",
+            "frequency_hint": "Once per academic year",
+            "weight_min": 40,
+            "weight_max": 60,
+        },
+        {
+            "code": "model_mock",
+            "label": "Model / Mock",
+            "frequency_hint": "Before final/public",
+            "weight_min": 0,
+            "weight_max": 0,
+        },
+        {
+            "code": "board_public",
+            "label": "Board / Public",
+            "frequency_hint": "SSC/HSC/O/A-Level",
+            "weight_min": 0,
+            "weight_max": 0,
+        },
+        {
+            "code": "practical_viva",
+            "label": "Practical/Viva",
+            "frequency_hint": "With term exams",
+            "weight_min": 20,
+            "weight_max": 30,
+        },
+        {
+            "code": "oral_viva",
+            "label": "Oral / Viva",
+            "frequency_hint": "As needed / with terms",
+            "weight_min": 0,
+            "weight_max": 0,
+        },
+    ]
+    codes = [s["code"] for s in seed]
+    existing = {r.code: r for r in db.execute(select(ExamTypeMaster).where(ExamTypeMaster.code.in_(codes))).scalars().all()}
+    for row in seed:
+        found = existing.get(row["code"])
+        if not found:
+            db.add(
+                ExamTypeMaster(
+                    code=row["code"],
+                    label=row["label"],
+                    frequency_hint=row["frequency_hint"],
+                    weight_min=row["weight_min"],
+                    weight_max=row["weight_max"],
+                    is_active=True,
+                    created_at=now,
+                )
+            )
+            continue
+        found.label = row["label"]
+        found.frequency_hint = row["frequency_hint"]
+        found.weight_min = row["weight_min"]
+        found.weight_max = row["weight_max"]
+        found.is_active = True
+    db.flush()
+
+
 def ensure_default_admin(db: Session) -> None:
     email = "admin@kuskul.com"
     password = "password123"
     school_code = "KUSKUL_DEMO"
     school_name = "KusKul Demo School"
+
+    ensure_default_roles(db)
+    ensure_default_exam_types(db)
 
     existing_user = db.scalar(select(User).where(User.email == email))
     if existing_user:
@@ -225,7 +340,6 @@ def ensure_default_admin(db: Session) -> None:
         school = School(name=school_name, code=school_code, is_active=True, created_at=now)
         db.add(school)
 
-    ensure_default_roles(db)
     role = db.scalar(select(Role).where(Role.name == "admin"))
     db.flush()
     if role:

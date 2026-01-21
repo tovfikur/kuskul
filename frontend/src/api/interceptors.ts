@@ -22,6 +22,16 @@ export function setupInterceptors() {
       }
     }
 
+    // Debug: Log requests to staff endpoints
+    if (config.url?.includes("/staff/")) {
+      console.log("[DEBUG] API Request:", {
+        url: config.url,
+        schoolId: schoolId,
+        hasSchoolIdHeader: !!config.headers?.["X-School-Id"],
+        headers: config.headers,
+      });
+    }
+
     return config;
   });
 

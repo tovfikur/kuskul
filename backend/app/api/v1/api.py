@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import academic_calendar_settings, academic_years, analytics, attendance_staff, attendance_students, audit_logs, auth, backup, batch, certificates, classes, communication_logs, curriculum, discounts, documents, enrollments, events, exam_schedules, exams, fee_dues, fee_payments, fee_structures, grades, guardians, health, holidays, import_export, leaves, library_books, library_issues, marks, messages, notices, notifications, parent_portal, reports, results, roles, schools, sections, settings, staff, streams, students, subject_groups, subjects, teacher_assignments, terms, time_slots, timetable, transport_assignments, transport_route_stops, transport_routes, transport_vehicles, users
+from app.api.v1.endpoints import academic_calendar_settings, academic_years, analytics, attendance_staff, attendance_students, audit_logs, auth, backup, batch, certificates, classes, communication_logs, curriculum, discounts, documents, enrollments, events, exam_schedules, exams, online_exams, fee_dues, fee_payments, fee_structures, grades, guardians, health, holidays, import_export, leaves, library_books, library_issues, logistics, marks, messages, notices, notifications, parent_portal, payroll, reports, results, roles, schools, sections, settings, staff, staff_extended, staff_leave, streams, students, subject_groups, subjects, teacher_assignments, terms, time_slots, timetable, transport_assignments, transport_route_stops, transport_routes, transport_vehicles, users
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
@@ -20,6 +20,11 @@ api_router.include_router(academic_calendar_settings.router, prefix="/academic-c
 api_router.include_router(students.router, prefix="/students", tags=["students"])
 api_router.include_router(enrollments.router, prefix="/enrollments", tags=["enrollments"])
 api_router.include_router(guardians.router, prefix="/guardians", tags=["guardians"])
+# Staff routers - ORDER MATTERS! Extended routes must come before the base staff router
+# to prevent /{staff_id} from matching paths like /departments
+api_router.include_router(staff_extended.router, prefix="/staff", tags=["staff-extended"])
+api_router.include_router(staff_leave.router, prefix="/staff", tags=["staff-leave"])
+api_router.include_router(payroll.router, prefix="/staff", tags=["payroll"])
 api_router.include_router(staff.router, prefix="/staff", tags=["staff"])
 api_router.include_router(teacher_assignments.router, prefix="/teacher-assignments", tags=["teacher-assignments"])
 api_router.include_router(attendance_students.router, prefix="/attendance/students", tags=["attendance-students"])
@@ -29,6 +34,7 @@ api_router.include_router(timetable.router, prefix="/timetable", tags=["timetabl
 api_router.include_router(time_slots.router, prefix="/time-slots", tags=["time-slots"])
 api_router.include_router(exams.router, prefix="/exams", tags=["exams"])
 api_router.include_router(exam_schedules.router, prefix="/exam-schedules", tags=["exam-schedules"])
+api_router.include_router(online_exams.router, prefix="/online-exams", tags=["online-exams"])
 api_router.include_router(marks.router, prefix="/marks", tags=["marks"])
 api_router.include_router(results.router, prefix="/results", tags=["results"])
 api_router.include_router(grades.router, prefix="/grades", tags=["grades"])
@@ -54,7 +60,8 @@ api_router.include_router(certificates.router, prefix="/certificates", tags=["ce
 api_router.include_router(events.router, prefix="/events", tags=["events"])
 api_router.include_router(holidays.router, prefix="/holidays", tags=["holidays"])
 api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
-api_router.include_router(audit_logs.router, prefix="/audit-logs", tags=["audit-logs"])
 api_router.include_router(backup.router, prefix="/backup", tags=["backup"])
 api_router.include_router(import_export.router, prefix="/import-export", tags=["import-export"])
 api_router.include_router(batch.router, prefix="/batch", tags=["batch"])
+api_router.include_router(logistics.router, prefix="/logistics", tags=["logistics"])
+

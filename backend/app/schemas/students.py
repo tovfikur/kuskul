@@ -10,6 +10,7 @@ class StudentOut(BaseModel):
 
     id: uuid.UUID
     school_id: uuid.UUID
+    user_id: Optional[uuid.UUID] = None
     first_name: str
     last_name: Optional[str]
     admission_no: Optional[str]
@@ -64,6 +65,7 @@ class StudentOut(BaseModel):
 
 
 class StudentCreate(BaseModel):
+    user_id: Optional[uuid.UUID] = None
     first_name: str = Field(min_length=1, max_length=100)
     last_name: Optional[str] = Field(default=None, max_length=100)
     admission_no: Optional[str] = Field(default=None, max_length=64)
@@ -117,6 +119,7 @@ class StudentCreate(BaseModel):
 
 
 class StudentUpdate(BaseModel):
+    user_id: Optional[uuid.UUID] = None
     first_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(default=None, max_length=100)
     admission_no: Optional[str] = Field(default=None, max_length=64)

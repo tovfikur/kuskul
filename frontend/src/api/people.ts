@@ -80,8 +80,8 @@ export interface Staff {
   school_id?: string;
   full_name: string;
   employee_id?: string | null;
-  email?: string;
-  phone?: string;
+  email?: string | null;
+  phone?: string | null;
   designation?: string | null;
   department?: string | null;
   emergency_contact_name?: string | null;
@@ -147,6 +147,7 @@ export async function getStudents(params?: {
   limit?: number;
   class_id?: string;
   section_id?: string;
+  academic_year_id?: string;
   search?: string;
   status?: string;
   gender?: string;
@@ -157,6 +158,7 @@ export async function getStudents(params?: {
       limit: params?.limit ?? 100,
       class_id: params?.class_id || undefined,
       section_id: params?.section_id || undefined,
+      academic_year_id: params?.academic_year_id || undefined,
       search: params?.search || undefined,
       status: params?.status || undefined,
       gender: params?.gender || undefined,
@@ -168,6 +170,14 @@ export async function getStudents(params?: {
 export async function getStudent(studentId: string): Promise<Student> {
   const resp = await api.get(`/students/${studentId}`);
   return resp.data;
+}
+
+export async function getStudentsBatch(studentIds: string[]): Promise<Student[]> {
+  if (studentIds.length === 0) return [];
+  const resp = await api.post("/students/batch", {
+    student_ids: Array.from(new Set(studentIds)).slice(0, 500),
+  });
+  return resp.data as Student[];
 }
 
 export async function createStudent(payload: {

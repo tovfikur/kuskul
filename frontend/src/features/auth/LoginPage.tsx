@@ -13,7 +13,7 @@ import {
 } from "@mui/material";
 
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
-import { signIn } from "./authSlice";
+import { signIn, restoreSession } from "./authSlice";
 
 const schema = z.object({
   email: z.string().email("Invalid email address"),
@@ -28,6 +28,14 @@ export function LoginPage() {
   const status = useAppSelector((s) => s.auth.status);
   const errorMessage = useAppSelector((s) => s.auth.errorMessage);
   const accessToken = useAppSelector((s) => s.auth.accessToken);
+  const sessionChecked = useAppSelector((s) => s.auth.sessionChecked);
+
+  // Try to restore session on mount (in case user is already logged in via cookie)
+  useEffect(() => {
+    if (!sessionChecked && status !== "loading") {
+      dispatch(restoreSession());
+    }
+  }, [dispatch, sessionChecked, status]);
 
   useEffect(() => {
     if (accessToken) {
@@ -43,6 +51,7 @@ export function LoginPage() {
   async function onSubmit(values: FormValues) {
     await dispatch(signIn(values));
   }
+
 
   return (
     <Box

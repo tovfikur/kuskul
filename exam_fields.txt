@@ -1,0 +1,167 @@
+
+# ✅ Generalized Exam Master Fields (Universal)
+
+This **one structure** works for **all exam types**.
+
+---
+
+## 🧩 1. Exam Identity & Scope
+
+| Field                 | Purpose                                                         |
+| --------------------- | --------------------------------------------------------------- |
+| `id`                  | Unique exam ID                                                  |
+| `exam_code`           | CT-2026-6-MATH-01                                               |
+| `exam_type`           | CT / QUIZ / ASSIGNMENT / MID / FINAL / PRACTICAL / VIVA / BOARD |
+| `exam_name`           | “Mid Term Exam 2026”                                            |
+| `academic_year_id`    | 2026                                                            |
+| `class_id`            | Class 6                                                         |
+| `section_id`          | A / B / Null                                                    |
+| `subject_id`          | Math / Bangla                                                   |
+| `is_combined_subject` | True/False                                                      |
+
+✔ Covers **all exams**
+
+---
+
+## 🧑‍🏫 2. Authority & Responsibility
+
+| Field                | Purpose                 |
+| -------------------- | ----------------------- |
+| `assigned_by_role`   | Teacher / Admin / Board |
+| `assigned_by_id`     | Teacher ID / Admin ID   |
+| `question_setter_id` | Teacher                 |
+| `examiner_id`        | Script checker          |
+| `moderator_id`       | Optional                |
+| `approved_by_id`     | Head Teacher            |
+
+✔ Works for **internal & board exams**
+
+---
+
+## 📅 3. Schedule & Logistics
+
+| Field              | Purpose                                   |
+| ------------------ | ----------------------------------------- |
+| `exam_date`        | Date                                      |
+| `start_time`       | Start time                                |
+| `end_time`         | End time                                  |
+| `duration_minutes` | Total duration                            |
+| `room`             | Exam room / Lab                           |
+| `exam_mode`        | Written / MCQ / Oral / Practical / Online |
+| `is_lab_required`  | True/False                                |
+
+✔ CT → Final → Practical → Viva
+
+---
+
+## 📚 4. Syllabus & Content Control
+
+| Field              | Purpose              |
+| ------------------ | -------------------- |
+| `syllabus_from`    | Chapter/Lesson start |
+| `syllabus_to`      | Chapter/Lesson end   |
+| `syllabus_details` | Text                 |
+| `question_pattern` | CQ / MCQ / Mixed     |
+| `exam_instruction` | Optional             |
+
+✔ Useful for **CT, Monthly, Mid, Final**
+
+---
+
+## 🧮 5. Marks Structure (Most Important)
+
+This is where **everything becomes unified** 👇
+
+| Field                    | Purpose                |
+| ------------------------ | ---------------------- |
+| `full_marks`             | 5 / 10 / 20 / 50 / 100 |
+| `pass_marks`             | Usually 33%            |
+| `theory_marks`           | 0–100                  |
+| `practical_marks`        | 0–25                   |
+| `viva_marks`             | 0–25                   |
+| `mcq_marks`              | Optional               |
+| `assignment_marks`       | Optional               |
+| `is_practical_required`  | True/False             |
+| `is_viva_required`       | True/False             |
+| `fail_if_practical_fail` | True (BD standard)     |
+| `fail_if_viva_fail`      | Configurable           |
+
+✔ Covers **Science, ICT, Language, KG**
+
+---
+
+## 📊 6. Weight & Calculation Rules
+
+| Field                      | Purpose              |
+| -------------------------- | -------------------- |
+| `weight_percentage`        | 5–60                 |
+| `included_in_final_result` | True/False           |
+| `best_of_count`            | CT/Quiz best X       |
+| `aggregation_method`       | Average / Best / Sum |
+| `counts_for_gpa`           | Yes/No               |
+
+✔ CT / Quiz / Assignment handled properly
+
+---
+
+## 🧑‍🎓 7. Student Participation Rules
+
+| Field                 | Purpose       |
+| --------------------- | ------------- |
+| `attendance_required` | Yes           |
+| `absent_mark_policy`  | Zero / Exempt |
+| `repeat_allowed`      | Yes/No        |
+| `reexam_allowed`      | Yes/No        |
+
+---
+
+## 📄 8. Status & Lifecycle
+
+| Field                   | Purpose                                             |
+| ----------------------- | --------------------------------------------------- |
+| `status`                | Draft / Scheduled / Running / Completed / Published |
+| `result_entry_deadline` | Date                                                |
+| `result_publish_date`   | Date                                                |
+| `locked_at`             | Timestamp                                           |
+| `is_result_editable`    | True/False                                          |
+
+---
+
+## 🔐 9. Audit & Control (Very Important)
+
+| Field        | Purpose     |
+| ------------ | ----------- |
+| `created_by` | User ID     |
+| `created_at` | Timestamp   |
+| `updated_by` | User ID     |
+| `updated_at` | Timestamp   |
+| `remarks`    | Admin notes |
+
+---
+
+# 🔁 How This One Structure Covers All Exams
+
+| Exam Type  | How It Fits                            |
+| ---------- | -------------------------------------- |
+| Class Test | Low marks, best_of_count, weight 10–20 |
+| Quiz       | MCQ/oral, small marks                  |
+| Assignment | assignment_marks only                  |
+| Viva       | viva_marks only                        |
+| Practical  | practical_marks + fail rule            |
+| Monthly    | Medium syllabus, mid weight            |
+| Mid-Term   | High weight, GPA counted               |
+| Final      | Highest weight, promotion              |
+| Model      | GPA optional                           |
+| Board      | Imported, read-only                    |
+
+---
+
+# ✅ Why This Is the Best Design
+
+✔ One table, not 10 different ones
+✔ Easy result calculation
+✔ Bangladesh-friendly
+✔ Scalable to college / university
+✔ Works with Laravel / Django / Spring
+
+---
