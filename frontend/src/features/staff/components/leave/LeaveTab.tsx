@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Box,
   Paper,
@@ -7,453 +7,536 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   TablePagination,
   TextField,
   MenuItem,
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  IconButton,
   Chip,
-  Grid,
-  Card,
-  CardContent,
   Alert,
-  Tabs,
-  Tab,
+  Avatar,
+  CircularProgress,
+  IconButton,
+  InputAdornment
 } from "@mui/material";
 import {
   Add,
   CheckCircle,
   Cancel,
-  Pending,
-  CalendarMonth,
+  EventNote,
+  Search,
+  Close
 } from "@mui/icons-material";
-
-// Placeholder - will be replaced with actual API
-const mockLeaveRequests = [
-  {
-    id: "1",
-    staff_name: "John Doe",
-    leave_type: "Sick Leave",
-    start_date: "2024-01-15",
-    end_date: "2024-01-17",
-    total_days: 3,
-    status: "pending",
-    reason: "Medical appointment",
-  },
-  {
-    id: "2",
-    staff_name: "Jane Smith",
-    leave_type: "Casual Leave",
-    start_date: "2024-01-20",
-    end_date: "2024-01-21",
-    total_days: 2,
-    status: "approved",
-    reason: "Personal work",
-  },
-];
+import {
+  listStaff,
+  listLeaveTypes,
+  listLeaveRequests,
+  createLeaveRequest,
+  approveLeaveRequest,
+  rejectLeaveRequest,
+  getLeaveBalanceSummary,
+  type Staff,
+  type LeaveType,
+  type StaffLeaveRequest
+} from "../../../../api/staffManagement";
 
 export default function LeaveTab() {
-  const [activeTab, setActiveTab] = useState(0);
-  const [requests, setRequests] = useState(mockLeaveRequests);
+  // Data State
+  const [requests, setRequests] = useState<StaffLeaveRequest[]>([]);
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [balanceSummary, setBalanceSummary] = useState<any>(null);
+  
+  // Maps for quick lookup
+  const [staffMap, setStaffMap] = useState<Record<string, Staff>>({});
+  const [typeMap, setTypeMap] = useState<Record<string, LeaveType>>({});
+
+  // UI State
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  
+  const [total, setTotal] = useState(0);
+
   // Filters
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
-  
-  // Dialog state
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Dialogs
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     staff_id: "",
     leave_type_id: "",
-    start_date: "",
-    end_date: "",
+    start_date: new Date().toISOString().split("T")[0],
+    end_date: new Date().toISOString().split("T")[0],
     reason: "",
   });
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  // Stats
-  const [stats, setStats] = useState({
-    pending: 1,
-    approved: 1,
-    rejected: 0,
-    total: 2,
-  });
+  // Initial Load
+  useEffect(() => {
+    loadMetadata();
+    loadRequests();
+    loadStats();
+  }, []);
 
-  const handleAdd = () => {
-    setFormData({
-      staff_id: "",
-      leave_type_id: "",
-      start_date: "",
-      end_date: "",
-      reason: "",
-    });
-    setError("");
-    setDialogOpen(true);
+  // Effect to handle pagination or filter changes
+  useEffect(() => {
+    loadRequests();
+  }, [page, rowsPerPage, statusFilter, typeFilter]);
+
+  const loadMetadata = async () => {
+    try {
+      // Staff
+      const sRes = await listStaff({ limit: 1000, status: "active" });
+      if ((sRes as any).data?.items) {
+        const list = (sRes as any).data.items;
+        setStaffList(list);
+        const map: any = {};
+        list.forEach((s: Staff) => map[s.id] = s);
+        setStaffMap(map);
+      }
+
+      // Leave Types
+      const tRes = await listLeaveTypes({ });
+      // listLeaveTypes returns list directly in data? or in items? Check staff_leave.py response_model.
+      // staff_leave.py: response_model=list[LeaveTypeOut]. So data IS the list.
+      const tData = (tRes as any).data;
+      if (Array.isArray(tData)) {
+        setLeaveTypes(tData);
+        const map: any = {};
+        tData.forEach((t: LeaveType) => map[t.id] = t);
+        setTypeMap(map);
+      }
+    } catch (e) {
+      console.error("Failed to load metadata", e);
+    }
   };
 
-  const handleSave = async () => {
-    setError("");
-    
-    if (!formData.staff_id || !formData.leave_type_id || !formData.start_date || !formData.end_date) {
-      setError("All fields are required");
+  const loadStats = async () => {
+    try {
+        const res = await getLeaveBalanceSummary(new Date().getFullYear());
+        if ((res as any).data) setBalanceSummary((res as any).data);
+    } catch (e) {
+        console.error(e);
+    }
+  };
+
+  const loadRequests = async () => {
+    setLoading(true);
+    try {
+      const res = await listLeaveRequests({
+        page: page + 1,
+        limit: rowsPerPage,
+        status: statusFilter || undefined,
+        leave_type_id: typeFilter || undefined,
+      });
+      
+      const data = (res as any).data;
+      if (data && data.items) {
+        setRequests(data.items);
+        setTotal(data.total);
+      }
+    } catch (e) {
+      console.error("Failed to load requests", e);
+      setError("Failed to load leave requests");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = async () => {
+    setError(null);
+    if (!formData.staff_id || !formData.leave_type_id || !formData.reason) {
+      setError("Please fill all required fields");
       return;
     }
 
-    // TODO: Call API to create leave request
-    setDialogOpen(false);
-  };
-
-  const handleApprove = async (id: string) => {
-    // TODO: Call API to approve request
-    setRequests(requests.map(r => 
-      r.id === id ? { ...r, status: "approved" } : r
-    ));
-  };
-
-  const handleReject = async (id: string) => {
-    const reason = prompt("Enter rejection reason:");
-    if (!reason) return;
-    
-    // TODO: Call API to reject request
-    setRequests(requests.map(r => 
-      r.id === id ? { ...r, status: "rejected" } : r
-    ));
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "approved": return "success";
-      case "rejected": return "error";
-      case "pending": return "warning";
-      default: return "default";
+    setActionLoading(true);
+    try {
+      await createLeaveRequest(formData);
+      setDialogOpen(false);
+      loadRequests();
+      loadStats(); // refresh stats
+      // Reset form
+      setFormData({
+        staff_id: "",
+        leave_type_id: "",
+        start_date: new Date().toISOString().split("T")[0],
+        end_date: new Date().toISOString().split("T")[0],
+        reason: "",
+      });
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Failed to create request");
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  const filteredRequests = requests.filter(req => {
-    if (statusFilter && req.status !== statusFilter) return false;
-    if (typeFilter && req.leave_type !== typeFilter) return false;
-    return true;
-  });
+  const handleAction = async (id: string, action: "approve" | "reject") => {
+    if (!confirm(`Are you sure you want to ${action} this request?`)) return;
+    
+    let reason = "";
+    if (action === "reject") {
+        reason = prompt("Please enter rejection reason:") || "";
+        if (!reason) return;
+    }
+
+    try {
+        if (action === "approve") await approveLeaveRequest(id);
+        else await rejectLeaveRequest(id, reason);
+        loadRequests();
+        loadStats();
+    } catch (err: any) {
+        alert(err.response?.data?.detail || "Action failed");
+    }
+  };
+
+  // Helper to enrich request data
+  const enrich = (req: StaffLeaveRequest) => {
+    const staff = staffMap[req.staff_id];
+    const type = typeMap[req.leave_type_id];
+    return {
+        ...req,
+        staff_name: staff ? `${staff.first_name} ${staff.last_name}` : "Unknown Staff",
+        staff_photo: staff?.profile_photo_url,
+        type_name: type?.name || "Unknown Type",
+        type_color: type?.color || "#9e9e9e"
+    };
+  };
+
+  // Filter local search if needed (API search not supported in listLeaveRequests for string query yet)
+  // listLeaveRequests supports 'status', 'leave_type_id' but not generic 'search'.
+  // So we filter locally for search term.
+  const displayRequests = useMemo(() => {
+    let list = requests.map(enrich);
+    if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        list = list.filter(r => r.staff_name.toLowerCase().includes(q));
+    }
+    return list;
+  }, [requests, staffMap, typeMap, searchQuery]);
 
   return (
-    <Box>
-      {/* Tabs */}
-      <Paper sx={{ mb: 2 }}>
-        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
-          <Tab label="Leave Requests" />
-          <Tab label="Leave Balances" />
-          <Tab label="Leave Calendar" />
-        </Tabs>
+    <Box sx={{ display: "flex", height: "calc(100vh - 180px)", gap: 3, pt: 1 }}>
+      
+      {/* LEFT PANEL: Overview & Quick apply (38.2%) */}
+      <Paper sx={{ 
+        width: "38.2%", 
+        borderRadius: 3, 
+        overflow: "hidden", 
+        display: "flex", 
+        flexDirection: "column",
+        bgcolor: "#fff"
+      }} elevation={2}>
+         
+         {/* Gradient Header */}
+         <Box sx={{ p: 3, background: "linear-gradient(135deg, #FF6B6B 0%, #EE5253 100%)", color: "white" }}>
+            <Typography variant="h6" fontWeight={700}>Leave Management</Typography>
+            <Typography variant="body2" sx={{ opacity: 0.9 }}>Track and manage staff time off</Typography>
+            
+            <Box sx={{ mt: 3, display: "flex", gap: 2 }}>
+               <Box sx={{ flex: 1, p: 2, bgcolor: "rgba(255,255,255,0.2)", borderRadius: 2 }}>
+                  <Typography variant="h4" fontWeight={700}>{balanceSummary?.total_pending || 0}</Typography>
+                  <Typography variant="caption" fontWeight={500}>Pending Requests</Typography>
+               </Box>
+               <Box sx={{ flex: 1, p: 2, bgcolor: "rgba(255,255,255,0.2)", borderRadius: 2 }}>
+                  <Typography variant="h4" fontWeight={700}>{balanceSummary?.total_used || 0}</Typography>
+                  <Typography variant="caption" fontWeight={500}>Taken This Year</Typography>
+               </Box>
+            </Box>
+         </Box>
+
+         {/* Actions & Balance List */}
+         <Box sx={{ p: 3, flex: 1, overflowY: "auto" }}>
+             <Button 
+                variant="contained" 
+                fullWidth 
+                startIcon={<Add />}
+                onClick={() => setDialogOpen(true)}
+                sx={{ 
+                    py: 1.5, 
+                    mb: 4, 
+                    background: "linear-gradient(90deg, #FF6B6B 0%, #FF8E53 100%)",
+                    fontWeight: 600,
+                    boxShadow: "0 4px 14px rgba(255, 107, 107, 0.4)"
+                }}
+             >
+                New Leave Request
+             </Button>
+
+             <Typography variant="subtitle2" fontWeight={600} color="text.secondary" gutterBottom>
+               Leave Types & Allowance
+             </Typography>
+
+             <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}>
+                {leaveTypes.map(lt => (
+                    <Box key={lt.id} sx={{ display: "flex", alignItems: "center", gap: 2, p: 1.5, border: "1px solid #f0f0f0", borderRadius: 2 }}>
+                        <Avatar sx={{ bgcolor: lt.color + "20", color: lt.color }}>
+                            {lt.name[0]}
+                        </Avatar>
+                        <Box sx={{ flex: 1 }}>
+                            <Typography variant="body2" fontWeight={600}>{lt.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">{lt.days_per_year} days/year</Typography>
+                        </Box>
+                        {lt.requires_approval && <Chip label="Approval" size="small" variant="outlined" sx={{ fontSize: 10, height: 20 }} />}
+                    </Box>
+                ))}
+             </Box>
+         </Box>
       </Paper>
 
-      {/* Tab 1: Leave Requests */}
-      {activeTab === 0 && (
-        <>
-          {/* Stats Cards */}
-          <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <Pending color="warning" />
-                    <Box>
-                      <Typography variant="h4">{stats.pending}</Typography>
-                      <Typography color="text.secondary">Pending</Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <CheckCircle color="success" />
-                    <Box>
-                      <Typography variant="h4">{stats.approved}</Typography>
-                      <Typography color="text.secondary">Approved</Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <Cancel color="error" />
-                    <Box>
-                      <Typography variant="h4">{stats.rejected}</Typography>
-                      <Typography color="text.secondary">Rejected</Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <CalendarMonth color="primary" />
-                    <Box>
-                      <Typography variant="h4">{stats.total}</Typography>
-                      <Typography color="text.secondary">Total Requests</Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
+      {/* RIGHT PANEL: List (61.8%) */}
+      <Paper sx={{ 
+        width: "61.8%", 
+        borderRadius: 3, 
+        overflow: "hidden", 
+        display: "flex", 
+        flexDirection: "column",
+        bgcolor: "#fff"
+      }} elevation={2}>
+        
+        {/* Toolbar */}
+        <Box sx={{ p: 2, borderBottom: "1px solid #f0f0f0", display: "flex", alignItems: "center", gap: 2 }}>
+           <TextField
+               size="small"
+               placeholder="Search staff..."
+               value={searchQuery}
+               onChange={(e) => setSearchQuery(e.target.value)}
+               InputProps={{
+                 startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment>
+               }}
+               sx={{ flex: 1 }}
+           />
+           <TextField
+              select
+              size="small"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              sx={{ width: 140 }}
+              SelectProps={{ displayEmpty: true }}
+           >
+              <MenuItem value="">All Types</MenuItem>
+              {leaveTypes.map(t => <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>)}
+           </TextField>
+           <TextField 
+              select 
+              size="small" 
+              value={statusFilter} 
+              onChange={(e) => setStatusFilter(e.target.value)}
+              sx={{ width: 140 }}
+              SelectProps={{ displayEmpty: true }}
+           >
+              <MenuItem value="">All Status</MenuItem>
+              <MenuItem value="pending">Pending</MenuItem>
+              <MenuItem value="approved">Approved</MenuItem>
+              <MenuItem value="rejected">Rejected</MenuItem>
+           </TextField>
+        </Box>
 
-          {/* Filters and Actions */}
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} sm={6} md={3}>
-                <TextField
-                  fullWidth
-                  select
-                  size="small"
-                  label="Status"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <MenuItem value="">All Status</MenuItem>
-                  <MenuItem value="pending">Pending</MenuItem>
-                  <MenuItem value="approved">Approved</MenuItem>
-                  <MenuItem value="rejected">Rejected</MenuItem>
-                </TextField>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <TextField
-                  fullWidth
-                  select
-                  size="small"
-                  label="Leave Type"
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                >
-                  <MenuItem value="">All Types</MenuItem>
-                  <MenuItem value="Sick Leave">Sick Leave</MenuItem>
-                  <MenuItem value="Casual Leave">Casual Leave</MenuItem>
-                  <MenuItem value="Annual Leave">Annual Leave</MenuItem>
-                </TextField>
-              </Grid>
-              <Grid item xs={12} md={6} sx={{ textAlign: "right" }}>
-                <Button
-                  variant="contained"
-                  startIcon={<Add />}
-                  onClick={handleAdd}
-                >
-                  Request Leave
-                </Button>
-              </Grid>
-            </Grid>
-          </Paper>
-
-          {/* Requests Table */}
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Staff Member</TableCell>
-                  <TableCell>Leave Type</TableCell>
-                  <TableCell>Start Date</TableCell>
-                  <TableCell>End Date</TableCell>
-                  <TableCell>Days</TableCell>
-                  <TableCell>Reason</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={8} align="center">Loading...</TableCell>
-                  </TableRow>
-                ) : filteredRequests.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} align="center">
-                      No leave requests found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredRequests
-                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                    .map((request) => (
-                      <TableRow key={request.id}>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={600}>
-                            {request.staff_name}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{request.leave_type}</TableCell>
-                        <TableCell>{request.start_date}</TableCell>
-                        <TableCell>{request.end_date}</TableCell>
-                        <TableCell>
-                          <Chip label={`${request.total_days} days`} size="small" />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                            {request.reason}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={request.status}
-                            color={getStatusColor(request.status) as any}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          {request.status === "pending" && (
-                            <>
-                              <Button
-                                size="small"
-                                color="success"
-                                onClick={() => handleApprove(request.id)}
-                              >
-                                Approve
-                              </Button>
-                              <Button
-                                size="small"
-                                color="error"
-                                onClick={() => handleReject(request.id)}
-                              >
-                                Reject
-                              </Button>
-                            </>
-                          )}
-                        </TableCell>
+        {/* Requests List */}
+        <Box sx={{ flex: 1, overflow: "auto" }}>
+            {loading ? (
+                <Box sx={{ p: 4, display: "flex", justifyContent: "center" }}><CircularProgress /></Box>
+            ) : displayRequests.length === 0 ? (
+                <Box sx={{ p: 4, textAlign: "center", color: "text.secondary" }}>
+                    <EventNote sx={{ fontSize: 48, opacity: 0.2, mb: 2 }} />
+                    <Typography>No leave requests found</Typography>
+                </Box>
+            ) : (
+                <Table stickyHeader>
+                   <TableHead>
+                      <TableRow>
+                         <TableCell>Staff</TableCell>
+                         <TableCell>Type</TableCell>
+                         <TableCell>Dates</TableCell>
+                         <TableCell>Status</TableCell>
+                         <TableCell align="right">Actions</TableCell>
                       </TableRow>
-                    ))
-                )}
-              </TableBody>
-            </Table>
-            <TablePagination
-              component="div"
-              count={filteredRequests.length}
-              page={page}
-              onPageChange={(_, newPage) => setPage(newPage)}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={(e) => {
-                setRowsPerPage(parseInt(e.target.value, 10));
-                setPage(0);
-              }}
-            />
-          </TableContainer>
-        </>
-      )}
+                   </TableHead>
+                   <TableBody>
+                      {displayRequests.map((req) => (
+                          <TableRow key={req.id} hover>
+                              <TableCell>
+                                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                                      <Avatar src={req.staff_photo} sx={{ width: 32, height: 32 }}>{req.staff_name[0]}</Avatar>
+                                      <Box>
+                                          <Typography variant="body2" fontWeight={600}>{req.staff_name}</Typography>
+                                          <Typography variant="caption" color="text.secondary">{req.reason}</Typography>
+                                      </Box>
+                                  </Box>
+                              </TableCell>
+                              <TableCell>
+                                  <Chip 
+                                    label={req.type_name} 
+                                    size="small" 
+                                    sx={{ 
+                                        bgcolor: req.type_color + "15", 
+                                        color: req.type_color, 
+                                        fontWeight: 600,
+                                        border: `1px solid ${req.type_color}40`
+                                    }} 
+                                  />
+                              </TableCell>
+                              <TableCell>
+                                  <Typography variant="body2">{req.start_date}</Typography>
+                                  <Typography variant="caption" color="text.secondary">{req.total_days} days</Typography>
+                              </TableCell>
+                              <TableCell>
+                                  <Chip 
+                                    label={req.status} 
+                                    size="small"
+                                    color={req.status === 'approved' ? 'success' : req.status === 'pending' ? 'warning' : 'error'} 
+                                    sx={{ textTransform: "capitalize" }}
+                                  />
+                              </TableCell>
+                              <TableCell align="right">
+                                  {req.status === 'pending' && (
+                                     <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end" }}>
+                                         <IconButton size="small" color="success" onClick={() => handleAction(req.id, "approve")}>
+                                              <CheckCircle fontSize="small" />
+                                          </IconButton>
+                                          <IconButton size="small" color="error" onClick={() => handleAction(req.id, "reject")}>
+                                              <Cancel fontSize="small" />
+                                          </IconButton>
+                                     </Box>
+                                  )}
+                              </TableCell>
+                          </TableRow>
+                      ))}
+                   </TableBody>
+                </Table>
+            )}
+        </Box>
+        <TablePagination
+            component="div"
+            count={total}
+            page={page}
+            onPageChange={(_, p) => setPage(p)}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(e) => setRowsPerPage(parseInt(e.target.value))}
+        />
+      </Paper>
 
-      {/* Tab 2: Leave Balances */}
-      {activeTab === 1 && (
-        <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Leave Balances
-          </Typography>
-          <Typography color="text.secondary">
-            Coming soon - View and manage staff leave balances
-          </Typography>
-        </Paper>
-      )}
+      {/* Create Dialog - Golden Ratio Split */}
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}>
+          <DialogContent sx={{ p: 0, display: "flex", height: 500, overflow: "hidden" }}>
+              
+              {/* Left Panel: Reason Input (38.2%) */}
+              <Box sx={{ 
+                  width: "38.2%", 
+                  bgcolor: "#f8f9fa",
+                  p: 4,
+                  display: "flex",
+                  flexDirection: "column",
+                  borderRight: "1px solid #e0e0e0"
+              }}>
+                   <Typography variant="subtitle2" fontWeight={700} color="text.secondary" gutterBottom>
+                      REASON FOR LEAVE
+                   </Typography>
+                   <TextField 
+                      multiline 
+                      fullWidth 
+                      placeholder="Please calculate and describe the reason for your leave request in detail..."
+                      value={formData.reason}
+                      onChange={(e) => setFormData({...formData, reason: e.target.value})}
+                      variant="standard"
+                      InputProps={{ disableUnderline: true }}
+                      sx={{ 
+                          flex: 1, 
+                          "& .MuiInputBase-root": { 
+                              height: "100%", 
+                              alignItems: "flex-start",
+                              fontSize: "0.95rem",
+                              lineHeight: 1.6
+                          } 
+                    }}
+                   />
+              </Box>
 
-      {/* Tab 3: Leave Calendar */}
-      {activeTab === 2 && (
-        <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Leave Calendar
-          </Typography>
-          <Typography color="text.secondary">
-            Coming soon - Visual calendar view of all leave requests
-          </Typography>
-        </Paper>
-      )}
+              {/* Right Panel: Structured Data (61.8%) */}
+              <Box sx={{ width: "61.8%", p: 4, bgcolor: "#fff", display: "flex", flexDirection: "column", position: "relative" }}>
+                  <IconButton onClick={() => setDialogOpen(false)} sx={{ position: "absolute", top: 8, right: 8, color: "text.secondary" }}>
+                      <Close />
+                  </IconButton>
 
-      {/* Request Leave Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Request Leave</DialogTitle>
-        <DialogContent>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <TextField
-                label="Staff Member"
-                fullWidth
-                select
-                value={formData.staff_id}
-                onChange={(e) => setFormData({ ...formData, staff_id: e.target.value })}
-                required
-              >
-                <MenuItem value="">Select Staff</MenuItem>
-                <MenuItem value="1">John Doe</MenuItem>
-                <MenuItem value="2">Jane Smith</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                label="Leave Type"
-                fullWidth
-                select
-                value={formData.leave_type_id}
-                onChange={(e) => setFormData({ ...formData, leave_type_id: e.target.value })}
-                required
-              >
-                <MenuItem value="">Select Type</MenuItem>
-                <MenuItem value="1">Sick Leave</MenuItem>
-                <MenuItem value="2">Casual Leave</MenuItem>
-                <MenuItem value="3">Annual Leave</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Start Date"
-                fullWidth
-                type="date"
-                value={formData.start_date}
-                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                InputLabelProps={{ shrink: true }}
-                required
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="End Date"
-                fullWidth
-                type="date"
-                value={formData.end_date}
-                onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                InputLabelProps={{ shrink: true }}
-                required
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                label="Reason"
-                fullWidth
-                multiline
-                rows={3}
-                value={formData.reason}
-                onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-                required
-              />
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSave} variant="contained">
-            Submit Request
-          </Button>
-        </DialogActions>
+                  <Box sx={{ mb: 4 }}>
+                      <Typography variant="h5" fontWeight={700}>New Request</Typography>
+                      <Typography variant="body2" color="text.secondary">Select staff and dates.</Typography>
+                  </Box>
+                  
+                  {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                      <TextField 
+                          select 
+                          fullWidth 
+                          label="Staff Member" 
+                          value={formData.staff_id}
+                          onChange={(e) => setFormData({...formData, staff_id: e.target.value})}
+                          size="small"
+                      >
+                          {staffList.map(s => (
+                              <MenuItem key={s.id} value={s.id}>{s.first_name} {s.last_name} ({s.employee_id})</MenuItem>
+                          ))}
+                      </TextField>
+
+                      <TextField 
+                          select 
+                          fullWidth 
+                          label="Leave Type" 
+                          value={formData.leave_type_id}
+                          onChange={(e) => setFormData({...formData, leave_type_id: e.target.value})}
+                          size="small"
+                      >
+                          {leaveTypes.map(t => (
+                              <MenuItem key={t.id} value={t.id}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: t.color }} />
+                                    {t.name}
+                                </Box>
+                              </MenuItem>
+                          ))}
+                      </TextField>
+
+                      <Box sx={{ display: "flex", gap: 2 }}>
+                          <TextField 
+                              type="date" 
+                              fullWidth 
+                              label="Start Date" 
+                              InputLabelProps={{ shrink: true }}
+                              value={formData.start_date}
+                              onChange={(e) => setFormData({...formData, start_date: e.target.value})}
+                              size="small"
+                          />
+                          <TextField 
+                              type="date" 
+                              fullWidth 
+                              label="End Date" 
+                              InputLabelProps={{ shrink: true }}
+                              value={formData.end_date}
+                              onChange={(e) => setFormData({...formData, end_date: e.target.value})}
+                              size="small"
+                          />
+                      </Box>
+                  </Box>
+
+                  <Box sx={{ mt: "auto", display: "flex", justifyContent: "flex-end", gap: 2 }}>
+                      <Button onClick={() => setDialogOpen(false)} color="inherit">Cancel</Button>
+                      <Button 
+                        variant="contained" 
+                        onClick={handleCreate} 
+                        disabled={actionLoading}
+                        sx={{ background: "linear-gradient(90deg, #FF6B6B 0%, #FF8E53 100%)", boxShadow: "0 4px 12px rgba(255,107,107,0.3)" }}
+                      >
+                          {actionLoading ? "Submitting..." : "Submit Request"}
+                      </Button>
+                  </Box>
+              </Box>
+          </DialogContent>
       </Dialog>
     </Box>
   );

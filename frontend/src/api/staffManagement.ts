@@ -389,3 +389,91 @@ export async function staffCheckIn(staff_id: string, method: string = "manual") 
 export async function staffCheckOut(staff_id: string, method: string = "manual") {
   return safeRequest({ method: "POST", url: "/attendance/staff/check-out", data: { staff_id, method } });
 }
+
+// ============================================================================
+// LEAVE BALANCES
+// ============================================================================
+
+export interface LeaveBalance {
+  id: string;
+  staff_id: string;
+  leave_type_id: string;
+  year: number;
+  total_days: number;
+  used_days: number;
+  pending_days: number;
+  carried_forward: number;
+  available_days: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+export async function getLeaveBalanceSummary(year?: number) {
+  return safeRequest({ method: "GET", url: "/staff/leave/balances/summary", params: { year } });
+}
+
+export async function getStaffLeaveBalances(staff_id: string, year?: number) {
+  return safeRequest({ method: "GET", url: `/staff/leave/balances/staff/${staff_id}`, params: { year } });
+}
+
+// ============================================================================
+// LEAVE REQUESTS
+// ============================================================================
+
+export interface StaffLeaveRequest {
+  id: string;
+  staff_id: string;
+  leave_type_id: string;
+  start_date: string;
+  end_date: string;
+  total_days: number;
+  reason: string;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  approved_by_user_id?: string;
+  approved_at?: string;
+  rejection_reason?: string;
+  cancelled_at?: string;
+  created_at: string;
+  updated_at?: string;
+  
+  // Extra details joined in frontend or backend
+  staff_name?: string;
+  leave_type_name?: string;
+  leave_type_color?: string;
+}
+
+export interface StaffLeaveRequestCreate {
+  staff_id: string;
+  leave_type_id: string;
+  start_date: string;
+  end_date: string;
+  reason: string;
+}
+
+export async function listLeaveRequests(params?: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  staff_id?: string;
+  leave_type_id?: string;
+  start_date?: string;
+  end_date?: string;
+}) {
+  return safeRequest({ method: "GET", url: "/staff/leave/requests", params });
+}
+
+export async function createLeaveRequest(data: StaffLeaveRequestCreate) {
+  return safeRequest({ method: "POST", url: "/staff/leave/requests", data });
+}
+
+export async function approveLeaveRequest(id: string) {
+  return safeRequest({ method: "PATCH", url: `/staff/leave/requests/${id}/approve`, data: {} });
+}
+
+export async function rejectLeaveRequest(id: string, rejection_reason: string) {
+  return safeRequest({ method: "PATCH", url: `/staff/leave/requests/${id}/reject`, data: { rejection_reason } });
+}
+
+export async function cancelLeaveRequest(id: string) {
+  return safeRequest({ method: "DELETE", url: `/staff/leave/requests/${id}` });
+}
