@@ -115,6 +115,7 @@ class StaffCreate(BaseModel):
     bank_account_number: Optional[str] = None
     bank_ifsc: Optional[str] = None
     
+    photo_url: Optional[str] = None # Direct field
     profile_photo_url: Optional[str] = None # Maps to photo_url
 
 

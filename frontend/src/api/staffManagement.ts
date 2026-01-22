@@ -477,3 +477,121 @@ export async function rejectLeaveRequest(id: string, rejection_reason: string) {
 export async function cancelLeaveRequest(id: string) {
   return safeRequest({ method: "DELETE", url: `/staff/leave/requests/${id}` });
 }
+
+// ============================================================================
+// PAYROLL MANAGEMENT
+// ============================================================================
+
+export interface PayrollCycle {
+  id: string;
+  school_id: string;
+  month: number;
+  year: number;
+  status: "draft" | "processing" | "completed" | "paid";
+  total_amount: number;
+  processed_by_user_id?: string;
+  processed_at?: string;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface PayrollCycleWithStats extends PayrollCycle {
+  payslip_count: number;
+  paid_count: number;
+  pending_count: number;
+}
+
+export interface PayrollCycleCreate {
+  month: number;
+  year: number;
+  notes?: string;
+}
+
+export interface Payslip {
+  id: string;
+  payroll_cycle_id: string;
+  staff_id: string;
+  basic_salary: number;
+  allowances: Record<string, number>;
+  deductions: Record<string, number>;
+  gross_salary: number;
+  total_deductions: number;
+  net_salary: number;
+  payment_date?: string;
+  payment_method: string;
+  payment_reference?: string;
+  status: "generated" | "sent" | "paid";
+  working_days: number;
+  present_days: number;
+  leave_days: number;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface PayslipUpdate {
+  basic_salary?: number;
+  allowances?: Record<string, number>;
+  deductions?: Record<string, number>;
+  working_days?: number;
+  present_days?: number;
+  leave_days?: number;
+  payment_method?: string;
+  payment_reference?: string;
+  notes?: string;
+}
+
+export interface PayslipMarkPaid {
+  payment_date: string;
+  payment_reference?: string;
+}
+
+// --- Cycle Actions ---
+
+export async function listPayrollCycles(params?: {
+  page?: number;
+  limit?: number;
+  year?: number;
+  status?: string;
+}) {
+  return safeRequest({ method: "GET", url: "/staff/payroll/cycles", params });
+}
+
+export async function createPayrollCycle(data: PayrollCycleCreate) {
+  return safeRequest({ method: "POST", url: "/staff/payroll/cycles", data });
+}
+
+export async function getPayrollCycle(id: string) {
+  return safeRequest({ method: "GET", url: `/staff/payroll/cycles/${id}` });
+}
+
+export async function processPayrollCycle(id: string, payload: { auto_generate_payslips: boolean; include_inactive_staff: boolean }) {
+  return safeRequest({ method: "PATCH", url: `/staff/payroll/cycles/${id}/process`, data: payload });
+}
+
+export async function completePayrollCycle(id: string) {
+  return safeRequest({ method: "PATCH", url: `/staff/payroll/cycles/${id}/complete` });
+}
+
+// --- Payslip Actions ---
+
+export async function getCyclePayslips(cycleId: string, params?: { page?: number; limit?: number }) {
+  return safeRequest({ method: "GET", url: `/staff/payroll/cycles/${cycleId}/payslips`, params });
+}
+
+export async function sendPayslips(cycleId: string, staffIds?: string[]) {
+  return safeRequest({ method: "POST", url: `/staff/payroll/cycles/${cycleId}/send-payslips`, data: { staff_ids: staffIds } });
+}
+
+export async function getPayslip(id: string) {
+  return safeRequest({ method: "GET", url: `/staff/payroll/payslips/${id}` });
+}
+
+export async function updatePayslip(id: string, data: PayslipUpdate) {
+  return safeRequest({ method: "PUT", url: `/staff/payroll/payslips/${id}`, data });
+}
+
+export async function markPayslipPaid(id: string, data: PayslipMarkPaid) {
+  return safeRequest({ method: "PATCH", url: `/staff/payroll/payslips/${id}/mark-paid`, data });
+}

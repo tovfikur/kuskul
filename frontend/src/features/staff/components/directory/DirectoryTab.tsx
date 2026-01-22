@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Box,
   Paper,
@@ -103,12 +103,22 @@ const defaultFormData: StaffFormData = {
 };
 
 const steps = [
-  { label: "Basic Info", icon: <Person /> },
-  { label: "Employment", icon: <Work /> },
-  { label: "Contact", icon: <ContactPhone /> },
-  { label: "Education", icon: <School /> },
-  { label: "Bank", icon: <AccountBalance /> },
+  { label: "Basic Info", iconName: "Person" },
+  { label: "Employment", iconName: "Work" },
+  { label: "Contact", iconName: "ContactPhone" },
+  { label: "Education", iconName: "School" },
+  { label: "Bank", iconName: "AccountBalance" },
 ];
+
+// Form field component for consistency
+const FormField = ({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) => (
+  <Box sx={{ mb: 2.5 }}>
+    <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: "block", fontWeight: 500 }}>
+      {label} {required && <span style={{ color: "#d32f2f" }}>*</span>}
+    </Typography>
+    {children}
+  </Box>
+);
 
 export default function DirectoryTab() {
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -130,6 +140,17 @@ export default function DirectoryTab() {
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stats, setStats] = useState({ total: 0, active: 0, onLeave: 0, birthdays: 0 });
+
+  const getStepIcon = (iconName: string) => {
+    switch (iconName) {
+      case "Person": return <Person />;
+      case "Work": return <Work />;
+      case "ContactPhone": return <ContactPhone />;
+      case "School": return <School />;
+      case "AccountBalance": return <AccountBalance />;
+      default: return null;
+    }
+  };
 
   useEffect(() => {
     loadDepartments();
@@ -302,17 +323,11 @@ export default function DirectoryTab() {
 
   const getDepartmentName = (id?: string) => departments.find(d => d.id === id)?.name || "-";
   const getDesignationName = (id?: string) => designations.find(d => d.id === id)?.title || "-";
-  const updateField = (field: keyof StaffFormData, value: any) => setFormData(prev => ({ ...prev, [field]: value }));
+  
+  const updateField = useCallback((field: keyof StaffFormData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  }, []);
 
-  // Form field component for consistency
-  const FormField = ({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) => (
-    <Box sx={{ mb: 2.5 }}>
-      <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: "block", fontWeight: 500 }}>
-        {label} {required && <span style={{ color: "#d32f2f" }}>*</span>}
-      </Typography>
-      {children}
-    </Box>
-  );
 
   return (
     <Box>
@@ -487,9 +502,9 @@ export default function DirectoryTab() {
                     transition: "all 0.2s",
                   }}
                 >
-                  <Avatar sx={{ width: 32, height: 32, bgcolor: activeStep === i ? "white" : "rgba(255,255,255,0.2)", color: activeStep === i ? "#1976d2" : "white", fontSize: 14 }}>
-                    {step.icon}
-                  </Avatar>
+                    <Avatar sx={{ width: 32, height: 32, bgcolor: activeStep === i ? "white" : "rgba(255,255,255,0.2)", color: activeStep === i ? "#1976d2" : "white", fontSize: 14 }}>
+                      {getStepIcon(step.iconName)}
+                    </Avatar>
                   <Typography variant="body2" fontWeight={activeStep === i ? 600 : 400}>{step.label}</Typography>
                 </Box>
               ))}

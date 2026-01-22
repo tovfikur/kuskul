@@ -178,19 +178,35 @@ def create_staff(payload: StaffCreate, db: Session = Depends(get_db), school_id=
         date_of_birth=payload.date_of_birth,
         blood_group=payload.blood_group,
         nationality=payload.nationality,
+        marital_status=payload.marital_status,
+        religion=payload.religion,
         
         # Address
         address=address,
+        permanent_address=payload.permanent_address,
         city=payload.city,
         state=payload.state,
         postal_code=payload.postal_code,
+        country=payload.country,
         
         emergency_contact_name=payload.emergency_contact_name,
         emergency_contact_phone=payload.emergency_contact_phone,
         emergency_contact_relation=payload.emergency_contact_relation,
         
         date_of_joining=payload.date_of_joining,
+        employment_type=payload.employment_type,
         status=payload.status,
+        
+        # Qualifications
+        highest_qualification=payload.highest_qualification,
+        specialization=payload.specialization,
+        experience_years=payload.experience_years,
+        
+        # Bank Details
+        bank_name=payload.bank_name,
+        bank_account_number=payload.bank_account_number,
+        bank_ifsc=payload.bank_ifsc,
+        
         photo_url=photo_url,
         
         created_at=now,
