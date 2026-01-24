@@ -19,6 +19,8 @@ def ensure_default_roles(db: Session) -> None:
             "allow": [
                 "users:read",
                 "users:write",
+                "roles:read",
+                "roles:write",
                 "schools:read",
                 "schools:write",
                 "academic:read",

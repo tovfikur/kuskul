@@ -16,6 +16,7 @@ import FinancePage from "./features/finance/FinancePage";
 import LogisticsPage from "./features/logistics/LogisticsPage";
 import SettingsPage from "./features/settings/SettingsPage";
 import SystemUsersPage from "./features/settings/SystemUsersPage";
+import UsersPage from "./features/users/UsersPage";
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
         <Route path="/academic" element={<AcademicPage />} />
         <Route path="/students" element={<StudentsPage />} />
         <Route path="/staff" element={<StaffPage />} />
+        <Route path="/users" element={<UsersPage />} />
         <Route path="/exams" element={<ExamsPage />} />
         <Route path="/events" element={<EventsPage />} />
         <Route path="/finance" element={<FinancePage />} />

@@ -10,16 +10,16 @@ from app.db.session import get_db
 from app.models.role import Role
 from app.schemas.roles import RoleCreate, RoleOut, RolePermissionsUpdate, RoleUpdate
 
-router = APIRouter(dependencies=[Depends(require_permission("super:*"))])
+router = APIRouter()
 
 
-@router.get("", response_model=list[RoleOut])
+@router.get("", response_model=list[RoleOut], dependencies=[Depends(require_permission("roles:read"))])
 def list_roles(db: Session = Depends(get_db)) -> list[RoleOut]:
     roles = db.execute(select(Role).order_by(Role.name.asc())).scalars().all()
     return [RoleOut(id=r.id, name=r.name, permissions=r.permissions or {}) for r in roles]
 
 
-@router.get("/{role_id}", response_model=RoleOut)
+@router.get("/{role_id}", response_model=RoleOut, dependencies=[Depends(require_permission("roles:read"))])
 def get_role(role_id: uuid.UUID, db: Session = Depends(get_db)) -> RoleOut:
     role = db.get(Role, role_id)
     if not role:
@@ -27,7 +27,7 @@ def get_role(role_id: uuid.UUID, db: Session = Depends(get_db)) -> RoleOut:
     return RoleOut(id=role.id, name=role.name, permissions=role.permissions or {})
 
 
-@router.post("", response_model=RoleOut)
+@router.post("", response_model=RoleOut, dependencies=[Depends(require_permission("roles:write"))])
 def create_role(payload: RoleCreate, db: Session = Depends(get_db)) -> RoleOut:
     existing = db.scalar(select(Role).where(Role.name == payload.name))
     if existing:
@@ -39,7 +39,7 @@ def create_role(payload: RoleCreate, db: Session = Depends(get_db)) -> RoleOut:
     return RoleOut(id=role.id, name=role.name, permissions=role.permissions or {})
 
 
-@router.put("/{role_id}", response_model=RoleOut)
+@router.put("/{role_id}", response_model=RoleOut, dependencies=[Depends(require_permission("roles:write"))])
 def update_role(role_id: uuid.UUID, payload: RoleUpdate, db: Session = Depends(get_db)) -> RoleOut:
     role = db.get(Role, role_id)
     if not role:
@@ -53,7 +53,7 @@ def update_role(role_id: uuid.UUID, payload: RoleUpdate, db: Session = Depends(g
     return RoleOut(id=role.id, name=role.name, permissions=role.permissions or {})
 
 
-@router.delete("/{role_id}")
+@router.delete("/{role_id}", dependencies=[Depends(require_permission("roles:write"))])
 def delete_role(role_id: uuid.UUID, db: Session = Depends(get_db)) -> dict[str, str]:
     role = db.get(Role, role_id)
     if not role:
@@ -63,7 +63,7 @@ def delete_role(role_id: uuid.UUID, db: Session = Depends(get_db)) -> dict[str, 
     return {"status": "ok"}
 
 
-@router.get("/{role_id}/permissions", response_model=dict)
+@router.get("/{role_id}/permissions", response_model=dict, dependencies=[Depends(require_permission("roles:read"))])
 def get_role_permissions(role_id: uuid.UUID, db: Session = Depends(get_db)) -> dict:
     role = db.get(Role, role_id)
     if not role:
@@ -71,7 +71,7 @@ def get_role_permissions(role_id: uuid.UUID, db: Session = Depends(get_db)) -> d
     return role.permissions or {}
 
 
-@router.put("/{role_id}/permissions", response_model=dict)
+@router.put("/{role_id}/permissions", response_model=dict, dependencies=[Depends(require_permission("roles:write"))])
 def update_role_permissions(role_id: uuid.UUID, payload: RolePermissionsUpdate, db: Session = Depends(get_db)) -> dict:
     role = db.get(Role, role_id)
     if not role:

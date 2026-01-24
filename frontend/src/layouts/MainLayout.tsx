@@ -32,6 +32,7 @@ import {
   LocalShipping,
   Settings,
   Event as EventIcon,
+  People as PeopleIcon,
 } from "@mui/icons-material";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { signOut } from "../features/auth/authSlice";
@@ -71,6 +72,7 @@ export default function MainLayout() {
     { text: "Academic", icon: <MenuBook />, path: "/academic" },
     { text: "Students", icon: <SchoolIcon />, path: "/students" },
     { text: "Staff", icon: <Badge />, path: "/staff" },
+    { text: "Users", icon: <PeopleIcon />, path: "/users" },
     { text: "Exams", icon: <Assignment />, path: "/exams" },
     { text: "Events & Notices", icon: <EventIcon />, path: "/events" },
     { text: "Finance", icon: <AttachMoney />, path: "/finance" },

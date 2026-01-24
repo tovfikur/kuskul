@@ -137,9 +137,50 @@ export interface StaffDocument {
 export interface User {
   id: string;
   email: string;
-  full_name: string;
+  full_name?: string;
   is_active: boolean;
   is_superuser: boolean;
+  role_name?: string;
+}
+
+export type Role = {
+  id: string;
+  name: string;
+  description?: string;
+};
+
+export async function getRoles(): Promise<Role[]> {
+  const resp = await api.get("/roles");
+  return resp.data;
+}
+
+export async function createUser(payload: {
+  email: string;
+  password?: string;
+  role_name: string;
+  full_name?: string;
+  is_active?: boolean;
+}): Promise<User> {
+  const resp = await api.post("/users", payload);
+  return resp.data;
+}
+
+export async function updateUser(
+  userId: string,
+  payload: {
+    email?: string;
+    password?: string;
+    role_name?: string;
+    full_name?: string;
+    is_active?: boolean;
+  }
+): Promise<User> {
+  const resp = await api.patch(`/users/${userId}`, payload);
+  return resp.data;
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  await api.delete(`/users/${userId}`);
 }
 
 export async function getStudents(params?: {
