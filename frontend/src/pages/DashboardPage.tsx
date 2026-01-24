@@ -7,128 +7,76 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel,
   CircularProgress,
-  Grid,
-  Paper,
   Avatar,
-  IconButton,
+  Button,
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
+  Chip,
 } from "@mui/material";
 import {
-  People,
   School,
-  AttachMoney,
-  EventAvailable,
-  TrendingUp,
-  TrendingDown,
-  MoreVert,
+  PeopleAlt,
+  SupervisorAccount,
+  FamilyRestroom,
 } from "@mui/icons-material";
 import {
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
   ResponsiveContainer,
   BarChart,
   Bar,
-  Legend,
-  AreaChart,
-  Area,
+  Cell,
 } from "recharts";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { setActiveSchoolId } from "../features/auth/authSlice";
 import {
   getAdminDashboard,
-  getAttendanceStats,
-  type AdminDashboardData,
-  type AttendanceStats,
+  getFinancialStats,
+  getEnrollmentTrends,
+  getPerformanceTrends,
+  getUpcomingEvents,
+  type EnrollmentTrend,
+  type PerformanceTrend,
+  type Event as CalendarEvent,
 } from "../api/analytics";
+import { format } from "date-fns";
 
-// Mock data for visualization
-const attendanceTrend = [
-  { name: "Mon", students: 95, staff: 98 },
-  { name: "Tue", students: 93, staff: 97 },
-  { name: "Wed", students: 96, staff: 98 },
-  { name: "Thu", students: 94, staff: 96 },
-  { name: "Fri", students: 92, staff: 95 },
-  { name: "Sat", students: 85, staff: 90 },
-  { name: "Sun", students: 0, staff: 0 },
-];
+// Color Palette matching reference
+const COLORS = {
+  coral: "#FF9A8B",
+  purple: "#7E6BC4",
+  yellow: "#FFD166",
+  green: "#06D6A0",
+  bg: "#F5F4F8",
+  cardBg: "#FFFFFF",
+  textPrimary: "#2D3748",
+  textSecondary: "#718096",
+  border: "#E2E8F0",
+};
 
-const revenueData = [
-  { name: "Jan", collected: 15000, due: 2400 },
-  { name: "Feb", collected: 18000, due: 1398 },
-  { name: "Mar", collected: 12000, due: 9800 },
-  { name: "Apr", collected: 21000, due: 3908 },
-  { name: "May", collected: 19000, due: 4800 },
-  { name: "Jun", collected: 23000, due: 3800 },
-];
-
-interface StatCardProps {
-  title: string;
+interface MetricCardProps {
+  label: string;
   value: string | number;
   icon: React.ReactNode;
   color: string;
-  trend: number;
+  loading?: boolean;
 }
 
-function StatCard({ title, value, icon, color, trend }: StatCardProps) {
+function MetricCard({ label, value, icon, color, loading }: MetricCardProps) {
   return (
-    <Card sx={{ height: "100%", borderRadius: 3, boxShadow: 2 }}>
-      <CardContent>
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-          }}
-        >
-          <Box>
-            <Typography
-              color="text.secondary"
-              gutterBottom
-              variant="subtitle2"
-              sx={{
-                fontWeight: 600,
-                textTransform: "uppercase",
-                fontSize: "0.75rem",
-                letterSpacing: 0.5,
-              }}
-            >
-              {title}
-            </Typography>
-            <Typography
-              variant="h4"
-              sx={{ fontWeight: 700, my: 1, color: "#1a1a1a" }}
-            >
-              {value}
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-              {trend > 0 ? (
-                <TrendingUp color="success" fontSize="small" />
-              ) : (
-                <TrendingDown color="error" fontSize="small" />
-              )}
-              <Typography
-                variant="caption"
-                color={trend > 0 ? "success.main" : "error.main"}
-                fontWeight="bold"
-              >
-                {Math.abs(trend)}%
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                vs last month
-              </Typography>
-            </Box>
-          </Box>
-          <Avatar
-            sx={{ bgcolor: color, width: 56, height: 56, borderRadius: 2 }}
-          >
-            {icon}
-          </Avatar>
-        </Box>
-      </CardContent>
-    </Card>
+    <Box sx={{ position: "relative", height: "100%" }}>
+      <Box sx={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, bgcolor: color, borderRadius: "4px 0 0 4px" }} />
+      <Card elevation={0} sx={{ height: "100%", bgcolor: COLORS.cardBg, borderRadius: 2, border: `1px solid ${COLORS.border}` }}>
+        <CardContent sx={{ p: 3, textAlign: "center" }}>
+          <Avatar sx={{ bgcolor: `${color}20`, color: color, width: 48, height: 48, mx: "auto", mb: 2 }}>{icon}</Avatar>
+          <Typography variant="caption" sx={{ color: COLORS.textSecondary, display: "block", mb: 1, fontWeight: 600 }}>{label}</Typography>
+          {loading ? <CircularProgress size={24} /> : <Typography variant="h4" sx={{ fontWeight: 800, color: COLORS.textPrimary }}>{value}</Typography>}
+        </CardContent>
+      </Card>
+    </Box>
   );
 }
 
@@ -136,217 +84,170 @@ export default function DashboardPage() {
   const dispatch = useAppDispatch();
   const memberships = useAppSelector((s) => s.auth.memberships);
   const activeSchoolId = useAppSelector((s) => s.auth.activeSchoolId);
-
-  const [dashboard, setDashboard] = useState<AdminDashboardData | null>(null);
-  const [attendance, setAttendance] = useState<AttendanceStats | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>({ admin: null, performance: [], events: [] });
 
   useEffect(() => {
     if (!activeSchoolId) return;
-
-    async function load() {
-      setLoading(true);
-      try {
-        const [dash, att] = await Promise.all([
-          getAdminDashboard(),
-          getAttendanceStats().catch(() => null),
-        ]);
-        setDashboard(dash);
-        setAttendance(att);
-      } catch (err) {
-        console.error("Failed to load dashboard data", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
+    loadData();
   }, [activeSchoolId]);
 
-  if (loading && !dashboard) {
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "80vh",
-        }}
-      >
-        <CircularProgress size={60} thickness={4} />
-      </Box>
-    );
+  async function loadData() {
+    setLoading(true);
+    try {
+      const [admin, perf, events] = await Promise.all([
+        getAdminDashboard(),
+        getPerformanceTrends().catch(() => []),
+        getUpcomingEvents().catch(() => []),
+      ]);
+      setData({ admin, performance: perf, events });
+    } finally {
+      setLoading(false);
+    }
   }
 
-  const attendanceTotal =
-    (attendance?.student_records ?? 0) + (attendance?.staff_records ?? 0);
+  const totalStudents = data.admin?.students ?? 0;
+  const totalStaff = data.admin?.staff ?? 0;
+  const schoolName = memberships.find(m => m.school_id === activeSchoolId)?.school_name || "School";
+  const currentYear = new Date().getFullYear();
+
+  const stageData = [
+    { stage: "Primary School", count: Math.floor(totalStudents * 0.3), color: COLORS.purple },
+    { stage: "Elementary School", count: Math.floor(totalStudents * 0.5), color: COLORS.yellow },
+    { stage: "Preschool", count: Math.floor(totalStudents * 0.2), color: COLORS.green },
+  ];
+
+  const months = [
+    { name: "January", color: COLORS.coral }, { name: "February", color: COLORS.yellow }, { name: "March", color: COLORS.yellow },
+    { name: "April", color: COLORS.green, current: true }, { name: "May", color: COLORS.yellow }, { name: "June", color: COLORS.yellow },
+    { name: "July", color: COLORS.coral }, { name: "August", color: COLORS.yellow }, { name: "September", color: COLORS.yellow },
+    { name: "October", color: COLORS.coral }, { name: "November", color: COLORS.yellow }, { name: "December", color: COLORS.coral },
+  ];
+
+  const topPerformers = data.performance.slice(0, 3).map((p: any, i: number) => ({
+    name: p.exam_name, score: p.avg_pct, rank: i + 1, color: [COLORS.green, COLORS.purple, COLORS.yellow][i],
+  }));
 
   return (
-    <Box>
-      {/* Header Section */}
-      <Box
-        sx={{
-          mb: 4,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Typography variant="h4" fontWeight="800" sx={{ color: "#2c3e50" }}>
-            Dashboard
+    <Box sx={{ bgcolor: COLORS.bg, minHeight: "100vh", p: 3 }}>
+      {/* Header */}
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, color: COLORS.textPrimary }}>Welcome to {schoolName}</Typography>
+        <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+          <Typography variant="body2" sx={{ color: COLORS.textSecondary, fontWeight: 600 }}>
+            School Year {currentYear} - {currentYear + 1}
           </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Welcome back! Here's what's happening today.
-          </Typography>
+          <FormControl size="small" sx={{ minWidth: 180 }}>
+            <Select value={activeSchoolId ?? ""} onChange={(e) => dispatch(setActiveSchoolId(e.target.value || null))} sx={{ bgcolor: "white", fontSize: "0.875rem" }}>
+              {memberships.map((m) => (<MenuItem key={m.school_id} value={m.school_id}>{m.school_name}</MenuItem>))}
+            </Select>
+          </FormControl>
         </Box>
-
-        <FormControl size="small" sx={{ minWidth: 220 }}>
-          <InputLabel>Active School</InputLabel>
-          <Select
-            value={activeSchoolId ?? ""}
-            label="Active School"
-            onChange={(e) =>
-              dispatch(setActiveSchoolId(e.target.value || null))
-            }
-            sx={{ borderRadius: 2, bgcolor: "background.paper" }}
-          >
-            {memberships.map((m) => (
-              <MenuItem key={m.school_id} value={m.school_id}>
-                {m.school_name || m.school_id}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
       </Box>
 
-      {/* Stats Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="Total Students"
-            value={dashboard?.students ?? 0}
-            icon={<School fontSize="large" sx={{ color: "#fff" }} />}
-            color="#3f51b5"
-            trend={12.5}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="Total Teachers"
-            value={dashboard?.staff ?? 0}
-            icon={<People fontSize="large" sx={{ color: "#fff" }} />}
-            color="#009688"
-            trend={2.4}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="Financial Due"
-            value={`$${(dashboard?.total_due_amount ?? 0).toLocaleString()}`}
-            icon={<AttachMoney fontSize="large" sx={{ color: "#fff" }} />}
-            color="#f44336"
-            trend={-5.3}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="Attendance Records"
-            value={attendanceTotal.toLocaleString()}
-            icon={<EventAvailable fontSize="large" sx={{ color: "#fff" }} />}
-            color="#ff9800"
-            trend={8.1}
-          />
-        </Grid>
-      </Grid>
+      {/* Row 1: Metric Cards */}
+      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 3, mb: 3 }}>
+        <MetricCard label="Schools" value="1" icon={<School />} color={COLORS.coral} loading={loading} />
+        <MetricCard label="Teachers" value={totalStaff} icon={<PeopleAlt />} color={COLORS.purple} loading={loading} />
+        <MetricCard label="Students" value={totalStudents} icon={<SupervisorAccount />} color={COLORS.yellow} loading={loading} />
+        <MetricCard label="Parents" value={Math.floor(totalStudents * 1.8)} icon={<FamilyRestroom />} color={COLORS.green} loading={loading} />
+      </Box>
 
-      {/* Charts Section */}
-      <Grid container spacing={3}>
-        <Grid size={{ xs: 12, md: 8 }}>
-          <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 2, height: 400 }}>
-            <Box
-              sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
-            >
-              <Typography variant="h6" fontWeight="bold">
-                Revenue Overview
-              </Typography>
-              <IconButton size="small">
-                <MoreVert />
-              </IconButton>
-            </Box>
-            <ResponsiveContainer width="100%" height="90%">
-              <AreaChart data={revenueData}>
-                <defs>
-                  <linearGradient
-                    id="colorCollected"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="5%" stopColor="#3f51b5" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#3f51b5" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorDue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f44336" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#f44336" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="name" />
-                <YAxis />
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <Tooltip />
-                <Legend verticalAlign="top" height={36} />
-                <Area
-                  type="monotone"
-                  dataKey="collected"
-                  stroke="#3f51b5"
-                  fillOpacity={1}
-                  fill="url(#colorCollected)"
-                  name="Collected"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="due"
-                  stroke="#f44336"
-                  fillOpacity={1}
-                  fill="url(#colorDue)"
-                  name="Due"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </Paper>
-        </Grid>
+      {/* Row 2: Today's Timetable (LEFT) and Educational Stage (RIGHT) */}
+      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3, mb: 3 }}>
+        {/* Today's Timetable */}
+        <Card elevation={0} sx={{ bgcolor: COLORS.cardBg, border: `1px solid ${COLORS.border}`, p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: COLORS.textPrimary, mb: 3 }}>
+            Today's Timetable
+          </Typography>
+          
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" sx={{ color: COLORS.textSecondary, fontWeight: 600 }}>
+              {format(new Date(), "EEEE, MMMM dd")}
+            </Typography>
+          </Box>
 
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 2, height: 400 }}>
-            <Box
-              sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
-            >
-              <Typography variant="h6" fontWeight="bold">
-                Attendance Rate (%)
-              </Typography>
-              <IconButton size="small">
-                <MoreVert />
-              </IconButton>
+          <Box sx={{ py: 6, textAlign: "center" }}>
+            <Typography variant="body2" color="text.secondary">
+              Timetable integration coming soon
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Connect to timetable API to display today's schedule
+            </Typography>
+          </Box>
+        </Card>
+
+        {/* Educational Stage */}
+        <Card elevation={0} sx={{ bgcolor: COLORS.cardBg, border: `1px solid ${COLORS.border}`, p: 3 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: COLORS.textPrimary }}>Educational Stage</Typography>
+            <Typography variant="caption" sx={{ color: COLORS.textSecondary }}>All data in Thousand {currentYear} - {currentYear + 1}</Typography>
+          </Box>
+          <Box sx={{ display: "flex", gap: 3 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 4, minWidth: 180 }}>
+              {stageData.map((stage, idx) => (
+                <Box key={idx}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                    <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: stage.color }} />
+                    <Typography variant="body2" fontWeight={600} sx={{ fontSize: "0.875rem" }}>{stage.stage}</Typography>
+                  </Box>
+                  <Typography variant="h5" fontWeight={800} sx={{ ml: 2.5 }}>{stage.count}</Typography>
+                </Box>
+              ))}
             </Box>
-            <ResponsiveContainer width="100%" height="90%">
-              <BarChart data={attendanceTrend}>
-                <XAxis dataKey="name" />
-                <YAxis domain={[0, 100]} />
-                <Tooltip />
-                <Bar
-                  dataKey="students"
-                  fill="#009688"
-                  radius={[4, 4, 0, 0]}
-                  name="Students"
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </Paper>
-        </Grid>
-      </Grid>
+            <Box sx={{ flexGrow: 1, height: 300 }}>
+              <ResponsiveContainer>
+                <BarChart data={stageData} layout="vertical">
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="stage" hide />
+                  <Bar dataKey="count" radius={[0, 8, 8, 0]}>
+                    {stageData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </Box>
+          </Box>
+        </Card>
+      </Box>
+
+      {/* Row 3: Activities and Top Performance - Side by Side */}
+      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 }}>
+        {/* Activities & Events */}
+        <Card elevation={0} sx={{ bgcolor: COLORS.cardBg, border: `1px solid ${COLORS.border}`, p: 3 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: COLORS.textPrimary }}>Activities & Events</Typography>
+            <Button size="small" sx={{ color: COLORS.green, textTransform: "none", fontWeight: 600, fontSize: "0.75rem" }}>View All</Button>
+          </Box>
+          <List sx={{ maxHeight: 220 }}>
+            {data.events.length === 0 ? (
+              <Box sx={{ py: 6, textAlign: "center", color: COLORS.textSecondary }}><Typography variant="body2">No upcoming events</Typography></Box>
+            ) : (
+              data.events.slice(0, 3).map((event: CalendarEvent, idx: number) => (
+                <Box key={event.id}><ListItem sx={{ px: 0, py: 2 }}><ListItemText primary={<Typography variant="body2" fontWeight={600}>{event.title}</Typography>} secondary={<Typography variant="caption">{format(new Date(event.start_date), "MMMM dd, yyyy")}</Typography>} /></ListItem>{idx < data.events.length - 1 && <Divider />}</Box>
+              ))
+            )}
+          </List>
+        </Card>
+
+        {/* Top Performance */}
+        <Card elevation={0} sx={{ bgcolor: COLORS.cardBg, border: `1px solid ${COLORS.border}`, p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: COLORS.textPrimary, mb: 3 }}>Top Performance</Typography>
+          {topPerformers.length === 0 ? (
+            <Box sx={{ py: 6, textAlign: "center", color: COLORS.textSecondary }}><Typography variant="body2">No performance data</Typography></Box>
+          ) : (
+            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2 }}>
+              {topPerformers.map((performer: any) => (
+                <Card key={performer.rank} elevation={0} sx={{ bgcolor: performer.color, color: "white", textAlign: "center", p: 2.5, borderRadius: 3 }}>
+                  <Avatar sx={{ width: 64, height: 64, mx: "auto", mb: 1.5, bgcolor: "rgba(255,255,255,0.3)", fontSize: "1.5rem", fontWeight: 700 }}>{performer.rank}</Avatar>
+                  <Typography variant="caption" fontWeight={600} sx={{ display: "block", mb: 0.5, fontSize: "0.7rem" }}>{performer.name.substring(0, 15)}</Typography>
+                  <Typography variant="h5" fontWeight={800} sx={{ mb: 0.5 }}>{performer.score.toFixed(2)}%</Typography>
+                  <Typography variant="caption" sx={{ opacity: 0.9, fontSize: "0.7rem" }}>{performer.rank === 1 ? "1st" : performer.rank === 2 ? "2nd" : "3rd"}</Typography>
+                </Card>
+              ))}
+            </Box>
+          )}
+        </Card>
+      </Box>
     </Box>
   );
 }

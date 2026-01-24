@@ -19,6 +19,6 @@ class Event(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     location: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    announced_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     is_all_day: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-

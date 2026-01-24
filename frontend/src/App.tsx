@@ -11,6 +11,7 @@ import AcademicPage from "./features/academic/AcademicPage";
 import StudentsPage from "./features/students/StudentsPage";
 import StaffPage from "./features/staff/StaffPage";
 import ExamsPage from "./features/exams/ExamsPage";
+import EventsPage from "./features/events/EventsPage";
 import FinancePage from "./features/finance/FinancePage";
 import LogisticsPage from "./features/logistics/LogisticsPage";
 import SettingsPage from "./features/settings/SettingsPage";
@@ -35,6 +36,7 @@ function App() {
         <Route path="/students" element={<StudentsPage />} />
         <Route path="/staff" element={<StaffPage />} />
         <Route path="/exams" element={<ExamsPage />} />
+        <Route path="/events" element={<EventsPage />} />
         <Route path="/finance" element={<FinancePage />} />
         <Route path="/logistics" element={<LogisticsPage />} />
         <Route path="/settings" element={<SettingsPage />} />

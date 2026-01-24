@@ -31,6 +31,7 @@ import {
   AttachMoney,
   LocalShipping,
   Settings,
+  Event as EventIcon,
 } from "@mui/icons-material";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { signOut } from "../features/auth/authSlice";
@@ -71,6 +72,7 @@ export default function MainLayout() {
     { text: "Students", icon: <SchoolIcon />, path: "/students" },
     { text: "Staff", icon: <Badge />, path: "/staff" },
     { text: "Exams", icon: <Assignment />, path: "/exams" },
+    { text: "Events & Notices", icon: <EventIcon />, path: "/events" },
     { text: "Finance", icon: <AttachMoney />, path: "/finance" },
     { text: "Logistics", icon: <LocalShipping />, path: "/logistics" },
     { text: "Settings", icon: <Settings />, path: "/settings" },

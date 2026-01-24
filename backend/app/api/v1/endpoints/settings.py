@@ -37,9 +37,8 @@ def get_settings(db: Session = Depends(get_db), school_id=Depends(get_active_sch
 
 @router.get("/{key}", response_model=SettingOut)
 def get_setting(key: str, db: Session = Depends(get_db), school_id=Depends(get_active_school_id)) -> SettingOut:
-    s = db.scalar(select(Setting).where(Setting.school_id == school_id, Setting.key == key))
-    if not s:
-        raise not_found("Setting not found")
+    s = _get_or_create(db, school_id, key)
+    db.commit()
     return _out(s)
 
 

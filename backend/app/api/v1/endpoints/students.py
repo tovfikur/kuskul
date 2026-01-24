@@ -2,6 +2,7 @@ import uuid
 import csv
 import io
 import html
+import json
 import segno
 from datetime import date, datetime, time, timezone
 from typing import Optional
@@ -42,8 +43,55 @@ def _out(s: Student) -> StudentOut:
     return StudentOut.model_validate(s)
 
 
-def _admission_no(now: datetime, student_id: uuid.UUID) -> str:
-    return f"ADM-{now.strftime('%Y%m%d')}-{str(student_id).split('-', 1)[0].upper()}"
+def _get_student_settings(db: Session, school_id: uuid.UUID) -> dict:
+    """Load and parse student settings from database"""
+    setting = db.scalar(
+        select(Setting).where(
+            Setting.school_id == school_id,
+            Setting.key == "students.settings"
+        )
+    )
+    if not setting or not setting.value or not setting.value.strip():
+        return {}  # Return empty dict to use defaults
+    try:
+        return json.loads(setting.value)
+    except (json.JSONDecodeError, ValueError):
+        return {}
+
+
+def _generate_admission_no(db: Session, school_id: uuid.UUID) -> Optional[str]:
+    """Generate admission number based on settings"""
+    settings = _get_student_settings(db, school_id)
+    
+    # Check if auto-generation is enabled
+    if not settings.get("auto_generate_admission_no", True):
+        return None
+    
+    # Get prefix and start number from settings
+    prefix = settings.get("admission_no_prefix", "STU").strip()
+    start_from = int(settings.get("admission_no_start_from", 1001))
+    
+    # Find the highest existing number with this prefix
+    max_admission = db.scalar(
+        select(func.max(Student.admission_no))
+        .where(
+            Student.school_id == school_id,
+            Student.admission_no.like(f"{prefix}%")
+        )
+    )
+    
+    if max_admission and max_admission.startswith(prefix):
+        try:
+            # Extract number part after prefix
+            number_part = max_admission[len(prefix):]
+            last_num = int(number_part)
+            next_num = last_num + 1
+        except (ValueError, IndexError):
+            next_num = start_from
+    else:
+        next_num = start_from
+    
+    return f"{prefix}{next_num}"
 
 
 @router.get("", response_model=dict)
@@ -120,7 +168,46 @@ def get_students_batch(
 @router.post("", response_model=StudentOut, dependencies=[Depends(require_permission("students:write"))])
 def create_student(payload: StudentCreate, db: Session = Depends(get_db), school_id=Depends(get_active_school_id)) -> StudentOut:
     now = datetime.now(timezone.utc)
+    
+    # Load student settings
+    settings = _get_student_settings(db, school_id)
+    
+    # Validate vaccination records if required
+    if settings.get("require_vaccination_records", False):
+        if not payload.vaccination_status or not payload.vaccination_status.strip():
+            raise problem(
+                status_code=400,
+                title="Validation Error",
+                detail="Vaccination status is required by school policy"
+            )
+    
+    # Handle admission number
     admission_no = payload.admission_no.strip() if payload.admission_no else None
+    
+    # Determine admission status based on settings
+    admission_status = payload.admission_status
+    if settings.get("require_admission_approval", True):
+        # Override to pending if approval is required
+        admission_status = "pending"
+    
+    # Determine default status
+    default_status = settings.get("default_student_status", "active")
+    status = payload.status or default_status
+    
+    # Determine default fee category
+    default_fee = settings.get("default_fee_category", "general")
+    fee_category = payload.fee_category or default_fee
+    
+    # Portal access - enforce settings
+    portal_access_student = payload.portal_access_student
+    portal_access_parent = payload.portal_access_parent
+    
+    if not settings.get("enable_student_portal", True):
+        portal_access_student = False
+        
+    if not settings.get("enable_parent_portal", True):
+        portal_access_parent = False
+    
     s = Student(
         school_id=school_id,
         user_id=payload.user_id,
@@ -135,7 +222,7 @@ def create_student(payload: StudentCreate, db: Session = Depends(get_db), school
         religion=payload.religion,
         blood_group=payload.blood_group,
         admission_date=payload.admission_date,
-        admission_status=payload.admission_status,
+        admission_status=admission_status,
         medium=payload.medium,
         shift=payload.shift,
         previous_school_name=payload.previous_school_name,
@@ -158,24 +245,29 @@ def create_student(payload: StudentCreate, db: Session = Depends(get_db), school
         birth_certificate_no=payload.birth_certificate_no,
         national_id_no=payload.national_id_no,
         passport_no=payload.passport_no,
-        fee_category=payload.fee_category,
+        fee_category=fee_category,
         scholarship_type=payload.scholarship_type,
         portal_username=payload.portal_username,
-        portal_access_student=payload.portal_access_student,
-        portal_access_parent=payload.portal_access_parent,
+        portal_access_student=portal_access_student,
+        portal_access_parent=portal_access_parent,
         remarks=payload.remarks,
         rfid_nfc_no=payload.rfid_nfc_no,
         hostel_status=payload.hostel_status,
         library_card_no=payload.library_card_no,
-        status=payload.status,
+        status=status,
         created_at=now,
     )
     db.add(s)
     db.commit()
     db.refresh(s)
+    
+    # Auto-generate admission number using settings
     if not s.admission_no:
-        s.admission_no = _admission_no(now, s.id)
-        db.commit()
+        s.admission_no = _generate_admission_no(db, school_id)
+        if s.admission_no:
+            db.commit()
+            db.refresh(s)
+    
     return _out(s)
 
 

@@ -150,6 +150,7 @@ export async function getStudents(params?: {
   academic_year_id?: string;
   search?: string;
   status?: string;
+  admission_status?: string;
   gender?: string;
 }): Promise<{ items: Student[]; total: number; page: number; limit: number }> {
   const resp = await api.get("/students", {
@@ -161,6 +162,7 @@ export async function getStudents(params?: {
       academic_year_id: params?.academic_year_id || undefined,
       search: params?.search || undefined,
       status: params?.status || undefined,
+      admission_status: params?.admission_status || undefined,
       gender: params?.gender || undefined,
     },
   });

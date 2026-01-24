@@ -25,6 +25,7 @@ def _out(e: Event) -> EventOut:
         start_date=e.start_date,
         end_date=e.end_date,
         location=e.location,
+        announced_by=e.announced_by,
         is_all_day=e.is_all_day,
     )
 
@@ -98,6 +99,7 @@ def create_event(payload: EventCreate, db: Session = Depends(get_db), school_id=
         start_date=payload.start_date,
         end_date=payload.end_date,
         location=payload.location,
+        announced_by=payload.announced_by,
         is_all_day=payload.is_all_day,
         created_at=now,
     )

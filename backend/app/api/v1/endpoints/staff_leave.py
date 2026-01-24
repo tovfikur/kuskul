@@ -1,7 +1,7 @@
 """API endpoints for staff leave management."""
 import uuid
 from datetime import date, datetime, timezone
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import and_, func, or_, select
@@ -180,7 +180,7 @@ def delete_leave_type(
 # LEAVE BALANCES
 # ============================================================================
 
-def _leave_balance_out(lb: LeaveBalance, include_type: bool = False) -> LeaveBalanceOut | LeaveBalanceWithType:
+def _leave_balance_out(lb: LeaveBalance, include_type: bool = False) -> Union[LeaveBalanceOut, LeaveBalanceWithType]:
     """Convert LeaveBalance model to output schema."""
     available = lb.total_days + lb.carried_forward - lb.used_days - lb.pending_days
     

@@ -14,6 +14,7 @@ class EventOut(BaseModel):
     start_date: date
     end_date: date
     location: Optional[str]
+    announced_by: Optional[str]
     is_all_day: bool
 
 
@@ -24,6 +25,7 @@ class EventCreate(BaseModel):
     start_date: date
     end_date: date
     location: Optional[str] = Field(default=None, max_length=200)
+    announced_by: Optional[str] = Field(default=None, max_length=200)
     is_all_day: bool = True
 
 
@@ -34,5 +36,5 @@ class EventUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     location: Optional[str] = Field(default=None, max_length=200)
+    announced_by: Optional[str] = Field(default=None, max_length=200)
     is_all_day: Optional[bool] = None
-
