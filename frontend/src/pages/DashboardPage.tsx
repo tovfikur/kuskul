@@ -195,16 +195,18 @@ export default function DashboardPage() {
                 </Box>
               ))}
             </Box>
-            <Box sx={{ flexGrow: 1, height: 300 }}>
-              <ResponsiveContainer>
-                <BarChart data={stageData} layout="vertical">
-                  <XAxis type="number" hide />
-                  <YAxis type="category" dataKey="stage" hide />
-                  <Bar dataKey="count" radius={[0, 8, 8, 0]}>
-                    {stageData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <Box sx={{ flex: 1, minWidth: 0, height: 300, position: "relative" }}>
+              <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stageData} layout="vertical">
+                    <XAxis type="number" hide />
+                    <YAxis type="category" dataKey="stage" hide />
+                    <Bar dataKey="count" radius={[0, 8, 8, 0]}>
+                      {stageData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </Box>
           </Box>
         </Card>
