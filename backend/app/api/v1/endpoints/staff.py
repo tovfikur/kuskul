@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, delete
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_active_school_id, require_permission
@@ -304,6 +304,34 @@ def delete_staff(staff_id: uuid.UUID, db: Session = Depends(get_db), school_id=D
     s = db.get(Staff, staff_id)
     if not s or s.school_id != school_id:
         raise not_found("Staff not found")
+    
+    # Cascade Delete
+    from app.models.teacher_assignment import TeacherAssignment, StaffAttendance
+    db.execute(delete(StaffAttendance).where(StaffAttendance.staff_id == staff_id))
+    db.execute(delete(TeacherAssignment).where(TeacherAssignment.staff_id == staff_id))
+
+    try:
+        from app.models.timetable_entry import TimetableEntry
+        db.execute(delete(TimetableEntry).where(TimetableEntry.staff_id == staff_id))
+    except ImportError:
+        pass
+
+    try:
+        from app.models.staff_leave import StaffLeaveRequest, LeaveBalance
+        db.execute(delete(StaffLeaveRequest).where(StaffLeaveRequest.staff_id == staff_id))
+        db.execute(delete(LeaveBalance).where(LeaveBalance.staff_id == staff_id))
+    except ImportError:
+        pass
+
+    try:
+        from app.models.payroll import Payslip
+        db.execute(delete(Payslip).where(Payslip.staff_id == staff_id))
+    except ImportError:
+        pass
+
+    from app.models.document import Document
+    db.execute(delete(Document).where(Document.entity_id == str(staff_id), Document.entity_type == "staff"))
+
     db.delete(s)
     db.commit()
     return {"status": "ok"}

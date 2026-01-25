@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_active_school_id, get_current_user, require_permission
@@ -273,6 +273,29 @@ def delete_exam(exam_id: uuid.UUID, db: Session = Depends(get_db), school_id=Dep
     year = db.get(AcademicYear, e.academic_year_id)
     if not year or year.school_id != school_id:
         raise not_found("Exam not found")
+    if not year or year.school_id != school_id:
+        raise not_found("Exam not found")
+        
+    # Cascade Delete related records
+    
+    # 1. Delete Marks (linked to ExamSchedule)
+    try:
+        from app.models.mark import Mark
+        subq = select(ExamSchedule.id).where(ExamSchedule.exam_id == exam_id)
+        db.execute(delete(Mark).where(Mark.exam_schedule_id.in_(subq)))
+    except ImportError:
+        pass
+
+    # 2. Delete Schedules
+    db.execute(delete(ExamSchedule).where(ExamSchedule.exam_id == exam_id))
+
+    # 3. Delete Results
+    try:
+        from app.models.result import Result
+        db.execute(delete(Result).where(Result.exam_id == exam_id))
+    except ImportError:
+        pass
+
     db.delete(e)
     db.commit()
     return {"status": "ok"}

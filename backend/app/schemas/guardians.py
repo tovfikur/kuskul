@@ -45,3 +45,8 @@ class LinkGuardianRequest(BaseModel):
     guardian_id: uuid.UUID
     relation: str = Field(default="guardian", max_length=32)
     is_primary: bool = False
+
+
+class StudentGuardianResponse(GuardianOut):
+    relation: str
+    is_primary: bool

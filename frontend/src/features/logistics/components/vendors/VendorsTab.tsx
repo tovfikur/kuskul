@@ -25,7 +25,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import { Add, Edit } from "@mui/icons-material";
+import { Add, Delete, Edit } from "@mui/icons-material";
 import {
   getVendors,
   createVendor,
@@ -43,10 +43,15 @@ export default function VendorsTab() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("active");
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
+
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
+  const [vendorToDeactivate, setVendorToDeactivate] = useState<Vendor | null>(
+    null,
+  );
 
   const [form, setForm] = useState({
     name: "",
@@ -85,7 +90,10 @@ export default function VendorsTab() {
         email: form.email || undefined,
         status: form.status,
       });
-      showToast({ severity: "success", message: "Vendor created successfully" });
+      showToast({
+        severity: "success",
+        message: "Vendor created successfully",
+      });
       setDialogOpen(false);
       resetForm();
       loadVendors();
@@ -103,7 +111,10 @@ export default function VendorsTab() {
         email: form.email || undefined,
         status: form.status,
       });
-      showToast({ severity: "success", message: "Vendor updated successfully" });
+      showToast({
+        severity: "success",
+        message: "Vendor updated successfully",
+      });
       setDialogOpen(false);
       setEditingVendor(null);
       resetForm();
@@ -131,6 +142,24 @@ export default function VendorsTab() {
       status: vendor.status,
     });
     setDialogOpen(true);
+  };
+
+  const openDeactivate = (vendor: Vendor) => {
+    setVendorToDeactivate(vendor);
+    setDeactivateDialogOpen(true);
+  };
+
+  const handleDeactivate = async () => {
+    if (!vendorToDeactivate) return;
+    try {
+      await updateVendor(vendorToDeactivate.id, { status: "inactive" });
+      showToast({ severity: "success", message: "Vendor deactivated" });
+      setDeactivateDialogOpen(false);
+      setVendorToDeactivate(null);
+      loadVendors();
+    } catch (error) {
+      showToast({ severity: "error", message: "Failed to deactivate vendor" });
+    }
   };
 
   return (
@@ -194,16 +223,33 @@ export default function VendorsTab() {
                       </TableCell>
                       <TableCell align="right">
                         <Tooltip title="Edit">
-                          <IconButton size="small" onClick={() => openEdit(vendor)}>
+                          <IconButton
+                            size="small"
+                            onClick={() => openEdit(vendor)}
+                          >
                             <Edit fontSize="small" />
                           </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Deactivate">
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={() => openDeactivate(vendor)}
+                              disabled={vendor.status === "inactive"}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </span>
                         </Tooltip>
                       </TableCell>
                     </TableRow>
                   ))}
                   {vendors.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} sx={{ textAlign: "center", py: 4 }}>
+                      <TableCell
+                        colSpan={5}
+                        sx={{ textAlign: "center", py: 4 }}
+                      >
                         <Typography color="text.secondary">
                           No vendors found
                         </Typography>
@@ -219,7 +265,9 @@ export default function VendorsTab() {
               page={page}
               onPageChange={(_, p) => setPage(p)}
               rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={(e) => setRowsPerPage(Number(e.target.value))}
+              onRowsPerPageChange={(e) =>
+                setRowsPerPage(Number(e.target.value))
+              }
               rowsPerPageOptions={[10, 20, 50]}
             />
           </>
@@ -236,7 +284,9 @@ export default function VendorsTab() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>{editingVendor ? "Edit Vendor" : "Add Vendor"}</DialogTitle>
+        <DialogTitle>
+          {editingVendor ? "Edit Vendor" : "Add Vendor"}
+        </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
             <Grid size={{ xs: 12 }}>
@@ -271,7 +321,12 @@ export default function VendorsTab() {
                 <Select
                   value={form.status}
                   label="Status"
-                  onChange={(e) => setForm({ ...form, status: e.target.value as "active" | "inactive" })}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      status: e.target.value as "active" | "inactive",
+                    })
+                  }
                 >
                   <MenuItem value="active">Active</MenuItem>
                   <MenuItem value="inactive">Inactive</MenuItem>
@@ -281,10 +336,12 @@ export default function VendorsTab() {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => {
-            setDialogOpen(false);
-            setEditingVendor(null);
-          }}>
+          <Button
+            onClick={() => {
+              setDialogOpen(false);
+              setEditingVendor(null);
+            }}
+          >
             Cancel
           </Button>
           <Button
@@ -292,6 +349,40 @@ export default function VendorsTab() {
             onClick={editingVendor ? handleUpdate : handleCreate}
           >
             {editingVendor ? "Update" : "Create"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deactivateDialogOpen}
+        onClose={() => {
+          setDeactivateDialogOpen(false);
+          setVendorToDeactivate(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Deactivate Vendor</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Deactivate{" "}
+            <Typography component="span" fontWeight={700}>
+              {vendorToDeactivate?.name}
+            </Typography>
+            ?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setDeactivateDialogOpen(false);
+              setVendorToDeactivate(null);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button variant="contained" color="error" onClick={handleDeactivate}>
+            Deactivate
           </Button>
         </DialogActions>
       </Dialog>

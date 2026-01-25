@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
+  Autocomplete,
   Avatar,
   Button,
   Checkbox,
@@ -79,6 +80,10 @@ import {
   type Student,
   type StudentAttendanceRecord,
   type StudentTimetableEntry,
+  getStudentGuardians,
+  getGuardians,
+  type Guardian,
+  updateGuardian,
 } from "../../api/people";
 import { showToast } from "../../app/toast";
 
@@ -173,6 +178,7 @@ const emptyStudentForm = {
 const emptyEnrollmentForm = { class_id: "", section_id: "", roll_number: "" };
 
 const emptyFatherForm = {
+  id: "",
   full_name: "",
   occupation: "",
   phone: "",
@@ -181,6 +187,7 @@ const emptyFatherForm = {
 };
 
 const emptyMotherForm = {
+  id: "",
   full_name: "",
   occupation: "",
   phone: "",
@@ -189,6 +196,7 @@ const emptyMotherForm = {
 };
 
 const emptyGuardianForm = {
+  id: "",
   full_name: "",
   relation: "guardian",
   phone: "",
@@ -289,6 +297,7 @@ export default function StudentsPage() {
   const [previousTcFile, setPreviousTcFile] = useState<File | null>(null);
 
   const [fatherForm, setFatherForm] = useState<{
+    id?: string;
     full_name: string;
     occupation: string;
     phone: string;
@@ -296,6 +305,7 @@ export default function StudentsPage() {
     id_number: string;
   }>({ ...emptyFatherForm });
   const [motherForm, setMotherForm] = useState<{
+    id?: string;
     full_name: string;
     occupation: string;
     phone: string;
@@ -303,6 +313,7 @@ export default function StudentsPage() {
     id_number: string;
   }>({ ...emptyMotherForm });
   const [guardianForm, setGuardianForm] = useState<{
+    id?: string;
     full_name: string;
     relation: string;
     phone: string;
@@ -314,6 +325,32 @@ export default function StudentsPage() {
   const [fatherPhotoFile, setFatherPhotoFile] = useState<File | null>(null);
   const [motherPhotoFile, setMotherPhotoFile] = useState<File | null>(null);
   const [guardianPhotoFile, setGuardianPhotoFile] = useState<File | null>(null);
+  
+  const [guardianSearchOpen, setGuardianSearchOpen] = useState(false);
+  const [guardianOptions, setGuardianOptions] = useState<Guardian[]>([]);
+  const [guardianSearchInput, setGuardianSearchInput] = useState("");
+  const guardianLoading = guardianSearchOpen && guardianOptions.length === 0;
+
+  useEffect(() => {
+    let active = true;
+    if (!guardianSearchOpen) return undefined;
+
+    const timer = setTimeout(() => {
+        (async () => {
+        try {
+            const { items } = await getGuardians({ limit: 50, search: guardianSearchInput || undefined });
+            if (active) setGuardianOptions(items);
+        } catch (e) {
+            console.error(e);
+        }
+        })();
+    }, 300);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [guardianSearchOpen, guardianSearchInput]);
 
   const [drawerStudentId, setDrawerStudentId] = useState<string | null>(null);
   const [drawerTab, setDrawerTab] = useState(0);
@@ -641,6 +678,51 @@ export default function StudentsPage() {
         roll_number: e?.roll_number != null ? String(e.roll_number) : "",
       });
       if (targetClassId) ensureSectionsForClass(targetClassId);
+
+      try {
+        const guardians = await getStudentGuardians(s.id);
+        const father = guardians.find((g) => g.relation?.trim().toLowerCase() === "father");
+        if (father) {
+          setFatherForm({
+            id: father.id,
+            full_name: father.full_name,
+            occupation: father.occupation || "",
+            phone: father.phone || "",
+            email: father.email || "",
+            id_number: father.id_number || "",
+          });
+        }
+        const mother = guardians.find((g) => g.relation?.trim().toLowerCase() === "mother");
+        if (mother) {
+          setMotherForm({
+            id: mother.id,
+            full_name: mother.full_name,
+            occupation: mother.occupation || "",
+            phone: mother.phone || "",
+            email: mother.email || "",
+            id_number: mother.id_number || "",
+          });
+        }
+        const other = guardians.find(
+          (g) =>
+            g.relation?.trim().toLowerCase() !== "father" &&
+            g.relation?.trim().toLowerCase() !== "mother"
+        );
+        if (other) {
+          setGuardianForm({
+            id: other.id,
+            full_name: other.full_name,
+            relation: other.relation || "guardian",
+            phone: other.phone || "",
+            email: other.email || "",
+            occupation: other.occupation || "",
+            id_number: other.id_number || "",
+            address: other.address || "",
+          });
+        }
+      } catch (e) {
+        console.error("Failed to load guardians", e);
+      }
     } catch (e) {
       console.error(e);
       showToast({ severity: "error", message: "Failed to load student" });
@@ -808,13 +890,9 @@ export default function StudentsPage() {
             : Promise.resolve(),
         ]);
 
-        const guardiansToCreate: Array<{
-          relation: string;
-          is_primary: boolean;
-          payload: Parameters<typeof createGuardian>[0];
-          photoFile: File | null;
-        }> = [
+        const guardiansToProcess = [
           {
+            id: fatherForm.id,
             relation: "father",
             is_primary: true,
             payload: {
@@ -827,6 +905,7 @@ export default function StudentsPage() {
             photoFile: fatherPhotoFile,
           },
           {
+            id: motherForm.id,
             relation: "mother",
             is_primary: false,
             payload: {
@@ -839,6 +918,7 @@ export default function StudentsPage() {
             photoFile: motherPhotoFile,
           },
           {
+            id: guardianForm.id,
             relation: guardianForm.relation || "guardian",
             is_primary: false,
             payload: {
@@ -853,19 +933,25 @@ export default function StudentsPage() {
           },
         ];
 
-        for (const g of guardiansToCreate) {
+        for (const g of guardiansToProcess) {
           if (!g.payload.full_name) continue;
-          const createdGuardian = await createGuardian(g.payload);
-          await Promise.all([
-            g.photoFile
-              ? uploadGuardianPhoto(createdGuardian.id, g.photoFile)
-              : Promise.resolve(),
-            linkGuardianToStudent(editingStudentId, {
-              guardian_id: createdGuardian.id,
+
+          let gid = g.id;
+          if (gid) {
+            await updateGuardian(gid, g.payload);
+          } else {
+            const created = await createGuardian(g.payload);
+            gid = created.id;
+            await linkGuardianToStudent(editingStudentId, {
+              guardian_id: gid,
               relation: g.relation,
               is_primary: g.is_primary,
-            }),
-          ]);
+            });
+          }
+
+          if (g.photoFile && gid) {
+             await uploadGuardianPhoto(gid, g.photoFile);
+          }
         }
 
         const yearId = currentAcademicYear?.id;
@@ -2233,9 +2319,49 @@ export default function StudentsPage() {
               {dialogTab === 6 && (
                 <Grid container spacing={2} sx={{ mt: 0.5 }}>
                   <Grid size={{ xs: 12 }}>
-                    <Typography variant="subtitle2" sx={{ mt: 1 }}>
-                      Father
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
+                        <Typography variant="subtitle2">
+                          Father
+                        </Typography>
+                         <Autocomplete
+                            size="small"
+                            sx={{ width: 300 }}
+                            freeSolo
+                            options={guardianOptions}
+                            getOptionLabel={(option) => typeof option === "string" ? option : `${option.full_name} (${option.phone || "-"})`}
+                            loading={guardianLoading}
+                            onOpen={() => setGuardianSearchOpen(true)}
+                            onClose={() => setGuardianSearchOpen(false)}
+                            onInputChange={(e, val) => setGuardianSearchInput(val)}
+                            onChange={(e, value) => {
+                                if (value && typeof value !== "string") {
+                                    setFatherForm({
+                                        id: value.id,
+                                        full_name: value.full_name,
+                                        occupation: value.occupation || "",
+                                        phone: value.phone || "",
+                                        email: value.email || "",
+                                        id_number: value.id_number || "",
+                                    });
+                                }
+                            }}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    label="Search Existing Father"
+                                    InputProps={{
+                                        ...params.InputProps,
+                                        endAdornment: (
+                                            <>
+                                                {guardianLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                                                {params.InputProps.endAdornment}
+                                            </>
+                                        ),
+                                    }}
+                                />
+                            )}
+                        />
+                    </Box>
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
@@ -2329,9 +2455,49 @@ export default function StudentsPage() {
                   </Grid>
 
                   <Grid size={{ xs: 12 }}>
-                    <Typography variant="subtitle2" sx={{ mt: 2 }}>
-                      Mother
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
+                        <Typography variant="subtitle2">
+                           Mother
+                        </Typography>
+                         <Autocomplete
+                            size="small"
+                            sx={{ width: 300 }}
+                            freeSolo
+                            options={guardianOptions}
+                            getOptionLabel={(option) => typeof option === "string" ? option : `${option.full_name} (${option.phone || "-"})`}
+                            loading={guardianLoading}
+                            onOpen={() => setGuardianSearchOpen(true)}
+                            onClose={() => setGuardianSearchOpen(false)}
+                            onInputChange={(e, val) => setGuardianSearchInput(val)}
+                            onChange={(e, value) => {
+                                if (value && typeof value !== "string") {
+                                    setMotherForm({
+                                        id: value.id,
+                                        full_name: value.full_name,
+                                        occupation: value.occupation || "",
+                                        phone: value.phone || "",
+                                        email: value.email || "",
+                                        id_number: value.id_number || "",
+                                    });
+                                }
+                            }}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    label="Search Existing Mother"
+                                    InputProps={{
+                                        ...params.InputProps,
+                                        endAdornment: (
+                                            <>
+                                                {guardianLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                                                {params.InputProps.endAdornment}
+                                            </>
+                                        ),
+                                    }}
+                                />
+                            )}
+                        />
+                    </Box>
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
@@ -2425,9 +2591,51 @@ export default function StudentsPage() {
                   </Grid>
 
                   <Grid size={{ xs: 12 }}>
-                    <Typography variant="subtitle2" sx={{ mt: 2 }}>
-                      Guardian
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
+                        <Typography variant="subtitle2">
+                           Guardian
+                        </Typography>
+                         <Autocomplete
+                            size="small"
+                            sx={{ width: 300 }}
+                            freeSolo
+                            options={guardianOptions}
+                            getOptionLabel={(option) => typeof option === "string" ? option : `${option.full_name} (${option.phone || "-"})`}
+                            loading={guardianLoading}
+                            onOpen={() => setGuardianSearchOpen(true)}
+                            onClose={() => setGuardianSearchOpen(false)}
+                            onInputChange={(e, val) => setGuardianSearchInput(val)}
+                            onChange={(e, value) => {
+                                if (value && typeof value !== "string") {
+                                    setGuardianForm({
+                                        id: value.id,
+                                        full_name: value.full_name,
+                                        relation: "guardian",
+                                        phone: value.phone || "",
+                                        email: value.email || "",
+                                        occupation: value.occupation || "",
+                                        id_number: value.id_number || "",
+                                        address: value.address || "",
+                                    });
+                                }
+                            }}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    label="Search Existing Guardian"
+                                    InputProps={{
+                                        ...params.InputProps,
+                                        endAdornment: (
+                                            <>
+                                                {guardianLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                                                {params.InputProps.endAdornment}
+                                            </>
+                                        ),
+                                    }}
+                                />
+                            )}
+                        />
+                    </Box>
                   </Grid>
                   <Grid size={{ xs: 12, md: 4 }}>
                     <TextField

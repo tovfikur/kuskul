@@ -26,7 +26,7 @@ import {
   Chip,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import { Add, Edit } from "@mui/icons-material";
+import { Add, Delete, Edit } from "@mui/icons-material";
 import {
   getMaintenanceTickets,
   createMaintenanceTicket,
@@ -47,6 +47,11 @@ export default function MaintenanceTab() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTicket, setEditingTicket] = useState<MaintenanceTicket | null>(null);
+
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [ticketToClose, setTicketToClose] = useState<MaintenanceTicket | null>(
+    null,
+  );
 
   const [form, setForm] = useState({
     asset_id: "",
@@ -146,6 +151,24 @@ export default function MaintenanceTab() {
       cost: ticket.cost?.toString() || "",
     });
     setDialogOpen(true);
+  };
+
+  const openClose = (ticket: MaintenanceTicket) => {
+    setTicketToClose(ticket);
+    setCloseDialogOpen(true);
+  };
+
+  const handleClose = async () => {
+    if (!ticketToClose) return;
+    try {
+      await updateMaintenanceTicket(ticketToClose.id, { status: "done" });
+      showToast({ severity: "success", message: "Ticket marked as done" });
+      setCloseDialogOpen(false);
+      setTicketToClose(null);
+      loadTickets();
+    } catch (error) {
+      showToast({ severity: "error", message: "Failed to update ticket" });
+    }
   };
 
   const getPriorityColor = (priority: TicketPriority): "error" | "warning" | "default" => {
@@ -265,6 +288,17 @@ export default function MaintenanceTab() {
                           <IconButton size="small" onClick={() => openEdit(ticket)}>
                             <Edit fontSize="small" />
                           </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Mark as done">
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={() => openClose(ticket)}
+                              disabled={ticket.status === "done"}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </span>
                         </Tooltip>
                       </TableCell>
                     </TableRow>
@@ -396,6 +430,40 @@ export default function MaintenanceTab() {
             onClick={editingTicket ? handleUpdate : handleCreate}
           >
             {editingTicket ? "Update" : "Create"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={closeDialogOpen}
+        onClose={() => {
+          setCloseDialogOpen(false);
+          setTicketToClose(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Mark Ticket as Done</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Mark{" "}
+            <Typography component="span" fontWeight={700}>
+              {ticketToClose?.title}
+            </Typography>{" "}
+            as done?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setCloseDialogOpen(false);
+              setTicketToClose(null);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button variant="contained" color="error" onClick={handleClose}>
+            Mark Done
           </Button>
         </DialogActions>
       </Dialog>

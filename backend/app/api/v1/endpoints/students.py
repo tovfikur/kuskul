@@ -9,7 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, delete
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_active_school_id, get_current_user, require_permission
@@ -35,7 +35,7 @@ from app.core.security import hash_password
 from app.core.seed import ensure_default_roles
 from app.schemas.batch import BatchPromoteStudentsRequest
 from app.schemas.documents import DocumentOut
-from app.schemas.guardians import LinkGuardianRequest, GuardianOut
+from app.schemas.guardians import LinkGuardianRequest, GuardianOut, StudentGuardianResponse
 from app.schemas.attendance import StudentAttendanceOut
 from app.schemas.students import StudentCreate, StudentOut, StudentUpdate
 from app.schemas.students_batch import StudentsBatchRequest
@@ -350,7 +350,7 @@ def update_student(
     # Auto-create Users for Guardians if parent portal access is enabled
     if s.portal_access_parent:
         ensure_default_roles(db)
-        guardian_role = db.scalar(select(Role).where(Role.name == "guardian"))
+        guardian_role = db.scalar(select(Role).where(Role.name == "parent"))
         
         # Find all linked guardians
         from app.models.student_guardian import StudentGuardian
@@ -419,6 +419,35 @@ def delete_student(student_id: uuid.UUID, db: Session = Depends(get_db), school_
     s = db.get(Student, student_id)
     if not s or s.school_id != school_id:
         raise not_found("Student not found")
+    
+    # Cascade delete related records
+    db.execute(delete(Enrollment).where(Enrollment.student_id == student_id))
+    from app.models.student_guardian import StudentGuardian
+    db.execute(delete(StudentGuardian).where(StudentGuardian.student_id == student_id))
+    from app.models.teacher_assignment import StudentAttendance
+    db.execute(delete(StudentAttendance).where(StudentAttendance.student_id == student_id))
+    from app.models.document import Document
+    db.execute(delete(Document).where(Document.entity_id == str(student_id), Document.entity_type == "student"))
+
+    from app.models.mark import Mark
+    db.execute(delete(Mark).where(Mark.student_id == student_id))
+
+    # Try to delete other common relations if they exist
+    try:
+        from app.models.result import Result
+        db.execute(delete(Result).where(Result.student_id == student_id))
+    except ImportError:
+        pass
+
+    try:
+        from app.models.fee_payment import FeePayment
+        from app.models.fee_due import FeeDue
+        db.execute(delete(FeePayment).where(FeePayment.student_id == student_id))
+        db.execute(delete(FeeDue).where(FeeDue.student_id == student_id))
+    except ImportError:
+        pass
+    
+    # Finally delete student
     db.delete(s)
     db.commit()
     return {"status": "ok"}
@@ -496,6 +525,45 @@ def get_student_attendance(
     ]
 
 
+@router.get("/{student_id}/guardians", response_model=list[StudentGuardianResponse])
+def get_student_guardians(
+    student_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    school_id=Depends(get_active_school_id),
+) -> list[StudentGuardianResponse]:
+    s = db.get(Student, student_id)
+    if not s or s.school_id != school_id:
+        raise not_found("Student not found")
+
+    from app.models.student_guardian import StudentGuardian
+    from app.models.guardian import Guardian
+    
+    rows = db.execute(
+        select(Guardian, StudentGuardian.relation, StudentGuardian.is_primary)
+        .join(StudentGuardian, StudentGuardian.guardian_id == Guardian.id)
+        .where(StudentGuardian.student_id == student_id)
+        .order_by(Guardian.created_at.desc())
+    ).all()
+    
+    res = []
+    for g, relation, is_primary in rows:
+        # Manually construct to avoid dict issues
+        res.append(StudentGuardianResponse(
+            id=g.id,
+            school_id=g.school_id,
+            full_name=g.full_name,
+            phone=g.phone,
+            email=g.email,
+            occupation=g.occupation,
+            id_number=g.id_number,
+            emergency_contact_name=g.emergency_contact_name,
+            emergency_contact_phone=g.emergency_contact_phone,
+            address=g.address,
+            photo_url=g.photo_url,
+            relation=relation,
+            is_primary=is_primary
+        ))
+    return res
 @router.get("/{student_id}/attendance/summary")
 def get_student_attendance_summary(
     student_id: uuid.UUID,
@@ -579,14 +647,13 @@ def add_student_guardian(
     if not g or g.school_id != school_id:
         raise not_found("Guardian not found")
     link = db.get(StudentGuardian, {"student_id": student_id, "guardian_id": payload.guardian_id})
-    if link:
-        raise problem(status_code=409, title="Conflict", detail="Guardian already linked to student")
-    db.add(StudentGuardian(student_id=student_id, guardian_id=payload.guardian_id, relation=payload.relation, is_primary=payload.is_primary))
+    if not link:
+        db.add(StudentGuardian(student_id=student_id, guardian_id=payload.guardian_id, relation=payload.relation, is_primary=payload.is_primary))
     
     # Auto-create user for guardian if student has parent portal enabled
     if s.portal_access_parent and not g.user_id:
         ensure_default_roles(db)
-        guardian_role = db.scalar(select(Role).where(Role.name == "guardian"))
+        guardian_role = db.scalar(select(Role).where(Role.name == "parent"))
         
         email = g.email
         if not email:

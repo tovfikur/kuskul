@@ -29,7 +29,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import { Add, Edit } from "@mui/icons-material";
+import { Add, Delete, Edit } from "@mui/icons-material";
 import {
   getInventoryItems,
   getInventoryLocations,
@@ -56,13 +56,20 @@ export default function InventoryTab() {
 
   // Items state
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [itemsLookup, setItemsLookup] = useState<InventoryItem[]>([]);
   const [itemsTotal, setItemsTotal] = useState(0);
   const [itemsPage, setItemsPage] = useState(0);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [itemsSearch, setItemsSearch] = useState("");
+  const [itemsStatusFilter, setItemsStatusFilter] = useState("active");
 
   // Locations state
-  const [locations, setLocations] = useState<InventoryLocation[]>([]);
+  const [locationsLookup, setLocationsLookup] = useState<InventoryLocation[]>(
+    [],
+  );
+  const [locationsList, setLocationsList] = useState<InventoryLocation[]>([]);
+  const [locationsSearch, setLocationsSearch] = useState("");
+  const [locationsStatusFilter, setLocationsStatusFilter] = useState("active");
 
   // Stock on hand state
   const [stockOnHand, setStockOnHand] = useState<StockOnHandRow[]>([]);
@@ -73,7 +80,17 @@ export default function InventoryTab() {
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
   const [movementDialogOpen, setMovementDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
-  const [editingLocation, setEditingLocation] = useState<InventoryLocation | null>(null);
+  const [editingLocation, setEditingLocation] =
+    useState<InventoryLocation | null>(null);
+
+  const [deactivateItemDialogOpen, setDeactivateItemDialogOpen] =
+    useState(false);
+  const [itemToDeactivate, setItemToDeactivate] =
+    useState<InventoryItem | null>(null);
+  const [deactivateLocationDialogOpen, setDeactivateLocationDialogOpen] =
+    useState(false);
+  const [locationToDeactivate, setLocationToDeactivate] =
+    useState<InventoryLocation | null>(null);
 
   // Form states
   const [itemForm, setItemForm] = useState({
@@ -103,29 +120,77 @@ export default function InventoryTab() {
     try {
       const result = await getInventoryItems({
         q: itemsSearch || undefined,
+        is_active:
+          itemsStatusFilter === "" ? undefined : itemsStatusFilter === "active",
         limit: itemsPerPage,
         offset: itemsPage * itemsPerPage,
       });
       setItems(result.items);
       setItemsTotal(result.total);
     } catch (error) {
-      showToast({ severity: "error", message: "Failed to load inventory items" });
+      showToast({
+        severity: "error",
+        message: "Failed to load inventory items",
+      });
     } finally {
       setLoading(false);
     }
-  }, [itemsSearch, itemsPage, itemsPerPage]);
+  }, [itemsSearch, itemsStatusFilter, itemsPage, itemsPerPage]);
 
-  const loadLocations = useCallback(async () => {
+  const loadItemsLookup = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getInventoryLocations({ limit: 100, offset: 0 });
-      setLocations(result.items);
+      const result = await getInventoryItems({
+        is_active: true,
+        limit: 1000,
+        offset: 0,
+      });
+      setItemsLookup(result.items);
+    } catch (error) {
+      showToast({
+        severity: "error",
+        message: "Failed to load inventory items",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadLocationsLookup = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await getInventoryLocations({
+        is_active: true,
+        limit: 1000,
+        offset: 0,
+      });
+      setLocationsLookup(result.items);
     } catch (error) {
       showToast({ severity: "error", message: "Failed to load locations" });
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const loadLocationsList = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await getInventoryLocations({
+        q: locationsSearch || undefined,
+        is_active:
+          locationsStatusFilter === ""
+            ? undefined
+            : locationsStatusFilter === "active",
+        limit: 1000,
+        offset: 0,
+      });
+      setLocationsList(result.items);
+    } catch (error) {
+      showToast({ severity: "error", message: "Failed to load locations" });
+    } finally {
+      setLoading(false);
+    }
+  }, [locationsSearch, locationsStatusFilter]);
 
   const loadStockOnHand = useCallback(async () => {
     setLoading(true);
@@ -144,12 +209,13 @@ export default function InventoryTab() {
   useEffect(() => {
     if (subTab === 0) loadItems();
     else if (subTab === 1) loadStockOnHand();
-    else if (subTab === 2) loadLocations();
-  }, [subTab, loadItems, loadStockOnHand, loadLocations]);
+    else if (subTab === 2) loadLocationsList();
+  }, [subTab, loadItems, loadStockOnHand, loadLocationsList]);
 
   useEffect(() => {
-    loadLocations();
-  }, [loadLocations]);
+    loadLocationsLookup();
+    loadItemsLookup();
+  }, [loadLocationsLookup, loadItemsLookup]);
 
   const handleCreateItem = async () => {
     try {
@@ -157,13 +223,16 @@ export default function InventoryTab() {
         sku: itemForm.sku,
         name: itemForm.name,
         uom: itemForm.uom,
-        reorder_level: itemForm.reorder_level ? Number(itemForm.reorder_level) : undefined,
+        reorder_level: itemForm.reorder_level
+          ? Number(itemForm.reorder_level)
+          : undefined,
         is_active: itemForm.is_active,
       });
       showToast({ severity: "success", message: "Item created successfully" });
       setItemDialogOpen(false);
       resetItemForm();
       loadItems();
+      loadItemsLookup();
     } catch (error) {
       showToast({ severity: "error", message: "Failed to create item" });
     }
@@ -176,7 +245,9 @@ export default function InventoryTab() {
         sku: itemForm.sku,
         name: itemForm.name,
         uom: itemForm.uom,
-        reorder_level: itemForm.reorder_level ? Number(itemForm.reorder_level) : undefined,
+        reorder_level: itemForm.reorder_level
+          ? Number(itemForm.reorder_level)
+          : undefined,
         is_active: itemForm.is_active,
       });
       showToast({ severity: "success", message: "Item updated successfully" });
@@ -184,6 +255,7 @@ export default function InventoryTab() {
       setEditingItem(null);
       resetItemForm();
       loadItems();
+      loadItemsLookup();
     } catch (error) {
       showToast({ severity: "error", message: "Failed to update item" });
     }
@@ -196,10 +268,14 @@ export default function InventoryTab() {
         name: locationForm.name,
         is_active: locationForm.is_active,
       });
-      showToast({ severity: "success", message: "Location created successfully" });
+      showToast({
+        severity: "success",
+        message: "Location created successfully",
+      });
       setLocationDialogOpen(false);
       resetLocationForm();
-      loadLocations();
+      loadLocationsLookup();
+      loadLocationsList();
     } catch (error) {
       showToast({ severity: "error", message: "Failed to create location" });
     }
@@ -213,11 +289,15 @@ export default function InventoryTab() {
         name: locationForm.name,
         is_active: locationForm.is_active,
       });
-      showToast({ severity: "success", message: "Location updated successfully" });
+      showToast({
+        severity: "success",
+        message: "Location updated successfully",
+      });
       setLocationDialogOpen(false);
       setEditingLocation(null);
       resetLocationForm();
-      loadLocations();
+      loadLocationsLookup();
+      loadLocationsList();
     } catch (error) {
       showToast({ severity: "error", message: "Failed to update location" });
     }
@@ -291,6 +371,49 @@ export default function InventoryTab() {
     setLocationDialogOpen(true);
   };
 
+  const openDeactivateItem = (item: InventoryItem) => {
+    setItemToDeactivate(item);
+    setDeactivateItemDialogOpen(true);
+  };
+
+  const handleDeactivateItem = async () => {
+    if (!itemToDeactivate) return;
+    try {
+      await updateInventoryItem(itemToDeactivate.id, { is_active: false });
+      showToast({ severity: "success", message: "Item deactivated" });
+      setDeactivateItemDialogOpen(false);
+      setItemToDeactivate(null);
+      loadItems();
+      loadItemsLookup();
+    } catch (error) {
+      showToast({ severity: "error", message: "Failed to deactivate item" });
+    }
+  };
+
+  const openDeactivateLocation = (location: InventoryLocation) => {
+    setLocationToDeactivate(location);
+    setDeactivateLocationDialogOpen(true);
+  };
+
+  const handleDeactivateLocation = async () => {
+    if (!locationToDeactivate) return;
+    try {
+      await updateInventoryLocation(locationToDeactivate.id, {
+        is_active: false,
+      });
+      showToast({ severity: "success", message: "Location deactivated" });
+      setDeactivateLocationDialogOpen(false);
+      setLocationToDeactivate(null);
+      loadLocationsLookup();
+      loadLocationsList();
+    } catch (error) {
+      showToast({
+        severity: "error",
+        message: "Failed to deactivate location",
+      });
+    }
+  };
+
   return (
     <Box>
       <Tabs value={subTab} onChange={(_, v) => setSubTab(v)} sx={{ mb: 2 }}>
@@ -306,6 +429,15 @@ export default function InventoryTab() {
             searchValue={itemsSearch}
             onSearchChange={setItemsSearch}
             searchPlaceholder="Search items by SKU or name..."
+            statusValue={itemsStatusFilter}
+            onStatusChange={(value) => {
+              setItemsStatusFilter(value);
+              setItemsPage(0);
+            }}
+            statusOptions={[
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+            ]}
             onRefresh={loadItems}
             loading={loading}
           />
@@ -362,20 +494,39 @@ export default function InventoryTab() {
                           <TableCell>{item.uom}</TableCell>
                           <TableCell>{item.reorder_level || "-"}</TableCell>
                           <TableCell>
-                            <StatusChip status={item.is_active ? "active" : "inactive"} />
+                            <StatusChip
+                              status={item.is_active ? "active" : "inactive"}
+                            />
                           </TableCell>
                           <TableCell align="right">
                             <Tooltip title="Edit">
-                              <IconButton size="small" onClick={() => openEditItem(item)}>
+                              <IconButton
+                                size="small"
+                                onClick={() => openEditItem(item)}
+                              >
                                 <Edit fontSize="small" />
                               </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Deactivate">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => openDeactivateItem(item)}
+                                  disabled={!item.is_active}
+                                >
+                                  <Delete fontSize="small" />
+                                </IconButton>
+                              </span>
                             </Tooltip>
                           </TableCell>
                         </TableRow>
                       ))}
                       {items.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={6} sx={{ textAlign: "center", py: 4 }}>
+                          <TableCell
+                            colSpan={6}
+                            sx={{ textAlign: "center", py: 4 }}
+                          >
                             <Typography color="text.secondary">
                               No inventory items found
                             </Typography>
@@ -391,7 +542,9 @@ export default function InventoryTab() {
                   page={itemsPage}
                   onPageChange={(_, p) => setItemsPage(p)}
                   rowsPerPage={itemsPerPage}
-                  onRowsPerPageChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  onRowsPerPageChange={(e) =>
+                    setItemsPerPage(Number(e.target.value))
+                  }
                   rowsPerPageOptions={[10, 20, 50]}
                 />
               </>
@@ -412,7 +565,7 @@ export default function InventoryTab() {
                 onChange={(e) => setSelectedLocation(e.target.value)}
               >
                 <MenuItem value="">All Locations</MenuItem>
-                {locations.map((loc) => (
+                {locationsLookup.map((loc) => (
                   <MenuItem key={loc.id} value={loc.id}>
                     {loc.name}
                   </MenuItem>
@@ -451,13 +604,18 @@ export default function InventoryTab() {
                         <TableCell>{row.location_name}</TableCell>
                         <TableCell>{row.uom}</TableCell>
                         <TableCell align="right">
-                          <Typography fontWeight={700}>{row.qty_on_hand}</Typography>
+                          <Typography fontWeight={700}>
+                            {row.qty_on_hand}
+                          </Typography>
                         </TableCell>
                       </TableRow>
                     ))}
                     {stockOnHand.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} sx={{ textAlign: "center", py: 4 }}>
+                        <TableCell
+                          colSpan={5}
+                          sx={{ textAlign: "center", py: 4 }}
+                        >
                           <Typography color="text.secondary">
                             No stock records found
                           </Typography>
@@ -475,6 +633,19 @@ export default function InventoryTab() {
       {/* Locations Tab */}
       {subTab === 2 && (
         <Box>
+          <ListFiltersBar
+            searchValue={locationsSearch}
+            onSearchChange={setLocationsSearch}
+            searchPlaceholder="Search locations by code or name..."
+            statusValue={locationsStatusFilter}
+            onStatusChange={setLocationsStatusFilter}
+            statusOptions={[
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+            ]}
+            onRefresh={loadLocationsList}
+            loading={loading}
+          />
           <Box sx={{ mb: 2 }}>
             <Button
               variant="contained"
@@ -506,27 +677,46 @@ export default function InventoryTab() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {locations.map((loc) => (
+                    {locationsList.map((loc) => (
                       <TableRow key={loc.id} hover>
                         <TableCell>
                           <Typography fontWeight={600}>{loc.code}</Typography>
                         </TableCell>
                         <TableCell>{loc.name}</TableCell>
                         <TableCell>
-                          <StatusChip status={loc.is_active ? "active" : "inactive"} />
+                          <StatusChip
+                            status={loc.is_active ? "active" : "inactive"}
+                          />
                         </TableCell>
                         <TableCell align="right">
                           <Tooltip title="Edit">
-                            <IconButton size="small" onClick={() => openEditLocation(loc)}>
+                            <IconButton
+                              size="small"
+                              onClick={() => openEditLocation(loc)}
+                            >
                               <Edit fontSize="small" />
                             </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Deactivate">
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => openDeactivateLocation(loc)}
+                                disabled={!loc.is_active}
+                              >
+                                <Delete fontSize="small" />
+                              </IconButton>
+                            </span>
                           </Tooltip>
                         </TableCell>
                       </TableRow>
                     ))}
-                    {locations.length === 0 && (
+                    {locationsList.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={4} sx={{ textAlign: "center", py: 4 }}>
+                        <TableCell
+                          colSpan={4}
+                          sx={{ textAlign: "center", py: 4 }}
+                        >
                           <Typography color="text.secondary">
                             No locations found
                           </Typography>
@@ -559,7 +749,9 @@ export default function InventoryTab() {
                 fullWidth
                 label="SKU"
                 value={itemForm.sku}
-                onChange={(e) => setItemForm({ ...itemForm, sku: e.target.value })}
+                onChange={(e) =>
+                  setItemForm({ ...itemForm, sku: e.target.value })
+                }
                 required
               />
             </Grid>
@@ -568,7 +760,9 @@ export default function InventoryTab() {
                 fullWidth
                 label="Unit of Measure"
                 value={itemForm.uom}
-                onChange={(e) => setItemForm({ ...itemForm, uom: e.target.value })}
+                onChange={(e) =>
+                  setItemForm({ ...itemForm, uom: e.target.value })
+                }
                 required
               />
             </Grid>
@@ -577,7 +771,9 @@ export default function InventoryTab() {
                 fullWidth
                 label="Name"
                 value={itemForm.name}
-                onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
+                onChange={(e) =>
+                  setItemForm({ ...itemForm, name: e.target.value })
+                }
                 required
               />
             </Grid>
@@ -587,7 +783,9 @@ export default function InventoryTab() {
                 label="Reorder Level"
                 type="number"
                 value={itemForm.reorder_level}
-                onChange={(e) => setItemForm({ ...itemForm, reorder_level: e.target.value })}
+                onChange={(e) =>
+                  setItemForm({ ...itemForm, reorder_level: e.target.value })
+                }
               />
             </Grid>
             <Grid size={{ xs: 12 }}>
@@ -595,7 +793,9 @@ export default function InventoryTab() {
                 control={
                   <Checkbox
                     checked={itemForm.is_active}
-                    onChange={(e) => setItemForm({ ...itemForm, is_active: e.target.checked })}
+                    onChange={(e) =>
+                      setItemForm({ ...itemForm, is_active: e.target.checked })
+                    }
                   />
                 }
                 label="Active"
@@ -604,10 +804,12 @@ export default function InventoryTab() {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => {
-            setItemDialogOpen(false);
-            setEditingItem(null);
-          }}>
+          <Button
+            onClick={() => {
+              setItemDialogOpen(false);
+              setEditingItem(null);
+            }}
+          >
             Cancel
           </Button>
           <Button
@@ -629,7 +831,9 @@ export default function InventoryTab() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>{editingLocation ? "Edit Location" : "Add Location"}</DialogTitle>
+        <DialogTitle>
+          {editingLocation ? "Edit Location" : "Add Location"}
+        </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
             <Grid size={{ xs: 12 }}>
@@ -637,7 +841,9 @@ export default function InventoryTab() {
                 fullWidth
                 label="Code"
                 value={locationForm.code}
-                onChange={(e) => setLocationForm({ ...locationForm, code: e.target.value })}
+                onChange={(e) =>
+                  setLocationForm({ ...locationForm, code: e.target.value })
+                }
                 required
               />
             </Grid>
@@ -646,7 +852,9 @@ export default function InventoryTab() {
                 fullWidth
                 label="Name"
                 value={locationForm.name}
-                onChange={(e) => setLocationForm({ ...locationForm, name: e.target.value })}
+                onChange={(e) =>
+                  setLocationForm({ ...locationForm, name: e.target.value })
+                }
                 required
               />
             </Grid>
@@ -655,7 +863,12 @@ export default function InventoryTab() {
                 control={
                   <Checkbox
                     checked={locationForm.is_active}
-                    onChange={(e) => setLocationForm({ ...locationForm, is_active: e.target.checked })}
+                    onChange={(e) =>
+                      setLocationForm({
+                        ...locationForm,
+                        is_active: e.target.checked,
+                      })
+                    }
                   />
                 }
                 label="Active"
@@ -664,15 +877,19 @@ export default function InventoryTab() {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => {
-            setLocationDialogOpen(false);
-            setEditingLocation(null);
-          }}>
+          <Button
+            onClick={() => {
+              setLocationDialogOpen(false);
+              setEditingLocation(null);
+            }}
+          >
             Cancel
           </Button>
           <Button
             variant="contained"
-            onClick={editingLocation ? handleUpdateLocation : handleCreateLocation}
+            onClick={
+              editingLocation ? handleUpdateLocation : handleCreateLocation
+            }
           >
             {editingLocation ? "Update" : "Create"}
           </Button>
@@ -695,9 +912,14 @@ export default function InventoryTab() {
                 <Select
                   value={movementForm.item_id}
                   label="Item"
-                  onChange={(e) => setMovementForm({ ...movementForm, item_id: e.target.value })}
+                  onChange={(e) =>
+                    setMovementForm({
+                      ...movementForm,
+                      item_id: e.target.value,
+                    })
+                  }
                 >
-                  {items.map((item) => (
+                  {itemsLookup.map((item) => (
                     <MenuItem key={item.id} value={item.id}>
                       {item.sku} - {item.name}
                     </MenuItem>
@@ -711,9 +933,14 @@ export default function InventoryTab() {
                 <Select
                   value={movementForm.location_id}
                   label="Location"
-                  onChange={(e) => setMovementForm({ ...movementForm, location_id: e.target.value })}
+                  onChange={(e) =>
+                    setMovementForm({
+                      ...movementForm,
+                      location_id: e.target.value,
+                    })
+                  }
                 >
-                  {locations.map((loc) => (
+                  {locationsLookup.map((loc) => (
                     <MenuItem key={loc.id} value={loc.id}>
                       {loc.name}
                     </MenuItem>
@@ -727,7 +954,12 @@ export default function InventoryTab() {
                 <Select
                   value={movementForm.type}
                   label="Type"
-                  onChange={(e) => setMovementForm({ ...movementForm, type: e.target.value as StockMovementType })}
+                  onChange={(e) =>
+                    setMovementForm({
+                      ...movementForm,
+                      type: e.target.value as StockMovementType,
+                    })
+                  }
                 >
                   <MenuItem value="receive">Receive</MenuItem>
                   <MenuItem value="issue">Issue</MenuItem>
@@ -741,7 +973,9 @@ export default function InventoryTab() {
                 label="Quantity"
                 type="number"
                 value={movementForm.qty}
-                onChange={(e) => setMovementForm({ ...movementForm, qty: e.target.value })}
+                onChange={(e) =>
+                  setMovementForm({ ...movementForm, qty: e.target.value })
+                }
                 required
               />
             </Grid>
@@ -752,7 +986,9 @@ export default function InventoryTab() {
                 multiline
                 rows={2}
                 value={movementForm.note}
-                onChange={(e) => setMovementForm({ ...movementForm, note: e.target.value })}
+                onChange={(e) =>
+                  setMovementForm({ ...movementForm, note: e.target.value })
+                }
               />
             </Grid>
           </Grid>
@@ -761,6 +997,82 @@ export default function InventoryTab() {
           <Button onClick={() => setMovementDialogOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleRecordMovement}>
             Record
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deactivateItemDialogOpen}
+        onClose={() => {
+          setDeactivateItemDialogOpen(false);
+          setItemToDeactivate(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Deactivate Item</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Deactivate{" "}
+            <Typography component="span" fontWeight={700}>
+              {itemToDeactivate?.sku} - {itemToDeactivate?.name}
+            </Typography>
+            ?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setDeactivateItemDialogOpen(false);
+              setItemToDeactivate(null);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeactivateItem}
+          >
+            Deactivate
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deactivateLocationDialogOpen}
+        onClose={() => {
+          setDeactivateLocationDialogOpen(false);
+          setLocationToDeactivate(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Deactivate Location</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Deactivate{" "}
+            <Typography component="span" fontWeight={700}>
+              {locationToDeactivate?.code} - {locationToDeactivate?.name}
+            </Typography>
+            ?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setDeactivateLocationDialogOpen(false);
+              setLocationToDeactivate(null);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeactivateLocation}
+          >
+            Deactivate
           </Button>
         </DialogActions>
       </Dialog>

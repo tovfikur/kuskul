@@ -25,7 +25,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import { Add, Edit } from "@mui/icons-material";
+import { Add, Delete, Edit } from "@mui/icons-material";
 import {
   getAssets,
   createAsset,
@@ -47,6 +47,9 @@ export default function AssetsTab() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+
+  const [retireDialogOpen, setRetireDialogOpen] = useState(false);
+  const [assetToRetire, setAssetToRetire] = useState<Asset | null>(null);
 
   const [form, setForm] = useState({
     tag: "",
@@ -148,6 +151,24 @@ export default function AssetsTab() {
     setDialogOpen(true);
   };
 
+  const openRetire = (asset: Asset) => {
+    setAssetToRetire(asset);
+    setRetireDialogOpen(true);
+  };
+
+  const handleRetire = async () => {
+    if (!assetToRetire) return;
+    try {
+      await updateAsset(assetToRetire.id, { status: "retired" });
+      showToast({ severity: "success", message: "Asset retired" });
+      setRetireDialogOpen(false);
+      setAssetToRetire(null);
+      loadAssets();
+    } catch (error) {
+      showToast({ severity: "error", message: "Failed to retire asset" });
+    }
+  };
+
   return (
     <Box>
       <ListFiltersBar
@@ -217,6 +238,17 @@ export default function AssetsTab() {
                           <IconButton size="small" onClick={() => openEdit(asset)}>
                             <Edit fontSize="small" />
                           </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Retire">
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={() => openRetire(asset)}
+                              disabled={asset.status === "retired"}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </span>
                         </Tooltip>
                       </TableCell>
                     </TableRow>
@@ -342,6 +374,40 @@ export default function AssetsTab() {
             onClick={editingAsset ? handleUpdate : handleCreate}
           >
             {editingAsset ? "Update" : "Create"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={retireDialogOpen}
+        onClose={() => {
+          setRetireDialogOpen(false);
+          setAssetToRetire(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Retire Asset</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Retire{" "}
+            <Typography component="span" fontWeight={700}>
+              {assetToRetire?.tag} - {assetToRetire?.name}
+            </Typography>
+            ?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setRetireDialogOpen(false);
+              setAssetToRetire(null);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button variant="contained" color="error" onClick={handleRetire}>
+            Retire
           </Button>
         </DialogActions>
       </Dialog>

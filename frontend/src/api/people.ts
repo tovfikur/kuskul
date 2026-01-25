@@ -350,6 +350,15 @@ export async function uploadStudentDocument(
   return resp.data;
 }
 
+export async function getGuardians(params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+}): Promise<{ items: Guardian[]; total: number }> {
+  const resp = await api.get("/guardians", { params });
+  return resp.data;
+}
+
 export async function createGuardian(payload: {
   full_name: string;
   phone?: string | null;
@@ -361,6 +370,24 @@ export async function createGuardian(payload: {
   address?: string | null;
 }): Promise<Guardian> {
   const resp = await api.post("/guardians", payload);
+  return resp.data;
+}
+
+export async function updateGuardian(
+  guardianId: string,
+  payload: {
+    full_name?: string;
+    phone?: string | null;
+    email?: string | null;
+    occupation?: string | null;
+    id_number?: string | null;
+    emergency_contact_name?: string | null;
+    emergency_contact_phone?: string | null;
+    address?: string | null;
+    photo_url?: string | null;
+  }
+): Promise<Guardian> {
+  const resp = await api.put(`/guardians/${guardianId}`, payload);
   return resp.data;
 }
 
@@ -378,6 +405,18 @@ export async function linkGuardianToStudent(
   payload: { guardian_id: string; relation?: string; is_primary?: boolean },
 ): Promise<void> {
   await api.post(`/students/${studentId}/guardians`, payload);
+}
+
+export type GuardianWithRelation = Guardian & {
+  relation: string;
+  is_primary: boolean;
+};
+
+export async function getStudentGuardians(
+  studentId: string
+): Promise<GuardianWithRelation[]> {
+  const resp = await api.get(`/students/${studentId}/guardians`);
+  return resp.data;
 }
 
 export type Enrollment = {
