@@ -13,6 +13,7 @@ class Staff(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     school_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("schools.id"), index=True, nullable=False)
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id"), index=True, nullable=True)
 
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
     employee_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)

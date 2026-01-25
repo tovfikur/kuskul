@@ -1,4 +1,5 @@
 import uuid
+import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -10,6 +11,7 @@ from app.core.rate_limit import InMemoryRateLimiter, RateLimitRule
 from app.core.security import decode_access_token
 from app.core.audit import write_audit_log
 from app.core.seed import ensure_default_admin
+from fastapi.staticfiles import StaticFiles
 from app.db.session import SessionLocal
 
 
@@ -20,6 +22,11 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
     )
+    
+    if not os.path.exists("static"):
+        os.makedirs("static")
+        
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
     limiter = InMemoryRateLimiter()
     auth_rule = RateLimitRule(window_seconds=15 * 60, max_requests=settings.rate_limit_auth_per_15_minutes)
@@ -119,6 +126,18 @@ def create_app() -> FastAPI:
     db = SessionLocal()
     try:
         ensure_default_admin(db)
+        
+        # Fix invalid emails ending in .local
+        from sqlalchemy import text
+        db.execute(text("UPDATE users SET email = REPLACE(email, '.local', '.kuskul.com') WHERE email LIKE '%.local'"))
+        
+        # Schema patch: Add user_id to staff if missing
+        try:
+            db.execute(text("ALTER TABLE staff ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)"))
+            # Note: Index creation syntax might vary, keeping it simple or skipping as valid migration is better
+        except Exception:
+            pass
+            
         db.commit()
     except Exception:
         db.rollback()

@@ -18,6 +18,9 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
+    full_name: Optional[str] = Field(default=None, max_length=200)
+    phone: Optional[str] = Field(default=None, max_length=32)
+    photo_url: Optional[str] = Field(default=None, max_length=500)
     password: Optional[str] = Field(default=None, min_length=8, max_length=128)
     is_active: Optional[bool] = None
     role_name: Optional[str] = Field(default=None, min_length=2, max_length=64)
@@ -35,7 +38,11 @@ class UserUpdate(BaseModel):
 class UserOut(BaseModel):
     id: uuid.UUID
     email: EmailStr
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    photo_url: Optional[str] = None
     is_active: bool
+    role_name: Optional[str] = None
 
 
 class UserDetail(UserOut):

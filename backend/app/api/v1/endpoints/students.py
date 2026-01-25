@@ -29,6 +29,10 @@ from app.models.teacher_assignment import StudentAttendance
 from app.models.timetable_entry import TimetableEntry
 from app.models.time_slot import TimeSlot
 from app.models.user import User
+from app.models.role import Role
+from app.models.membership import Membership
+from app.core.security import hash_password
+from app.core.seed import ensure_default_roles
 from app.schemas.batch import BatchPromoteStudentsRequest
 from app.schemas.documents import DocumentOut
 from app.schemas.guardians import LinkGuardianRequest, GuardianOut
@@ -267,6 +271,38 @@ def create_student(payload: StudentCreate, db: Session = Depends(get_db), school
         if s.admission_no:
             db.commit()
             db.refresh(s)
+
+    # Create/Link User if portal access is enabled
+    if s.portal_access_student and not s.user_id:
+        ensure_default_roles(db)
+        student_role = db.scalar(select(Role).where(Role.name == "student"))
+        
+        # Determine username/email
+        base_username = s.portal_username or s.admission_no or f"stu{s.id.hex[:6]}"
+        # User requires unique email. We'll forge one.
+        email = f"{base_username}@student.kuskul.com"
+        
+        existing_user = db.scalar(select(User).where(User.email == email))
+        if existing_user:
+            s.user_id = existing_user.id
+        else:
+            new_user = User(
+                email=email,
+                full_name=f"{s.first_name} {s.last_name or ''}".strip(),
+                password_hash=hash_password("password123"),
+                is_active=True,
+                created_at=now,
+                updated_at=now
+            )
+            db.add(new_user)
+            db.flush()
+            s.user_id = new_user.id
+            
+            if student_role:
+                db.add(Membership(user_id=new_user.id, school_id=school_id, role_id=student_role.id, is_active=True, created_at=now))
+        
+        db.commit()
+        db.refresh(s)
     
     return _out(s)
 
@@ -280,6 +316,100 @@ def update_student(
         raise not_found("Student not found")
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(s, k, v)
+    
+    # Auto-create User if portal access is enabled and User missing
+    if s.portal_access_student and not s.user_id:
+        ensure_default_roles(db)
+        student_role = db.scalar(select(Role).where(Role.name == "student"))
+        
+        # Determine username/email
+        base_username = s.portal_username or s.admission_no or f"stu{s.id.hex[:6]}"
+        email = f"{base_username}@student.kuskul.com"
+        
+        existing_user = db.scalar(select(User).where(User.email == email))
+        now = datetime.now(timezone.utc)
+        
+        if existing_user:
+            s.user_id = existing_user.id
+        else:
+            new_user = User(
+                email=email,
+                full_name=f"{s.first_name} {s.last_name or ''}".strip(),
+                password_hash=hash_password("password123"),
+                is_active=True,
+                created_at=now,
+                updated_at=now
+            )
+            db.add(new_user)
+            db.flush()
+            s.user_id = new_user.id
+            
+            if student_role:
+                db.add(Membership(user_id=new_user.id, school_id=school_id, role_id=student_role.id, is_active=True, created_at=now))
+
+    # Auto-create Users for Guardians if parent portal access is enabled
+    if s.portal_access_parent:
+        ensure_default_roles(db)
+        guardian_role = db.scalar(select(Role).where(Role.name == "guardian"))
+        
+        # Find all linked guardians
+        from app.models.student_guardian import StudentGuardian
+        from app.models.guardian import Guardian
+        linked_guardians = db.execute(
+            select(Guardian)
+            .join(StudentGuardian, StudentGuardian.guardian_id == Guardian.id)
+            .where(StudentGuardian.student_id == student_id)
+        ).scalars().all()
+        
+        for g in linked_guardians:
+            if not g.user_id:
+                # Create User for Guardian
+                email = g.email
+                if not email:
+                     if g.phone:
+                         import re
+                         clean_phone = re.sub(r'[^0-9]', '', g.phone)
+                         email = f"{clean_phone}@guardian.kuskul.com"
+                     else:
+                         email = f"guardian{g.id.hex[:6]}@guardian.kuskul.com"
+                         
+                existing_g_user = db.scalar(select(User).where(User.email == email))
+                now = datetime.now(timezone.utc)
+                
+                if existing_g_user:
+                    g.user_id = existing_g_user.id
+                else:
+                    new_g_user = User(
+                        email=email,
+                        full_name=g.full_name,
+                        phone=g.phone,
+                        photo_url=g.photo_url,
+                        password_hash=hash_password("password123"),
+                        is_active=True,
+                        created_at=now,
+                        updated_at=now
+                    )
+                    db.add(new_g_user)
+                    db.flush()
+                    g.user_id = new_g_user.id
+                    
+                    if guardian_role:
+                        db.add(Membership(user_id=new_g_user.id, school_id=school_id, role_id=guardian_role.id, is_active=True, created_at=now))
+        
+        db.flush()
+
+    # Sync to User if linked
+    if s.user_id:
+
+        u = db.get(User, s.user_id)
+        if u:
+            # Sync full name and photo
+            full_name = " ".join(filter(None, [s.first_name, s.last_name]))
+            u.full_name = full_name
+            u.photo_url = s.photo_url
+            # Phone: Student model doesn't have a personal phone field, only emergency contact.
+            # So we don't sync phone here.
+            
     db.commit()
     return _out(s)
 
@@ -306,7 +436,31 @@ def upload_student_photo(
         raise not_found("Student not found")
     if not file.filename:
         raise problem(status_code=400, title="Bad Request", detail="Missing filename")
-    s.photo_url = file.filename
+    
+    # Save file to static directory
+    import shutil
+    import os
+    
+    EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in EXTENSIONS:
+        raise problem(status_code=400, title="Bad Request", detail="Invalid image format")
+        
+    filename = f"student_{student_id}_{uuid.uuid4().hex[:8]}{ext}"
+    static_path = os.path.join("static", filename)
+    
+    with open(static_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    s.photo_url = f"/static/{filename}"
+    
+    # Sync to User if linked
+    if s.user_id:
+
+        u = db.get(User, s.user_id)
+        if u:
+            u.photo_url = s.photo_url
+
     db.commit()
     return {"status": "ok"}
 
@@ -428,6 +582,43 @@ def add_student_guardian(
     if link:
         raise problem(status_code=409, title="Conflict", detail="Guardian already linked to student")
     db.add(StudentGuardian(student_id=student_id, guardian_id=payload.guardian_id, relation=payload.relation, is_primary=payload.is_primary))
+    
+    # Auto-create user for guardian if student has parent portal enabled
+    if s.portal_access_parent and not g.user_id:
+        ensure_default_roles(db)
+        guardian_role = db.scalar(select(Role).where(Role.name == "guardian"))
+        
+        email = g.email
+        if not email:
+             if g.phone:
+                 import re
+                 clean_phone = re.sub(r'[^0-9]', '', g.phone)
+                 email = f"{clean_phone}@guardian.kuskul.com"
+             else:
+                 email = f"guardian{g.id.hex[:6]}@guardian.kuskul.com"
+        
+        now = datetime.now(timezone.utc)
+        existing_user = db.scalar(select(User).where(User.email == email))
+        if existing_user:
+             g.user_id = existing_user.id
+        else:
+             new_user = User(
+                email=email,
+                full_name=g.full_name,
+                phone=g.phone,
+                photo_url=g.photo_url,
+                password_hash=hash_password("password123"),
+                is_active=True,
+                created_at=now,
+                updated_at=now
+             )
+             db.add(new_user)
+             db.flush()
+             g.user_id = new_user.id
+             
+             if guardian_role:
+                 db.add(Membership(user_id=new_user.id, school_id=school_id, role_id=guardian_role.id, is_active=True, created_at=now))
+
     db.commit()
     return {"status": "ok"}
 

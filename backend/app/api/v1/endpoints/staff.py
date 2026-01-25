@@ -18,6 +18,10 @@ from app.models.staff import Staff
 from app.models.teacher_assignment import StaffAttendance, TeacherAssignment
 from app.models.staff import StaffPerformanceRecord, StaffQualification
 from app.models.user import User
+from app.models.role import Role
+from app.models.membership import Membership
+from app.core.security import hash_password
+from app.core.seed import ensure_default_roles
 from app.schemas.attendance import StaffAttendanceOut
 from app.schemas.documents import DocumentOut
 from app.schemas.teacher_assignments import TeacherAssignmentOut
@@ -214,6 +218,45 @@ def create_staff(payload: StaffCreate, db: Session = Depends(get_db), school_id=
     db.add(s)
     db.commit()
     db.refresh(s)
+    
+    # Auto-create User for Staff
+    if not s.user_id:
+        email = s.email
+        if not email:
+             email = f"staff{s.id.hex[:6]}@kuskul.com"
+        
+        ensure_default_roles(db)
+        # Determine role
+        role_name = "staff"
+        if s.designation and "teacher" in s.designation.lower():
+             role_name = "teacher"
+             
+        role = db.scalar(select(Role).where(func.lower(Role.name) == role_name))
+        
+        existing_user = db.scalar(select(User).where(User.email == email))
+        if existing_user:
+             s.user_id = existing_user.id
+             db.commit() # Save linkage
+        else:
+             new_user = User(
+                email=email,
+                full_name=s.full_name,
+                phone=s.phone,
+                photo_url=s.photo_url,
+                password_hash=hash_password("password123"),
+                is_active=True,
+                created_at=now,
+                updated_at=now
+             )
+             db.add(new_user)
+             db.flush()
+             s.user_id = new_user.id
+             
+             if role:
+                 db.add(Membership(user_id=new_user.id, school_id=school_id, role_id=role.id, is_active=True, created_at=now))
+            
+             db.commit()
+             db.refresh(s)
     return _out(s)
 
 

@@ -69,20 +69,58 @@ def get_guardian(
 def create_guardian(
     payload: GuardianCreate, db: Session = Depends(get_db), school_id=Depends(get_active_school_id)
 ) -> GuardianOut:
+    # Deduplication logic: Check if guardian already exists by email or phone
+    existing = None
+    if payload.email:
+        existing = db.scalar(
+            select(Guardian).where(
+                Guardian.school_id == school_id, 
+                Guardian.email == str(payload.email)
+            ).limit(1)
+        )
+    
+    if not existing and payload.phone:
+        existing = db.scalar(
+            select(Guardian).where(
+                Guardian.school_id == school_id, 
+                Guardian.phone == payload.phone
+            ).limit(1)
+        )
+
     now = datetime.now(timezone.utc)
-    g = Guardian(
-        school_id=school_id,
-        full_name=payload.full_name,
-        phone=payload.phone,
-        email=str(payload.email) if payload.email else None,
-        occupation=payload.occupation,
-        id_number=payload.id_number,
-        emergency_contact_name=payload.emergency_contact_name,
-        emergency_contact_phone=payload.emergency_contact_phone,
-        address=payload.address,
-        created_at=now,
-    )
-    db.add(g)
+    
+    if existing:
+        # Update existing guardian with provided details
+        data = payload.model_dump(exclude_unset=True)
+        if "email" in data:
+            data["email"] = str(data["email"]) if data["email"] else None
+        
+        for k, v in data.items():
+            setattr(existing, k, v)
+        g = existing
+    else:
+        # Create new guardian
+        g = Guardian(
+            school_id=school_id,
+            full_name=payload.full_name,
+            phone=payload.phone,
+            email=str(payload.email) if payload.email else None,
+            occupation=payload.occupation,
+            id_number=payload.id_number,
+            emergency_contact_name=payload.emergency_contact_name,
+            emergency_contact_phone=payload.emergency_contact_phone,
+            address=payload.address,
+            created_at=now,
+        )
+        db.add(g)
+    
+    # Sync with User: Link to User if email matches
+    if g.email:
+        from app.models.user import User
+        user = db.scalar(select(User).where(User.email == g.email).limit(1))
+        if user:
+            g.user_id = user.id
+
     db.commit()
     db.refresh(g)
     return _out(g)
@@ -101,8 +139,42 @@ def update_guardian(
     data = payload.model_dump(exclude_unset=True)
     if "email" in data:
         data["email"] = str(data["email"]) if data["email"] else None
+        new_email = data["email"]
+        
+        # Sync to User
+        if new_email:
+            from app.models.user import User
+            if g.user_id:
+                u = db.get(User, g.user_id)
+                if u:
+                     # Check uniqueness logic could be here, but DB will catch unique constraint violation if we don't.
+                     # However, a friendly error is better.
+                     existing_user = db.scalar(select(User).where(User.email == new_email))
+                     if existing_user and existing_user.id != u.id:
+                         raise problem(status_code=409, title="Conflict", detail="Email linked to another user")
+                     u.email = new_email
+            else:
+                 # Check if we should link to an existing user
+                 u = db.scalar(select(User).where(User.email == new_email))
+                 if u:
+                     g.user_id = u.id
+
     for k, v in data.items():
         setattr(g, k, v)
+    
+    # Sync other fields to User if linked
+    if g.user_id:
+        from app.models.user import User
+        u = db.get(User, g.user_id)
+        if u:
+            # Sync fields
+            if "full_name" in data:
+                u.full_name = data["full_name"]
+            if "phone" in data:
+                u.phone = data["phone"]
+            if "photo_url" in data:
+                u.photo_url = data["photo_url"]
+    
     db.commit()
     return _out(g)
 
@@ -147,7 +219,31 @@ def upload_guardian_photo(
         raise not_found("Guardian not found")
     if not file.filename:
         raise problem(status_code=400, title="Bad Request", detail="Missing filename")
-    g.photo_url = file.filename
+        
+    # Save file to static directory
+    import shutil
+    import os
+    
+    EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in EXTENSIONS:
+        raise problem(status_code=400, title="Bad Request", detail="Invalid image format")
+        
+    filename = f"guardian_{guardian_id}_{uuid.uuid4().hex[:8]}{ext}"
+    static_path = os.path.join("static", filename)
+    
+    with open(static_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    g.photo_url = f"/static/{filename}"
+    
+    # Sync to User if linked
+    if g.user_id:
+        from app.models.user import User
+        u = db.get(User, g.user_id)
+        if u:
+            u.photo_url = g.photo_url
+            
     db.commit()
     return {"status": "ok"}
 

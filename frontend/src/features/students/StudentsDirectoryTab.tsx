@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
+  Avatar,
   Button,
   Checkbox,
   Chip,
@@ -80,6 +81,12 @@ import {
   type StudentTimetableEntry,
 } from "../../api/people";
 import { showToast } from "../../app/toast";
+
+const getFileUrl = (path?: string | null) => {
+  if (!path) return undefined;
+  if (path.startsWith("http")) return path;
+  return `http://localhost:8000${path}`;
+};
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -1301,23 +1308,20 @@ export default function StudentsPage() {
                       <TableCell>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
                           {/* Avatar Placeholder */}
-                          <Box
+                          <Avatar
+                            src={getFileUrl(row.photo_url)}
                             sx={{
-                              width: 32,
-                              height: 32,
-                              borderRadius: "50%",
-                              bgcolor: "primary.light",
-                              color: "primary.main",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontWeight: 700,
-                              fontSize: "0.8rem",
+                                width: 32,
+                                height: 32,
+                                bgcolor: "primary.light",
+                                color: "primary.main",
+                                fontWeight: 700,
+                                fontSize: "0.8rem",
                             }}
                           >
                             {row.first_name?.[0]}
                             {row.last_name?.[0]}
-                          </Box>
+                          </Avatar>
                           <Typography variant="body2" fontWeight={600}>
                             {formatStudentName(row)}
                           </Typography>
@@ -2190,6 +2194,16 @@ export default function StudentsPage() {
                         <Typography variant="body2" color="text.secondary">
                           {studentPhotoFile.name}
                         </Typography>
+                      ) : form.photo_url ? (
+                        <Box sx={{ mt: 1, display: "flex", alignItems: "center", gap: 2 }}>
+                            <Avatar
+                              src={getFileUrl(form.photo_url)}
+                              sx={{ width: 56, height: 56 }}
+                            />
+                            <Typography variant="body2" color="text.secondary">
+                                Current Photo
+                            </Typography>
+                        </Box>
                       ) : null}
 
                       <Button
@@ -2565,18 +2579,27 @@ export default function StudentsPage() {
         PaperProps={{ sx: { width: { xs: "100%", md: 520 } } }}
       >
         <Box sx={{ p: 2 }}>
-          <Box
-            sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}
-          >
-            <Box>
-              <Typography variant="h6" fontWeight={800}>
-                {drawerStudent ? formatStudentName(drawerStudent) : "Student"}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Admission: {drawerStudent?.admission_no || "-"} • ID:{" "}
-                {drawerStudentId}
-              </Typography>
-            </Box>
+
+            <Box
+              sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}
+            >
+              <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+                <Avatar
+                  src={getFileUrl(drawerStudent?.photo_url)}
+                  sx={{ width: 64, height: 64, bgcolor: "primary.main", fontSize: "1.5rem" }}
+                >
+                  {drawerStudent?.first_name?.[0]}
+                </Avatar>
+                <Box>
+                  <Typography variant="h6" fontWeight={800}>
+                    {drawerStudent ? formatStudentName(drawerStudent) : "Student"}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Admission: {drawerStudent?.admission_no || "-"} • ID:{" "}
+                    {drawerStudentId}
+                  </Typography>
+                </Box>
+              </Box>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               {drawerStudent ? (
                 <Chip

@@ -41,13 +41,18 @@ def list_users(
         include_inactive = True
 
     base = (
-        select(User)
+        select(User, Role.name)
         .join(Membership, Membership.user_id == User.id)
         .join(Role, Role.id == Membership.role_id)
         .where(Membership.school_id == school_id, Membership.is_active.is_(True))
     )
     if email:
         base = base.where(User.email.ilike(f"%{email}%"))
+    if search:
+        base = base.where(
+            User.email.ilike(f"%{search}%") | User.full_name.ilike(f"%{search}%")
+        )
+
     if role:
         base = base.where(Role.name == role)
     if is_active is not None:
@@ -56,9 +61,20 @@ def list_users(
         base = base.where(User.is_active.is_(True))
 
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
-    users = db.execute(base.order_by(User.email.asc()).offset(offset).limit(limit)).scalars().all()
+    rows = db.execute(base.order_by(User.email.asc()).offset(offset).limit(limit)).all()
+    
     return UserList(
-        items=[UserOut(id=u.id, email=u.email, is_active=u.is_active) for u in users],
+        items=[
+            UserOut(
+                id=u.id, 
+                email=u.email, 
+                full_name=u.full_name,
+                phone=u.phone,
+                photo_url=u.photo_url,
+                is_active=u.is_active,
+                role_name=r_name
+            ) for u, r_name in rows
+        ],
         total=int(total),
         offset=offset,
         limit=limit,
@@ -80,7 +96,16 @@ def get_user(user_id: uuid.UUID, db: Session = Depends(get_db), school_id=Depend
     if not user:
         raise not_found("User not found")
     role = db.get(Role, membership.role_id)
-    return UserDetail(id=user.id, email=user.email, is_active=user.is_active, school_id=school_id, role_name=(role.name if role else ""))
+    return UserDetail(
+        id=user.id, 
+        email=user.email, 
+        full_name=user.full_name,
+        phone=user.phone,
+        photo_url=user.photo_url,
+        is_active=user.is_active, 
+        school_id=school_id, 
+        role_name=(role.name if role else "")
+    )
 
 
 @router.post("", response_model=UserOut, dependencies=[Depends(require_permission("users:write"))])
@@ -102,7 +127,15 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), school_id=De
     db.add(Membership(user_id=user.id, school_id=school_id, role_id=role.id, is_active=True, created_at=now))
 
     db.commit()
-    return UserOut(id=user.id, email=user.email, is_active=user.is_active)
+    return UserOut(
+        id=user.id, 
+        email=user.email, 
+        full_name=user.full_name,
+        phone=user.phone,
+        photo_url=user.photo_url,
+        is_active=user.is_active,
+        role_name=role.name
+    )
 
 
 @router.patch("/{user_id}", response_model=UserDetail, dependencies=[Depends(require_permission("users:write"))])
@@ -131,6 +164,27 @@ def update_user(
             raise problem(status_code=409, title="Conflict", detail="Email already exists")
         user.email = payload.email
 
+    # Update profile fields
+    if payload.full_name is not None:
+        user.full_name = payload.full_name
+    if payload.phone is not None:
+        user.phone = payload.phone
+    if payload.photo_url is not None:
+        user.photo_url = payload.photo_url
+
+    # Sync to Linked Guardians
+    from app.models.guardian import Guardian
+    guardians = db.execute(select(Guardian).where(Guardian.user_id == user.id)).scalars().all()
+    for g in guardians:
+        if payload.email:
+            g.email = payload.email
+        if payload.full_name:
+            g.full_name = payload.full_name
+        if payload.phone:
+            g.phone = payload.phone
+        if payload.photo_url:
+            g.photo_url = payload.photo_url
+
     if payload.password:
         user.password_hash = hash_password(payload.password)
 
@@ -148,7 +202,16 @@ def update_user(
     db.commit()
 
     role = db.get(Role, membership.role_id)
-    return UserDetail(id=user.id, email=user.email, is_active=user.is_active, school_id=school_id, role_name=(role.name if role else ""))
+    return UserDetail(
+        id=user.id, 
+        email=user.email, 
+        full_name=user.full_name,
+        phone=user.phone,
+        photo_url=user.photo_url,
+        is_active=user.is_active, 
+        school_id=school_id, 
+        role_name=(role.name if role else "")
+    )
 
 
 @router.delete("/{user_id}", dependencies=[Depends(require_permission("users:write"))])
