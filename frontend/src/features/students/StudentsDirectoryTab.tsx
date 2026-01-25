@@ -956,205 +956,318 @@ export default function StudentsPage() {
   }
 
   return (
-    <Box sx={{ width: "100%" }}>
-      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "flex-end", mb: 3 }}>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleImportCsv(f);
-            }}
-          />
-          <Button
-            variant="outlined"
-            startIcon={<UploadFile />}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            Bulk Import CSV
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<Download />}
-            onClick={handleExportCsv}
-          >
-            Export CSV
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<Refresh />}
-            onClick={() => loadStudents()}
-            disabled={loading}
-          >
-            Refresh
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={openCreateDialog}
-          >
-            Add Student
-          </Button>
-        </Box>
-
-      <Grid container spacing={2} sx={{ mb: 2 }}>
+    <Box sx={{ width: "100%", pb: 2 }}>
+      {/* Metrics Row */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, md: 4 }}>
-          <Paper sx={{ p: 2, borderRadius: 3 }}>
-            <Typography variant="overline" color="text.secondary">
-              Total Results
-            </Typography>
-            <Typography variant="h5" fontWeight={800}>
-              {total.toLocaleString()}
+          <Paper
+            elevation={0}
+            sx={{
+              p: 3,
+              borderRadius: 4,
+              height: "100%",
+              background: "linear-gradient(135deg, #3F51B5 0%, #303F9F 100%)",
+              color: "white",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              boxShadow: "0px 10px 20px rgba(63, 81, 181, 0.2)",
+            }}
+          >
+            <Box>
+              <Typography variant="overline" sx={{ opacity: 0.8, letterSpacing: 1 }}>
+                Total Students
+              </Typography>
+              <Typography variant="h3" fontWeight={800} sx={{ mt: 1 }}>
+                {total.toLocaleString()}
+              </Typography>
+            </Box>
+            <Typography variant="body2" sx={{ opacity: 0.8, mt: 2 }}>
+              Registered in the system
             </Typography>
           </Paper>
         </Grid>
+
         <Grid size={{ xs: 12, md: 4 }}>
-          <Paper sx={{ p: 2, borderRadius: 3 }}>
-            <Typography variant="overline" color="text.secondary">
-              On This Page
-            </Typography>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 3,
+              borderRadius: 4,
+              height: "100%",
+              bgcolor: "white",
+              border: "1px solid #E0E0E0",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+            }}
+          >
             <Box
               sx={{
                 display: "flex",
                 alignItems: "center",
-                gap: 1,
-                flexWrap: "wrap",
+                justifyContent: "space-between",
+                mb: 2,
               }}
             >
-              <Typography variant="h5" fontWeight={800}>
-                {students.length.toLocaleString()}
+              <Typography variant="subtitle1" fontWeight={700} color="text.secondary">
+                Active Status
               </Typography>
               <Chip
-                label={`Active: ${filteredCounts.active}`}
+                label="Live Stats"
+                size="small"
                 color="success"
-                size="small"
+                variant="outlined"
               />
-              <Chip
-                label={`Inactive: ${filteredCounts.inactive}`}
-                size="small"
-              />
+            </Box>
+            <Box sx={{ display: "flex", gap: 3 }}>
+              <Box>
+                <Typography variant="h4" fontWeight={700} color="text.primary">
+                  {filteredCounts.active}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Active
+                </Typography>
+              </Box>
+              <Divider orientation="vertical" flexItem />
+              <Box>
+                <Typography variant="h4" fontWeight={700} color="text.secondary">
+                  {filteredCounts.inactive}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Inactive
+                </Typography>
+              </Box>
             </Box>
           </Paper>
         </Grid>
+
         <Grid size={{ xs: 12, md: 4 }}>
-          <Paper sx={{ p: 2, borderRadius: 3 }}>
-            <Typography variant="overline" color="text.secondary">
-              Quick Actions
-            </Typography>
-            <Typography color="text.secondary">
-              Open a student to manage fees, attendance, and timetable.
-            </Typography>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 3,
+              borderRadius: 4,
+              height: "100%",
+              background: "linear-gradient(135deg, #FF9800 0%, #F57C00 100%)",
+              color: "white",
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+              boxShadow: "0px 10px 20px rgba(255, 152, 0, 0.2)",
+            }}
+          >
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                Need Help?
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                Double-click any student row to view details, fees, and attendance.
+              </Typography>
+            </Box>
           </Paper>
         </Grid>
       </Grid>
 
-      <Paper sx={{ p: 2, borderRadius: 3, mb: 2 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid size={{ xs: 12, md: 4 }}>
+      {/* Actions & Filters Container */}
+      <Paper
+        sx={{
+          borderRadius: 4,
+          overflow: "hidden",
+          border: "1px solid #E0E0E0",
+          boxShadow: "0px 4px 20px rgba(0,0,0,0.05)",
+        }}
+      >
+        {/* Toolbar */}
+        <Box
+          sx={{
+            p: 2,
+            borderBottom: "1px solid #F0F0F0",
+            bgcolor: "#FAFAFA",
+            display: "flex",
+            gap: 2,
+            alignItems: "center",
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+          }}
+        >
+          {/* Search */}
+          <Box sx={{ flexGrow: 1, maxWidth: 400 }}>
             <TextField
               fullWidth
               size="small"
-              label="Search"
+              placeholder="Search by name, ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Name or admission no"
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <Search fontSize="small" />
+                    <Search color="action" />
                   </InputAdornment>
                 ),
+                sx: { bgcolor: "white", borderRadius: 2 },
               }}
             />
-          </Grid>
-          <Grid size={{ xs: 12, md: 2 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Class</InputLabel>
-              <Select
-                value={classId}
-                label="Class"
-                onChange={(e) => setClassId(e.target.value)}
-              >
-                <MenuItem value="">All</MenuItem>
-                {classes.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid size={{ xs: 12, md: 2 }}>
-            <FormControl fullWidth size="small" disabled={!classId}>
-              <InputLabel>Section</InputLabel>
-              <Select
-                value={sectionId}
-                label="Section"
-                onChange={(e) => setSectionId(e.target.value)}
-              >
-                <MenuItem value="">All</MenuItem>
-                {sections.map((s) => (
-                  <MenuItem key={s.id} value={s.id}>
-                    {s.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid size={{ xs: 12, md: 2 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Status</InputLabel>
-              <Select
-                value={status}
-                label="Status"
-                onChange={(e) => setStatus(e.target.value)}
-              >
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value="active">Active</MenuItem>
-                <MenuItem value="inactive">Inactive</MenuItem>
-                <MenuItem value="suspended">Suspended</MenuItem>
-                <MenuItem value="alumni">Alumni</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid size={{ xs: 12, md: 2 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Gender</InputLabel>
-              <Select
-                value={gender}
-                label="Gender"
-                onChange={(e) => setGender(e.target.value)}
-              >
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value="male">Male</MenuItem>
-                <MenuItem value="female">Female</MenuItem>
-                <MenuItem value="other">Other</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-        </Grid>
-      </Paper>
+          </Box>
 
-      <Paper sx={{ borderRadius: 3, overflow: "hidden" }}>
+          {/* Action Buttons */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            {/* Hidden Input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleImportCsv(f);
+              }}
+            />
+
+            <Tooltip title="Bulk Import">
+              <IconButton
+                size="small"
+                onClick={() => fileInputRef.current?.click()}
+                sx={{ bgcolor: "white", border: "1px solid #E0E0E0" }}
+              >
+                <UploadFile fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Export CSV">
+              <IconButton
+                size="small"
+                onClick={handleExportCsv}
+                sx={{ bgcolor: "white", border: "1px solid #E0E0E0" }}
+              >
+                <Download fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Refresh List">
+              <IconButton
+                size="small"
+                onClick={() => loadStudents()}
+                disabled={loading}
+                sx={{ bgcolor: "white", border: "1px solid #E0E0E0" }}
+              >
+                <Refresh fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={openCreateDialog}
+              sx={{ borderRadius: 2, px: 3, fontWeight: 700, textTransform: "none" }}
+            >
+              Add Student
+            </Button>
+          </Box>
+        </Box>
+
+        {/* Filters Row */}
+        <Box
+          sx={{
+            p: 2,
+            display: "flex",
+            gap: 2,
+            flexWrap: "wrap",
+            bgcolor: "white",
+            alignItems: "center",
+          }}
+        >
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Class</InputLabel>
+            <Select
+              value={classId}
+              label="Class"
+              onChange={(e) => setClassId(e.target.value)}
+            >
+              <MenuItem value="">All Classes</MenuItem>
+              {classes.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" sx={{ minWidth: 150 }} disabled={!classId}>
+            <InputLabel>Section</InputLabel>
+            <Select
+              value={sectionId}
+              label="Section"
+              onChange={(e) => setSectionId(e.target.value)}
+            >
+              <MenuItem value="">All Sections</MenuItem>
+              {sections.map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Status</InputLabel>
+            <Select
+              value={status}
+              label="Status"
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              <MenuItem value="">All Statuses</MenuItem>
+              <MenuItem value="active">Active</MenuItem>
+              <MenuItem value="inactive">Inactive</MenuItem>
+              <MenuItem value="suspended">Suspended</MenuItem>
+              <MenuItem value="alumni">Alumni</MenuItem>
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Gender</InputLabel>
+            <Select
+              value={gender}
+              label="Gender"
+              onChange={(e) => setGender(e.target.value)}
+            >
+              <MenuItem value="">All Genders</MenuItem>
+              <MenuItem value="male">Male</MenuItem>
+              <MenuItem value="female">Female</MenuItem>
+              <MenuItem value="other">Other</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+
+        {/* Table */}
         {loading ? (
-          <Box sx={{ p: 4, display: "flex", justifyContent: "center" }}>
+          <Box sx={{ p: 6, display: "flex", justifyContent: "center" }}>
             <CircularProgress />
           </Box>
         ) : (
           <>
-            <TableContainer>
+            <TableContainer sx={{ maxHeight: 600 }}>
               <Table stickyHeader>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Admission No</TableCell>
-                    <TableCell>Student</TableCell>
-                    <TableCell>Gender</TableCell>
-                    <TableCell>DOB</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell align="right">Actions</TableCell>
+                    <TableCell sx={{ fontWeight: 700, bgcolor: "#F8F9FA" }}>
+                      ID / Adm No
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700, bgcolor: "#F8F9FA" }}>
+                      Student Name
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700, bgcolor: "#F8F9FA" }}>
+                      Gender
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700, bgcolor: "#F8F9FA" }}>
+                      Date of Birth
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700, bgcolor: "#F8F9FA" }}>
+                      Status
+                    </TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{ fontWeight: 700, bgcolor: "#F8F9FA" }}
+                    >
+                      Actions
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1163,16 +1276,49 @@ export default function StudentsPage() {
                       key={row.id}
                       hover
                       onDoubleClick={() => openDrawer(row.id)}
-                      sx={{ cursor: "pointer" }}
+                      sx={{
+                        cursor: "pointer",
+                        "&:last-child td, &:last-child th": { border: 0 },
+                        transition: "background-color 0.2s",
+                        "&:hover": { bgcolor: "#F5F5F5" },
+                      }}
                     >
-                      <TableCell>{row.admission_no || "-"}</TableCell>
                       <TableCell>
-                        <Typography fontWeight={700}>
-                          {formatStudentName(row) || "-"}
+                        <Typography
+                          variant="body2"
+                          fontWeight={600}
+                          color="primary"
+                        >
+                          {row.admission_no || "N/A"}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {row.id}
+                        <Typography variant="caption" color="text.secondary">
+                          #{row.id.slice(0, 8)}...
                         </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                          {/* Avatar Placeholder */}
+                          <Box
+                            sx={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: "50%",
+                              bgcolor: "primary.light",
+                              color: "primary.main",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 700,
+                              fontSize: "0.8rem",
+                            }}
+                          >
+                            {row.first_name?.[0]}
+                            {row.last_name?.[0]}
+                          </Box>
+                          <Typography variant="body2" fontWeight={600}>
+                            {formatStudentName(row)}
+                          </Typography>
+                        </Box>
                       </TableCell>
                       <TableCell sx={{ textTransform: "capitalize" }}>
                         {row.gender || "-"}
@@ -1183,55 +1329,59 @@ export default function StudentsPage() {
                           label={(row.status || "-").toUpperCase()}
                           color={statusChipColor(row.status || "")}
                           size="small"
+                          sx={{ fontWeight: 600, borderRadius: 1 }}
                         />
                       </TableCell>
                       <TableCell align="right">
-                        <Tooltip title="More">
-                          <IconButton
-                            size="small"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActionsAnchor(e.currentTarget);
-                              setActionsStudent(row);
-                            }}
-                          >
-                            <MoreVert fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActionsAnchor(e.currentTarget);
+                            setActionsStudent(row);
+                          }}
+                        >
+                          <MoreVert fontSize="small" />
+                        </IconButton>
                       </TableCell>
                     </TableRow>
                   ))}
                   {students.length === 0 && (
                     <TableRow>
-                      <TableCell
-                        colSpan={6}
-                        sx={{ py: 6, textAlign: "center" }}
-                      >
-                        <Typography fontWeight={700}>
-                          No students found
-                        </Typography>
-                        <Typography color="text.secondary">
-                          Try adjusting filters or import students in bulk.
-                        </Typography>
+                      <TableCell colSpan={6} sx={{ py: 8, textAlign: "center" }}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: 1,
+                            opacity: 0.6,
+                          }}
+                        >
+                          <Search sx={{ fontSize: 48 }} />
+                          <Typography variant="h6">No students found</Typography>
+                          <Typography variant="body2">
+                            Try adjusting your filters or search terms.
+                          </Typography>
+                        </Box>
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
             </TableContainer>
+            <Divider />
             <TablePagination
+              rowsPerPageOptions={[10, 20, 50, 100]}
               component="div"
               count={total}
-              page={page}
-              onPageChange={(_e, next) => {
-                setPage(next);
-              }}
               rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(_e, newPage) => setPage(newPage)}
               onRowsPerPageChange={(e) => {
-                const next = parseInt(e.target.value, 10);
-                setRowsPerPage(next);
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
               }}
-              rowsPerPageOptions={[10, 20, 50, 100]}
             />
           </>
         )}
