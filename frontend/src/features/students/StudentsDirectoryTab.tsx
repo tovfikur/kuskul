@@ -1058,11 +1058,14 @@ export default function StudentsPage() {
             }}
           >
             <Box>
-              <Typography variant="h6" fontWeight={700}>
-                Need Help?
+              <Typography variant="overline" sx={{ opacity: 0.8, letterSpacing: 1 }}>
+                Academics
               </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                Double-click any student row to view details, fees, and attendance.
+              <Typography variant="h3" fontWeight={800} sx={{ mt: 1 }}>
+                {classes.length}
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.9, mt: 1 }}>
+                Active classes
               </Typography>
             </Box>
           </Paper>
@@ -1275,7 +1278,7 @@ export default function StudentsPage() {
                     <TableRow
                       key={row.id}
                       hover
-                      onDoubleClick={() => openDrawer(row.id)}
+                      onClick={() => openDrawer(row.id)}
                       sx={{
                         cursor: "pointer",
                         "&:last-child td, &:last-child th": { border: 0 },
