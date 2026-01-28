@@ -102,6 +102,8 @@ class StaffContractBase(BaseModel):
     end_date: Optional[datetime] = None
     salary: Decimal = Field(..., ge=0)
     salary_currency: str = Field("BDT", max_length=10)
+    allowances: dict = Field(default_factory=dict)
+    deductions: dict = Field(default_factory=dict)
     working_hours_per_week: int = Field(40, ge=1, le=168)
     contract_document_url: Optional[str] = Field(None, max_length=500)
     terms_and_conditions: Optional[str] = None
@@ -120,6 +122,8 @@ class StaffContractUpdate(BaseModel):
     end_date: Optional[datetime] = None
     salary: Optional[Decimal] = Field(None, ge=0)
     salary_currency: Optional[str] = Field(None, max_length=10)
+    allowances: Optional[dict] = None
+    deductions: Optional[dict] = None
     working_hours_per_week: Optional[int] = Field(None, ge=1, le=168)
     contract_document_url: Optional[str] = Field(None, max_length=500)
     terms_and_conditions: Optional[str] = None

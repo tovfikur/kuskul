@@ -101,6 +101,18 @@ export function PayrollTab() {
     }
   }, [selectedCycleId]);
 
+  useEffect(() => {
+    const match = cycles.find(
+      (c: PayrollCycle) =>
+        Number(c.month) === Number(selectedMonth) &&
+        Number(c.year) === Number(selectedYear),
+    );
+    const nextId = match ? match.id : "";
+    if (nextId !== selectedCycleId) {
+      setSelectedCycleId(nextId);
+    }
+  }, [cycles, selectedMonth, selectedYear, selectedCycleId]);
+
   const loadStaff = async () => {
     try {
       const res = await listStaff({ limit: 1000, status: "active" });
@@ -156,8 +168,14 @@ export function PayrollTab() {
         setCurrentCycle((cycleRes as any).data);
       }
 
-      const payslipsRes = await getCyclePayslips(id, { limit: 100 });
-      setPayslips((payslipsRes as any).data?.items || []);
+      const payslipsRes = await getCyclePayslips(id, { limit: 500 });
+      if ((payslipsRes as any).ok) {
+        setPayslips((payslipsRes as any).data?.items || []);
+      } else {
+        setError(
+          (payslipsRes as any).data?.detail || "Failed to load payslips",
+        );
+      }
     } catch (err) {
       console.error("Failed to load cycle details", err);
     }
@@ -320,6 +338,16 @@ export function PayrollTab() {
     }).format(amount);
   };
 
+  const updateDeduction = (label: string, value: number) => {
+    setEditData({
+      ...editData,
+      deductions: {
+        ...(editData.deductions || {}),
+        [label]: value,
+      },
+    });
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "draft":
@@ -342,6 +370,11 @@ export function PayrollTab() {
       Number(c.month) === Number(selectedMonth) &&
       Number(c.year) === Number(selectedYear),
   );
+  const canRepairPayslips =
+    !!currentCycle &&
+    (currentCycle.status === "completed" ||
+      currentCycle.status === "approved") &&
+    (currentCycle.payslip_count || 0) === 0;
 
   const enrichedPayslips = useMemo(() => {
     return payslips.map((p) => {
@@ -635,6 +668,25 @@ export function PayrollTab() {
                 </Button>
               )}
 
+              {canRepairPayslips && (
+                <Button
+                  variant="contained"
+                  fullWidth
+                  startIcon={<PlayArrow />}
+                  onClick={handleProcessCycle}
+                  disabled={processing}
+                  sx={{
+                    py: 1.5,
+                    background:
+                      "linear-gradient(90deg, #43a047 0%, #66bb6a 100%)",
+                    fontWeight: 600,
+                    boxShadow: "0 4px 14px rgba(67, 160, 71, 0.4)",
+                  }}
+                >
+                  Generate Payslips
+                </Button>
+              )}
+
               <Button
                 variant="outlined"
                 fullWidth
@@ -830,11 +882,29 @@ export function PayrollTab() {
                       <Tooltip title="View Details">
                         <IconButton
                           size="small"
-                          onClick={() => handleViewDetails(payslip)}
+                          onClick={() => {
+                            handleViewDetails(payslip);
+                            setEditMode(false);
+                          }}
                         >
                           <Visibility fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                      {currentCycle?.status !== "completed" &&
+                        currentCycle?.status !== "approved" &&
+                        payslip.status !== "paid" && (
+                          <Tooltip title="Edit">
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                handleViewDetails(payslip);
+                                setEditMode(true);
+                              }}
+                            >
+                              <Edit fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       <Tooltip title="Download PDF">
                         <IconButton
                           size="small"
@@ -949,7 +1019,6 @@ export function PayrollTab() {
                 </Grid>
               </Grid>
 
-              {/* Editable Fields */}
               {editMode ? (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <TextField
@@ -969,6 +1038,81 @@ export function PayrollTab() {
                       ),
                     }}
                   />
+
+                  <TextField
+                    label="Attendance/Leave Deduction"
+                    type="number"
+                    fullWidth
+                    value={
+                      editData.deductions?.["Attendance/Leave Deduction"] ?? ""
+                    }
+                    onChange={(e) =>
+                      updateDeduction(
+                        "Attendance/Leave Deduction",
+                        Number(e.target.value),
+                      )
+                    }
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">₹</InputAdornment>
+                      ),
+                    }}
+                  />
+
+                  <Typography variant="subtitle2" sx={{ mt: 1 }}>
+                    Allowances
+                  </Typography>
+                  {Object.entries(editData.allowances || {}).map(
+                    ([key, value]: any) => (
+                      <TextField
+                        key={key}
+                        label={key}
+                        type="number"
+                        size="small"
+                        fullWidth
+                        value={value}
+                        onChange={(e) =>
+                          setEditData({
+                            ...editData,
+                            allowances: {
+                              ...editData.allowances,
+                              [key]: Number(e.target.value),
+                            },
+                          })
+                        }
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">₹</InputAdornment>
+                          ),
+                        }}
+                      />
+                    ),
+                  )}
+
+                  <Typography variant="subtitle2" sx={{ mt: 1 }}>
+                    Deductions
+                  </Typography>
+                  {Object.entries(editData.deductions || {})
+                    .filter(([key]) => key !== "Attendance/Leave Deduction")
+                    .map(([key, value]: any) => (
+                      <TextField
+                        key={key}
+                        label={key}
+                        type="number"
+                        size="small"
+                        fullWidth
+                        value={value}
+                        onChange={(e) =>
+                          updateDeduction(key, Number(e.target.value))
+                        }
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">₹</InputAdornment>
+                          ),
+                        }}
+                      />
+                    ))}
+
                   <TextField
                     label="Working Days"
                     type="number"
@@ -1043,6 +1187,21 @@ export function PayrollTab() {
                       )}
                   </Box>
                   <Grid container spacing={2}>
+                    {selectedPayslip.notes && (
+                      <Grid size={{ xs: 12 }}>
+                        <Alert severity="warning" sx={{ mb: 1 }}>
+                          <Typography variant="subtitle2" fontWeight={700}>
+                            Validation Warnings:
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{ whiteSpace: "pre-line" }}
+                          >
+                            {selectedPayslip.notes}
+                          </Typography>
+                        </Alert>
+                      </Grid>
+                    )}
                     <Grid size={{ xs: 6 }}>
                       <Typography variant="caption" color="text.secondary">
                         Basic Salary
@@ -1059,6 +1218,91 @@ export function PayrollTab() {
                         {selectedPayslip.payment_method}
                       </Typography>
                     </Grid>
+
+                    <Grid size={{ xs: 12 }}>
+                      <Typography
+                        variant="subtitle2"
+                        color="success.main"
+                        gutterBottom
+                      >
+                        Allowances
+                      </Typography>
+                      {Object.keys(selectedPayslip.allowances || {}).length >
+                      0 ? (
+                        <Grid container spacing={1}>
+                          {Object.entries(selectedPayslip.allowances).map(
+                            ([key, value]: any) => (
+                              <Grid key={key} size={{ xs: 6 }}>
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    borderBottom: "1px dashed #e0e0e0",
+                                    pb: 0.5,
+                                  }}
+                                >
+                                  <Typography variant="body2">{key}</Typography>
+                                  <Typography variant="body2" fontWeight={500}>
+                                    {formatCurrency(Number(value))}
+                                  </Typography>
+                                </Box>
+                              </Grid>
+                            ),
+                          )}
+                        </Grid>
+                      ) : (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          fontStyle="italic"
+                        >
+                          No allowances
+                        </Typography>
+                      )}
+                    </Grid>
+
+                    <Grid size={{ xs: 12 }}>
+                      <Typography
+                        variant="subtitle2"
+                        color="error.main"
+                        gutterBottom
+                      >
+                        Deductions
+                      </Typography>
+                      {Object.keys(selectedPayslip.deductions || {}).length >
+                      0 ? (
+                        <Grid container spacing={1}>
+                          {Object.entries(selectedPayslip.deductions).map(
+                            ([key, value]: any) => (
+                              <Grid key={key} size={{ xs: 6 }}>
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    borderBottom: "1px dashed #e0e0e0",
+                                    pb: 0.5,
+                                  }}
+                                >
+                                  <Typography variant="body2">{key}</Typography>
+                                  <Typography variant="body2" fontWeight={500}>
+                                    {formatCurrency(Number(value))}
+                                  </Typography>
+                                </Box>
+                              </Grid>
+                            ),
+                          )}
+                        </Grid>
+                      ) : (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          fontStyle="italic"
+                        >
+                          No deductions
+                        </Typography>
+                      )}
+                    </Grid>
+
                     <Grid size={{ xs: 4 }}>
                       <Typography variant="caption" color="text.secondary">
                         Working Days

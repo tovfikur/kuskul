@@ -5,7 +5,7 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSON, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -59,6 +59,8 @@ class StaffContract(Base):
     end_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)  # null for permanent
     salary: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     salary_currency: Mapped[str] = mapped_column(String(10), nullable=False, default="BDT")
+    allowances: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    deductions: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     working_hours_per_week: Mapped[int] = mapped_column(Integer, nullable=False, default=40)
     contract_document_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     terms_and_conditions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

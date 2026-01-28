@@ -432,6 +432,8 @@ def _contract_out(c: StaffContract) -> StaffContractOut:
         end_date=c.end_date,
         salary=c.salary,
         salary_currency=c.salary_currency,
+        allowances=c.allowances,
+        deductions=c.deductions,
         working_hours_per_week=c.working_hours_per_week,
         contract_document_url=c.contract_document_url,
         terms_and_conditions=c.terms_and_conditions,
@@ -479,6 +481,23 @@ def create_staff_contract(
     if payload.end_date and payload.end_date < payload.start_date:
         raise problem(status_code=400, title="Bad Request", detail="end_date must be >= start_date")
     
+    # Validate salary against designation range
+    if staff.designation_id:
+        desig = db.get(Designation, staff.designation_id)
+        if desig:
+            if desig.min_salary is not None and payload.salary < desig.min_salary:
+                raise problem(
+                    status_code=400, 
+                    title="Bad Request", 
+                    detail=f"Salary {payload.salary} is below minimum {desig.min_salary} for designation {desig.title}"
+                )
+            if desig.max_salary is not None and payload.salary > desig.max_salary:
+                raise problem(
+                    status_code=400, 
+                    title="Bad Request", 
+                    detail=f"Salary {payload.salary} is above maximum {desig.max_salary} for designation {desig.title}"
+                )
+
     now = datetime.now(timezone.utc)
     contract = StaffContract(
         staff_id=staff_id,
@@ -487,6 +506,8 @@ def create_staff_contract(
         end_date=payload.end_date,
         salary=payload.salary,
         salary_currency=payload.salary_currency,
+        allowances=payload.allowances,
+        deductions=payload.deductions,
         working_hours_per_week=payload.working_hours_per_week,
         contract_document_url=payload.contract_document_url,
         terms_and_conditions=payload.terms_and_conditions,
@@ -543,6 +564,25 @@ def update_staff_contract(
     if end and end < start:
         raise problem(status_code=400, title="Bad Request", detail="end_date must be >= start_date")
     
+    # Validate salary against designation range if salary is being updated
+    if "salary" in data:
+        new_salary = data["salary"]
+        if staff.designation_id:
+            desig = db.get(Designation, staff.designation_id)
+            if desig:
+                if desig.min_salary is not None and new_salary < desig.min_salary:
+                    raise problem(
+                        status_code=400, 
+                        title="Bad Request", 
+                        detail=f"Salary {new_salary} is below minimum {desig.min_salary} for designation {desig.title}"
+                    )
+                if desig.max_salary is not None and new_salary > desig.max_salary:
+                    raise problem(
+                        status_code=400, 
+                        title="Bad Request", 
+                        detail=f"Salary {new_salary} is above maximum {desig.max_salary} for designation {desig.title}"
+                    )
+
     for k, v in data.items():
         setattr(contract, k, v)
     

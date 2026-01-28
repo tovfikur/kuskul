@@ -30,6 +30,10 @@ import {
   Assessment,
   TrendingUp,
   Person,
+  FilterAlt,
+  School,
+  Groups,
+  RestartAlt,
 } from "@mui/icons-material";
 import { getStudents, type Student } from "../../../api/people";
 import IndividualReportTab from "./IndividualReportTab";
@@ -140,6 +144,13 @@ export default function ReportsTab() {
     { label: "Active", value: stats.active, color: "success.main" },
     { label: "Inactive", value: stats.inactive, color: "error.main" },
   ];
+
+  function resetFilters() {
+    setSelectedClass("");
+    setSelectedSection("");
+    setSelectedStatus("active");
+    setSelectedGender("");
+  }
 
   function exportToCSV() {
     if (students.length === 0) {
@@ -255,27 +266,62 @@ export default function ReportsTab() {
       <Paper
         elevation={0}
         sx={{
-          p: 3,
+          p: 4,
           mb: 4,
-          borderRadius: 3,
+          borderRadius: 4,
           border: "1px solid",
           borderColor: "divider",
+          background: "linear-gradient(to right bottom, #ffffff, #f8f9fa)",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
         }}
       >
-        <Typography variant="h6" fontWeight={700} sx={{ mb: 3 }}>
-          Filter Criteria
-        </Typography>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          sx={{ mb: 3 }}
+        >
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <FilterAlt sx={{ color: "primary.main", fontSize: 28 }} />
+            <Typography variant="h6" fontWeight={700} color="text.primary">
+              Filter Criteria
+            </Typography>
+          </Stack>
+
+          <Button
+            variant="text"
+            startIcon={<RestartAlt />}
+            onClick={resetFilters}
+            color="inherit"
+            sx={{
+              borderRadius: 2,
+              textTransform: "none",
+              color: "text.secondary",
+              "&:hover": { color: "error.main", bgcolor: "error.lighter" },
+            }}
+          >
+            Reset Filters
+          </Button>
+        </Stack>
+
         <Grid container spacing={3}>
-          <Grid container item xs={12} sm={6} md={3}>
-            <FormControl fullWidth>
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl fullWidth variant="outlined">
               <InputLabel>Class</InputLabel>
               <Select
                 value={selectedClass}
                 label="Class"
                 onChange={(e) => setSelectedClass(e.target.value)}
-                sx={{ borderRadius: 2 }}
+                startAdornment={
+                  <School
+                    sx={{ color: "action.active", mr: 1, fontSize: 20 }}
+                  />
+                }
+                sx={{ borderRadius: 2.5 }}
               >
-                <MenuItem value="">All Classes</MenuItem>
+                <MenuItem value="">
+                  <em>All Classes</em>
+                </MenuItem>
                 {classes.map((c) => (
                   <MenuItem key={c.id} value={c.id}>
                     {c.name}
@@ -284,16 +330,24 @@ export default function ReportsTab() {
               </Select>
             </FormControl>
           </Grid>
-          <Grid container item xs={12} sm={6} md={3}>
+
+          <Grid item xs={12} sm={6} md={3}>
             <FormControl fullWidth disabled={!selectedClass}>
               <InputLabel>Section</InputLabel>
               <Select
                 value={selectedSection}
                 label="Section"
                 onChange={(e) => setSelectedSection(e.target.value)}
-                sx={{ borderRadius: 2 }}
+                startAdornment={
+                  <Groups
+                    sx={{ color: "action.active", mr: 1, fontSize: 20 }}
+                  />
+                }
+                sx={{ borderRadius: 2.5 }}
               >
-                <MenuItem value="">All Sections</MenuItem>
+                <MenuItem value="">
+                  <em>All Sections</em>
+                </MenuItem>
                 {sections.map((s) => (
                   <MenuItem key={s.id} value={s.id}>
                     {s.name}
@@ -302,16 +356,22 @@ export default function ReportsTab() {
               </Select>
             </FormControl>
           </Grid>
-          <Grid container item xs={12} sm={6} md={3}>
+
+          <Grid item xs={12} sm={6} md={3}>
             <FormControl fullWidth>
               <InputLabel>Status</InputLabel>
               <Select
                 value={selectedStatus}
                 label="Status"
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                sx={{ borderRadius: 2 }}
+                startAdornment={
+                  <TrendingUp
+                    sx={{ color: "action.active", mr: 1, fontSize: 20 }}
+                  />
+                }
+                sx={{ borderRadius: 2.5 }}
               >
-                <MenuItem value="">All</MenuItem>
+                <MenuItem value="">All Statuses</MenuItem>
                 <MenuItem value="active">Active</MenuItem>
                 <MenuItem value="inactive">Inactive</MenuItem>
                 <MenuItem value="suspended">Suspended</MenuItem>
@@ -319,16 +379,22 @@ export default function ReportsTab() {
               </Select>
             </FormControl>
           </Grid>
-          <Grid container item xs={12} sm={6} md={3}>
+
+          <Grid item xs={12} sm={6} md={3}>
             <FormControl fullWidth>
               <InputLabel>Gender</InputLabel>
               <Select
                 value={selectedGender}
                 label="Gender"
                 onChange={(e) => setSelectedGender(e.target.value)}
-                sx={{ borderRadius: 2 }}
+                startAdornment={
+                  <Person
+                    sx={{ color: "action.active", mr: 1, fontSize: 20 }}
+                  />
+                }
+                sx={{ borderRadius: 2.5 }}
               >
-                <MenuItem value="">All</MenuItem>
+                <MenuItem value="">All Genders</MenuItem>
                 <MenuItem value="male">Male</MenuItem>
                 <MenuItem value="female">Female</MenuItem>
                 <MenuItem value="other">Other</MenuItem>
@@ -337,25 +403,38 @@ export default function ReportsTab() {
           </Grid>
         </Grid>
 
-        <Divider sx={{ my: 3 }} />
+        <Divider sx={{ my: 3, borderStyle: "dashed" }} />
 
-        <Stack direction="row" spacing={2}>
+        <Stack direction="row" spacing={2} justifyContent="flex-end">
+          <Button
+            variant="outlined"
+            startIcon={<PictureAsPdf />}
+            disabled
+            sx={{
+              borderRadius: 2.5,
+              px: 3,
+              py: 1,
+              textTransform: "none",
+              fontWeight: 600,
+            }}
+          >
+            Export PDF
+          </Button>
           <Button
             variant="contained"
             startIcon={<Download />}
             onClick={exportToCSV}
             disabled={loading || students.length === 0}
-            sx={{ borderRadius: 2, px: 3 }}
+            sx={{
+              borderRadius: 2.5,
+              px: 3,
+              py: 1,
+              textTransform: "none",
+              fontWeight: 600,
+              boxShadow: "0 8px 16px rgba(0,0,0,0.1)",
+            }}
           >
             Export CSV
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<PictureAsPdf />}
-            disabled
-            sx={{ borderRadius: 2, px: 3 }}
-          >
-            Export PDF (Coming Soon)
           </Button>
         </Stack>
       </Paper>

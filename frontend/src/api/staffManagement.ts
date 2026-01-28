@@ -163,9 +163,7 @@ export interface LeaveTypeUpdate {
   is_active?: boolean;
 }
 
-export async function listLeaveTypes(params?: {
-  is_active?: boolean;
-}) {
+export async function listLeaveTypes(params?: { is_active?: boolean }) {
   return safeRequest({ method: "GET", url: "/staff/leave/types", params });
 }
 
@@ -200,7 +198,7 @@ export interface Staff {
   date_of_joining?: string;
   status: string;
   profile_photo_url?: string;
-  
+
   // Personal
   gender?: string;
   date_of_birth?: string;
@@ -250,7 +248,7 @@ export interface StaffCreate {
   designation_id?: string;
   date_of_joining?: string;
   status?: string;
-  
+
   gender?: string;
   date_of_birth?: string;
   blood_group?: string;
@@ -292,7 +290,7 @@ export interface StaffUpdate {
   designation_id?: string;
   date_of_joining?: string;
   status?: string;
-  
+
   gender?: string;
   date_of_birth?: string;
   blood_group?: string;
@@ -382,12 +380,26 @@ export async function markStaffAttendance(data: MarkStaffAttendanceRequest) {
   return safeRequest({ method: "POST", url: "/attendance/staff/mark", data });
 }
 
-export async function staffCheckIn(staff_id: string, method: string = "manual") {
-  return safeRequest({ method: "POST", url: "/attendance/staff/check-in", data: { staff_id, method } });
+export async function staffCheckIn(
+  staff_id: string,
+  method: string = "manual",
+) {
+  return safeRequest({
+    method: "POST",
+    url: "/attendance/staff/check-in",
+    data: { staff_id, method },
+  });
 }
 
-export async function staffCheckOut(staff_id: string, method: string = "manual") {
-  return safeRequest({ method: "POST", url: "/attendance/staff/check-out", data: { staff_id, method } });
+export async function staffCheckOut(
+  staff_id: string,
+  method: string = "manual",
+) {
+  return safeRequest({
+    method: "POST",
+    url: "/attendance/staff/check-out",
+    data: { staff_id, method },
+  });
 }
 
 // ============================================================================
@@ -409,11 +421,19 @@ export interface LeaveBalance {
 }
 
 export async function getLeaveBalanceSummary(year?: number) {
-  return safeRequest({ method: "GET", url: "/staff/leave/balances/summary", params: { year } });
+  return safeRequest({
+    method: "GET",
+    url: "/staff/leave/balances/summary",
+    params: { year },
+  });
 }
 
 export async function getStaffLeaveBalances(staff_id: string, year?: number) {
-  return safeRequest({ method: "GET", url: `/staff/leave/balances/staff/${staff_id}`, params: { year } });
+  return safeRequest({
+    method: "GET",
+    url: `/staff/leave/balances/staff/${staff_id}`,
+    params: { year },
+  });
 }
 
 // ============================================================================
@@ -435,7 +455,7 @@ export interface StaffLeaveRequest {
   cancelled_at?: string;
   created_at: string;
   updated_at?: string;
-  
+
   // Extra details joined in frontend or backend
   staff_name?: string;
   leave_type_name?: string;
@@ -467,11 +487,19 @@ export async function createLeaveRequest(data: StaffLeaveRequestCreate) {
 }
 
 export async function approveLeaveRequest(id: string) {
-  return safeRequest({ method: "PATCH", url: `/staff/leave/requests/${id}/approve`, data: {} });
+  return safeRequest({
+    method: "PATCH",
+    url: `/staff/leave/requests/${id}/approve`,
+    data: {},
+  });
 }
 
 export async function rejectLeaveRequest(id: string, rejection_reason: string) {
-  return safeRequest({ method: "PATCH", url: `/staff/leave/requests/${id}/reject`, data: { rejection_reason } });
+  return safeRequest({
+    method: "PATCH",
+    url: `/staff/leave/requests/${id}/reject`,
+    data: { rejection_reason },
+  });
 }
 
 export async function cancelLeaveRequest(id: string) {
@@ -566,26 +594,50 @@ export async function getPayrollCycle(id: string) {
   return safeRequest({ method: "GET", url: `/staff/payroll/cycles/${id}` });
 }
 
-export async function processPayrollCycle(id: string, payload: { auto_generate_payslips: boolean; include_inactive_staff: boolean }) {
-  return safeRequest({ method: "PATCH", url: `/staff/payroll/cycles/${id}/process`, data: payload });
+export async function processPayrollCycle(
+  id: string,
+  payload: { auto_generate_payslips: boolean; include_inactive_staff: boolean },
+) {
+  return safeRequest({
+    method: "PATCH",
+    url: `/staff/payroll/cycles/${id}/process`,
+    data: payload,
+  });
 }
 
 export async function approvePayrollCycle(id: string) {
-  return safeRequest({ method: "PATCH", url: `/staff/payroll/cycles/${id}/approve` });
+  return safeRequest({
+    method: "PATCH",
+    url: `/staff/payroll/cycles/${id}/approve`,
+  });
 }
 
 export async function completePayrollCycle(id: string) {
-  return safeRequest({ method: "PATCH", url: `/staff/payroll/cycles/${id}/complete` });
+  return safeRequest({
+    method: "PATCH",
+    url: `/staff/payroll/cycles/${id}/complete`,
+  });
 }
 
 // --- Payslip Actions ---
 
-export async function getCyclePayslips(cycleId: string, params?: { page?: number; limit?: number }) {
-  return safeRequest({ method: "GET", url: `/staff/payroll/cycles/${cycleId}/payslips`, params });
+export async function getCyclePayslips(
+  cycleId: string,
+  params?: { page?: number; limit?: number },
+) {
+  return safeRequest({
+    method: "GET",
+    url: `/staff/payroll/cycles/${cycleId}/payslips`,
+    params,
+  });
 }
 
 export async function sendPayslips(cycleId: string, staffIds?: string[]) {
-  return safeRequest({ method: "POST", url: `/staff/payroll/cycles/${cycleId}/send-payslips`, data: { staff_ids: staffIds } });
+  return safeRequest({
+    method: "POST",
+    url: `/staff/payroll/cycles/${cycleId}/send-payslips`,
+    data: { staff_ids: staffIds },
+  });
 }
 
 export async function getPayslip(id: string) {
@@ -593,9 +645,96 @@ export async function getPayslip(id: string) {
 }
 
 export async function updatePayslip(id: string, data: PayslipUpdate) {
-  return safeRequest({ method: "PUT", url: `/staff/payroll/payslips/${id}`, data });
+  return safeRequest({
+    method: "PUT",
+    url: `/staff/payroll/payslips/${id}`,
+    data,
+  });
 }
 
 export async function markPayslipPaid(id: string, data: PayslipMarkPaid) {
-  return safeRequest({ method: "PATCH", url: `/staff/payroll/payslips/${id}/mark-paid`, data });
+  return safeRequest({
+    method: "PATCH",
+    url: `/staff/payroll/payslips/${id}/mark-paid`,
+    data,
+  });
+}
+
+// ============================================================================
+// STAFF CONTRACTS
+// ============================================================================
+
+export interface StaffContract {
+  id: string;
+  staff_id: string;
+  contract_type: string;
+  start_date: string;
+  end_date?: string;
+  salary: number;
+  salary_currency: string;
+  allowances: Record<string, number>;
+  deductions: Record<string, number>;
+  working_hours_per_week: number;
+  contract_document_url?: string;
+  terms_and_conditions?: string;
+  status: string;
+  termination_reason?: string;
+  terminated_at?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface StaffContractCreate {
+  contract_type: string;
+  start_date: string;
+  end_date?: string;
+  salary: number;
+  salary_currency?: string;
+  allowances?: Record<string, number>;
+  deductions?: Record<string, number>;
+  working_hours_per_week?: number;
+  contract_document_url?: string;
+  terms_and_conditions?: string;
+  status?: string;
+}
+
+export interface StaffContractUpdate {
+  contract_type?: string;
+  start_date?: string;
+  end_date?: string;
+  salary?: number;
+  salary_currency?: string;
+  allowances?: Record<string, number>;
+  deductions?: Record<string, number>;
+  working_hours_per_week?: number;
+  contract_document_url?: string;
+  terms_and_conditions?: string;
+  status?: string;
+}
+
+export async function listStaffContracts(staffId: string) {
+  return safeRequest({ method: "GET", url: `/staff/${staffId}/contracts` });
+}
+
+export async function createStaffContract(
+  staffId: string,
+  data: StaffContractCreate,
+) {
+  return safeRequest({
+    method: "POST",
+    url: `/staff/${staffId}/contracts`,
+    data,
+  });
+}
+
+export async function updateStaffContract(
+  staffId: string,
+  contractId: string,
+  data: StaffContractUpdate,
+) {
+  return safeRequest({
+    method: "PUT",
+    url: `/staff/${staffId}/contracts/${contractId}`,
+    data,
+  });
 }

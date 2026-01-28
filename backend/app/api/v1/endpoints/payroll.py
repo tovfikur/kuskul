@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import func, select, extract, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_active_school_id, get_current_user, require_permission
@@ -13,7 +13,9 @@ from app.core.problems import not_found, problem
 from app.db.session import get_db
 from app.models.payroll import PayrollCycle, Payslip
 from app.models.staff import Staff
-from app.models.staff_extended import StaffContract
+from app.models.staff_extended import StaffContract, Designation
+from app.models.staff_leave import StaffLeaveRequest, LeaveType
+from app.models.teacher_assignment import StaffAttendance
 from app.models.user import User
 from app.schemas.payroll import (
     PayrollCycleCreate,
@@ -170,8 +172,10 @@ def process_payroll_cycle(
     if not cycle or cycle.school_id != school_id:
         raise not_found("Payroll cycle not found")
     
-    # Allow regeneration if in draft or processing (generated) stage
-    if cycle.status not in ["draft", "processing"]:
+    payslip_count = db.scalar(
+        select(func.count()).where(Payslip.payroll_cycle_id == cycle_id)
+    ) or 0
+    if cycle.status not in ["draft", "processing"] and payslip_count > 0:
         raise problem(status_code=400, title="Bad Request", detail="Cannot regenerate payslips for approved/completed cycles")
     
     # Get all staff
@@ -187,6 +191,43 @@ def process_payroll_cycle(
     # Determine days in month
     import calendar
     days_in_month = calendar.monthrange(cycle.year, cycle.month)[1]
+    month_start = date(cycle.year, cycle.month, 1)
+    month_end = date(cycle.year, cycle.month, days_in_month)
+
+    # --- PRE-FETCH DATA FOR PERFORMANCE ---
+    
+    # 1. Leave Types (to identify unpaid leaves)
+    leave_types = db.execute(select(LeaveType).where(LeaveType.school_id == school_id)).scalars().all()
+    unpaid_leave_type_ids = {lt.id for lt in leave_types if not lt.is_paid}
+    
+    # 2. Attendance Records for the Month
+    attendance_records = db.execute(
+        select(StaffAttendance).where(
+            extract('month', StaffAttendance.attendance_date) == cycle.month,
+            extract('year', StaffAttendance.attendance_date) == cycle.year
+        )
+    ).scalars().all()
+    
+    attendance_by_staff = {}
+    for rec in attendance_records:
+        if rec.staff_id not in attendance_by_staff:
+            attendance_by_staff[rec.staff_id] = []
+        attendance_by_staff[rec.staff_id].append(rec)
+        
+    # 3. Approved Leave Requests overlapping the Month
+    leave_requests = db.execute(
+        select(StaffLeaveRequest).where(
+            StaffLeaveRequest.status == 'approved',
+            StaffLeaveRequest.start_date <= month_end,
+            StaffLeaveRequest.end_date >= month_start
+        )
+    ).scalars().all()
+    
+    leaves_by_staff = {}
+    for req in leave_requests:
+        if req.staff_id not in leaves_by_staff:
+            leaves_by_staff[req.staff_id] = []
+        leaves_by_staff[req.staff_id].append(req)
     
     if payload.auto_generate_payslips:
         # First, clear existing auto-generated payslips if any (to allow regeneration)
@@ -220,63 +261,91 @@ def process_payroll_cycle(
                 ).order_by(StaffContract.start_date.desc())
             ).scalar_one_or_none()
             
+            # Auto-create contract if missing (Solves 0 staff count issue)
             if not contract:
-                continue
+                contract = StaffContract(
+                    staff_id=staff.id,
+                    contract_type="permanent",
+                    start_date=date.today(),
+                    salary=Decimal(0),
+                    salary_currency="BDT",
+                    allowances={},
+                    deductions={},
+                    working_hours_per_week=40,
+                    status="active",
+                    created_at=now,
+                    updated_at=now
+                )
+                db.add(contract)
+                db.flush() # Get ID and make available
             
             # --- SALARY CALCULATION ENGINE ---
             basic_salary = contract.salary
             
-            # 1. Allowances (Simulated for realism)
-            allowances = {}
-            house_rent = Decimal(0)
-            medical = Decimal(0)
-            transport = Decimal(0)
+            # Validation: Check against designation range
+            validation_notes = []
+            if staff.designation_id:
+                desig = db.get(Designation, staff.designation_id)
+                if desig:
+                    if desig.min_salary is not None and basic_salary < desig.min_salary:
+                        validation_notes.append(f"WARNING: Salary {basic_salary} is below designation minimum {desig.min_salary}")
+                    if desig.max_salary is not None and basic_salary > desig.max_salary:
+                        validation_notes.append(f"WARNING: Salary {basic_salary} is above designation maximum {desig.max_salary}")
 
-            # Different rules based on contract type
-            is_permanent = contract.contract_type.lower() in ["permanent", "full-time", "probation"]
+            if basic_salary == 0:
+                validation_notes.append("WARNING: Basic salary is 0. Please update contract.")
+
+            # 1. Allowances (From Contract)
+            # Ensure values are strings for JSON and Decimals for math
+            allowances = {k: str(v) for k, v in (contract.allowances or {}).items()}
+            total_allowances = sum(Decimal(v) for v in allowances.values())
             
-            if is_permanent:
-                # Full-time staff get standard allowances
-                house_rent = round(basic_salary * Decimal('0.10'), 2)
-                medical = round(basic_salary * Decimal('0.05'), 2)
-                transport = Decimal('1000.00')
-                
-                allowances = {
-                    "House Rent": str(house_rent),
-                    "Medical": str(medical),
-                    "Transport": str(transport)
-                }
-            else:
-                # Part-time/Substitute/Hourly might get just transport or nothing
-                # For now, we give them transport only
-                transport = Decimal('500.00')
-                allowances = {
-                    "Transport": str(transport)
-                }
+            # 2. Attendance & Leave Calculation
+            staff_attendance = attendance_by_staff.get(staff.id, [])
+            staff_leaves = leaves_by_staff.get(staff.id, [])
             
-            total_allowances = house_rent + medical + transport
+            # Count attendance stats
+            present_count = sum(1 for r in staff_attendance if r.status == 'present')
+            late_count = sum(1 for r in staff_attendance if r.status == 'late')
+            half_day_count = sum(1 for r in staff_attendance if r.status == 'half_day')
+            absent_count = sum(1 for r in staff_attendance if r.status == 'absent')
             
-            # 2. Deductions & Attendance
-            days_in_month = calendar.monthrange(cycle.year, cycle.month)[1]
-            working_days = days_in_month
-            present_days = working_days # Assume full attendance
-            leave_days = 0
+            # Count leave stats (overlapping days)
+            paid_leave_days = 0
+            unpaid_leave_days = 0
             
-            # If hourly/substitute, logic would be different (e.g. pay per class)
-            # But we lack that data, so we assume a flat "contract salary" implies expected monthly earnings for now
+            for req in staff_leaves:
+                start = max(req.start_date, month_start)
+                end = min(req.end_date, month_end)
+                days = (end - start).days + 1
+                if days > 0:
+                    if req.leave_type_id in unpaid_leave_type_ids:
+                        unpaid_leave_days += days
+                    else:
+                        paid_leave_days += days
+            
+            # 3. Calculate Deductions (From Contract + Attendance)
+            deductions = {k: str(v) for k, v in (contract.deductions or {}).items()}
+            
+            # Deduct for explicit absence, unpaid leaves, and half-days (0.5 deduction)
+            # Note: We do NOT deduct for "missing records" to avoid zero-pay bugs if attendance not filled
+            deductible_days = absent_count + unpaid_leave_days + (half_day_count * 0.5)
+            
+            daily_rate = basic_salary / Decimal(days_in_month) if days_in_month > 0 else Decimal(0)
+            attendance_deduction = round(daily_rate * Decimal(deductible_days), 2)
+            
+            if attendance_deduction > 0:
+                deductions["Attendance/Leave Deduction"] = str(attendance_deduction)
+            
+            total_deductions = sum(Decimal(v) for v in deductions.values())
             
             gross_salary = basic_salary + total_allowances
-            
-            tax = round(gross_salary * Decimal('0.02'), 2) if gross_salary > 20000 else Decimal(0)
-            provident_fund = round(basic_salary * Decimal('0.05'), 2) if is_permanent else Decimal(0)
-            
-            deductions = {
-                "Tax": str(tax),
-                "Provident Fund": str(provident_fund)
-            }
-            
-            total_deductions = tax + provident_fund
             net_salary = gross_salary - total_deductions
+            
+            # 4. Final Stats
+            working_days = days_in_month
+            total_present_days = present_count + late_count + (half_day_count * 0.5) # Late counts as present for stats
+            total_leave_days = paid_leave_days + unpaid_leave_days
             
             payslip = Payslip(
                 payroll_cycle_id=cycle_id,
@@ -288,10 +357,11 @@ def process_payroll_cycle(
                 total_deductions=total_deductions,
                 net_salary=net_salary,
                 working_days=working_days,
-                present_days=present_days,
-                leave_days=leave_days,
+                present_days=int(total_present_days),
+                leave_days=int(total_leave_days),
                 payment_method="bank_transfer",
                 status="generated",
+                notes="\n".join(validation_notes) if validation_notes else None,
                 created_at=now,
             )
             db.add(payslip)
@@ -342,6 +412,12 @@ def complete_payroll_cycle(
     
     if cycle.status != "approved":
         raise problem(status_code=400, title="Bad Request", detail="Can only complete approved cycles")
+
+    payslip_count = db.scalar(
+        select(func.count()).where(Payslip.payroll_cycle_id == cycle_id)
+    ) or 0
+    if payslip_count == 0:
+        raise problem(status_code=400, title="Bad Request", detail="Cannot complete cycle without payslips")
     
     # Validation: Check if all payslips are paid
     pending_count = db.scalar(
@@ -553,6 +629,10 @@ def update_payslip(
         raise problem(status_code=400, title="Bad Request", detail="Cannot update paid payslips")
     
     data = payload.model_dump(exclude_unset=True)
+    if data.get("allowances") is not None:
+        data["allowances"] = {k: str(v) for k, v in data["allowances"].items()}
+    if data.get("deductions") is not None:
+        data["deductions"] = {k: str(v) for k, v in data["deductions"].items()}
     
     # Recalculate totals if components change
     if any(k in data for k in ["basic_salary", "allowances", "deductions"]):
