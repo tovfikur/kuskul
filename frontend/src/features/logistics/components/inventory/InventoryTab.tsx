@@ -127,7 +127,7 @@ export default function InventoryTab() {
       });
       setItems(result.items);
       setItemsTotal(result.total);
-    } catch (error) {
+    } catch {
       showToast({
         severity: "error",
         message: "Failed to load inventory items",
@@ -146,7 +146,7 @@ export default function InventoryTab() {
         offset: 0,
       });
       setItemsLookup(result.items);
-    } catch (error) {
+    } catch {
       showToast({
         severity: "error",
         message: "Failed to load inventory items",
@@ -165,7 +165,7 @@ export default function InventoryTab() {
         offset: 0,
       });
       setLocationsLookup(result.items);
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to load locations" });
     } finally {
       setLoading(false);
@@ -185,7 +185,7 @@ export default function InventoryTab() {
         offset: 0,
       });
       setLocationsList(result.items);
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to load locations" });
     } finally {
       setLoading(false);
@@ -199,7 +199,7 @@ export default function InventoryTab() {
         location_id: selectedLocation || undefined,
       });
       setStockOnHand(result);
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to load stock on hand" });
     } finally {
       setLoading(false);
@@ -233,7 +233,7 @@ export default function InventoryTab() {
       resetItemForm();
       loadItems();
       loadItemsLookup();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to create item" });
     }
   };
@@ -256,7 +256,7 @@ export default function InventoryTab() {
       resetItemForm();
       loadItems();
       loadItemsLookup();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to update item" });
     }
   };
@@ -276,7 +276,7 @@ export default function InventoryTab() {
       resetLocationForm();
       loadLocationsLookup();
       loadLocationsList();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to create location" });
     }
   };
@@ -298,7 +298,7 @@ export default function InventoryTab() {
       resetLocationForm();
       loadLocationsLookup();
       loadLocationsList();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to update location" });
     }
   };
@@ -316,7 +316,7 @@ export default function InventoryTab() {
       setMovementDialogOpen(false);
       resetMovementForm();
       loadStockOnHand();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to record movement" });
     }
   };
@@ -385,7 +385,7 @@ export default function InventoryTab() {
       setItemToDeactivate(null);
       loadItems();
       loadItemsLookup();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to deactivate item" });
     }
   };
@@ -406,7 +406,7 @@ export default function InventoryTab() {
       setLocationToDeactivate(null);
       loadLocationsLookup();
       loadLocationsList();
-    } catch (error) {
+    } catch {
       showToast({
         severity: "error",
         message: "Failed to deactivate location",

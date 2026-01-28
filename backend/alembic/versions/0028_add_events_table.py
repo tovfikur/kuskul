@@ -18,7 +18,7 @@ depends_on = None
 
 def upgrade():
     # Drop table if exists to ensure we start fresh with correct schema
-    op.execute("DROP TABLE IF EXISTS events CASCADE")
+    op.execute("DROP TABLE IF EXISTS events")
     
     op.create_table('events',
     sa.Column('id', sa.Uuid(as_uuid=True), nullable=False),

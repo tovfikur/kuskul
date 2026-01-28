@@ -173,7 +173,7 @@ export async function updateUser(
     role_name?: string;
     full_name?: string;
     is_active?: boolean;
-  }
+  },
 ): Promise<User> {
   const resp = await api.patch(`/users/${userId}`, payload);
   return resp.data;
@@ -215,7 +215,9 @@ export async function getStudent(studentId: string): Promise<Student> {
   return resp.data;
 }
 
-export async function getStudentsBatch(studentIds: string[]): Promise<Student[]> {
+export async function getStudentsBatch(
+  studentIds: string[],
+): Promise<Student[]> {
   if (studentIds.length === 0) return [];
   const resp = await api.post("/students/batch", {
     student_ids: Array.from(new Set(studentIds)).slice(0, 500),
@@ -385,7 +387,7 @@ export async function updateGuardian(
     emergency_contact_phone?: string | null;
     address?: string | null;
     photo_url?: string | null;
-  }
+  },
 ): Promise<Guardian> {
   const resp = await api.put(`/guardians/${guardianId}`, payload);
   return resp.data;
@@ -413,7 +415,7 @@ export type GuardianWithRelation = Guardian & {
 };
 
 export async function getStudentGuardians(
-  studentId: string
+  studentId: string,
 ): Promise<GuardianWithRelation[]> {
   const resp = await api.get(`/students/${studentId}/guardians`);
   return resp.data;
@@ -751,4 +753,53 @@ export async function getUsers(
     params: { page, limit },
   });
   return resp.data;
+}
+
+export type StudentResult = {
+  id: string;
+  exam_name: string;
+  academic_year: string;
+  total_marks: number;
+  obtained_marks: number;
+  percentage: number;
+  grade?: string;
+  remarks?: string;
+  date?: string;
+};
+
+export type StudentPromotion = {
+  id: string;
+  academic_year: string;
+  class_name: string;
+  section_name?: string;
+  status: string;
+  roll_number?: number;
+};
+
+export type StudentDiscipline = {
+  id: string;
+  category: string;
+  note?: string;
+  is_positive: boolean;
+  date: string;
+  reported_by?: string;
+};
+
+export async function getStudentResults(id: string): Promise<StudentResult[]> {
+  const res = await api.get(`/students/${id}/results`);
+  return res.data;
+}
+
+export async function getStudentPromotions(
+  id: string,
+): Promise<StudentPromotion[]> {
+  const res = await api.get(`/students/${id}/promotions`);
+  return res.data;
+}
+
+export async function getStudentDiscipline(
+  id: string,
+): Promise<StudentDiscipline[]> {
+  const res = await api.get(`/students/${id}/discipline`);
+  return res.data;
 }

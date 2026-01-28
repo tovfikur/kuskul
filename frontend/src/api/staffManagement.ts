@@ -570,6 +570,10 @@ export async function processPayrollCycle(id: string, payload: { auto_generate_p
   return safeRequest({ method: "PATCH", url: `/staff/payroll/cycles/${id}/process`, data: payload });
 }
 
+export async function approvePayrollCycle(id: string) {
+  return safeRequest({ method: "PATCH", url: `/staff/payroll/cycles/${id}/approve` });
+}
+
 export async function completePayrollCycle(id: string) {
   return safeRequest({ method: "PATCH", url: `/staff/payroll/cycles/${id}/complete` });
 }

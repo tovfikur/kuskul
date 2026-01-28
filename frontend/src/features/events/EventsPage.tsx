@@ -3,6 +3,7 @@ import { Box, Tabs, Tab, Typography, Fab } from "@mui/material";
 import { Add as AddIcon } from "@mui/icons-material";
 import EventList from "./components/EventList";
 import NoticeBoard from "./components/NoticeBoard";
+import CalendarView from "./components/CalendarView";
 import EventForm from "./components/EventForm";
 import type { Event } from "../../api/analytics";
 
@@ -32,7 +33,7 @@ export default function EventsPage() {
   };
 
   const handleEventSaved = useCallback(() => {
-    // Refresh both tabs by incrementing key
+    // Refresh all tabs by incrementing key
     setRefreshKey((prev) => prev + 1);
   }, []);
 
@@ -60,6 +61,7 @@ export default function EventsPage() {
       <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
           <Tab label="All Events" />
+          <Tab label="Calendar View" />
           <Tab label="Notice Board" />
         </Tabs>
       </Box>
@@ -69,6 +71,10 @@ export default function EventsPage() {
       </TabPanel>
 
       <TabPanel value={tabValue} index={1}>
+        <CalendarView key={`calendar-${refreshKey}`} onEdit={handleEdit} />
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={2}>
         <NoticeBoard key={`notices-${refreshKey}`} />
       </TabPanel>
 

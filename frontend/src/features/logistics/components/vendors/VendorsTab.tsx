@@ -71,7 +71,7 @@ export default function VendorsTab() {
       });
       setVendors(result.items);
       setTotal(result.total);
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to load vendors" });
     } finally {
       setLoading(false);
@@ -97,7 +97,7 @@ export default function VendorsTab() {
       setDialogOpen(false);
       resetForm();
       loadVendors();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to create vendor" });
     }
   };
@@ -119,7 +119,7 @@ export default function VendorsTab() {
       setEditingVendor(null);
       resetForm();
       loadVendors();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to update vendor" });
     }
   };
@@ -157,7 +157,7 @@ export default function VendorsTab() {
       setDeactivateDialogOpen(false);
       setVendorToDeactivate(null);
       loadVendors();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to deactivate vendor" });
     }
   };

@@ -17,32 +17,49 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column('staff', sa.Column('marital_status', sa.String(length=20), nullable=True))
-    op.add_column('staff', sa.Column('religion', sa.String(length=50), nullable=True))
-    op.add_column('staff', sa.Column('permanent_address', sa.String(length=500), nullable=True))
-    op.add_column('staff', sa.Column('country', sa.String(length=100), nullable=True))
-    op.add_column('staff', sa.Column('employment_type', sa.String(length=50), nullable=True))
-    
-    # Bank Details
-    op.add_column('staff', sa.Column('bank_name', sa.String(length=100), nullable=True))
-    op.add_column('staff', sa.Column('bank_account_number', sa.String(length=50), nullable=True))
-    op.add_column('staff', sa.Column('bank_ifsc', sa.String(length=50), nullable=True))
-    
-    # Qualification Summary
-    op.add_column('staff', sa.Column('highest_qualification', sa.String(length=100), nullable=True))
-    op.add_column('staff', sa.Column('specialization', sa.String(length=100), nullable=True))
-    op.add_column('staff', sa.Column('experience_years', sa.Integer(), nullable=True))
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    staff_columns = [col['name'] for col in insp.get_columns('staff')]
+
+    with op.batch_alter_table('staff') as batch_op:
+        if 'marital_status' not in staff_columns:
+            batch_op.add_column(sa.Column('marital_status', sa.String(length=20), nullable=True))
+        if 'religion' not in staff_columns:
+            batch_op.add_column(sa.Column('religion', sa.String(length=50), nullable=True))
+        if 'permanent_address' not in staff_columns:
+            batch_op.add_column(sa.Column('permanent_address', sa.String(length=500), nullable=True))
+        if 'country' not in staff_columns:
+            batch_op.add_column(sa.Column('country', sa.String(length=100), nullable=True))
+        if 'employment_type' not in staff_columns:
+            batch_op.add_column(sa.Column('employment_type', sa.String(length=50), nullable=True))
+        
+        # Bank Details
+        if 'bank_name' not in staff_columns:
+            batch_op.add_column(sa.Column('bank_name', sa.String(length=100), nullable=True))
+        if 'bank_account_number' not in staff_columns:
+            batch_op.add_column(sa.Column('bank_account_number', sa.String(length=50), nullable=True))
+        if 'bank_ifsc' not in staff_columns:
+            batch_op.add_column(sa.Column('bank_ifsc', sa.String(length=50), nullable=True))
+        
+        # Qualification Summary
+        if 'highest_qualification' not in staff_columns:
+            batch_op.add_column(sa.Column('highest_qualification', sa.String(length=100), nullable=True))
+        if 'specialization' not in staff_columns:
+            batch_op.add_column(sa.Column('specialization', sa.String(length=100), nullable=True))
+        if 'experience_years' not in staff_columns:
+            batch_op.add_column(sa.Column('experience_years', sa.Integer(), nullable=True))
 
 
 def downgrade():
-    op.drop_column('staff', 'experience_years')
-    op.drop_column('staff', 'specialization')
-    op.drop_column('staff', 'highest_qualification')
-    op.drop_column('staff', 'bank_ifsc')
-    op.drop_column('staff', 'bank_account_number')
-    op.drop_column('staff', 'bank_name')
-    op.drop_column('staff', 'employment_type')
-    op.drop_column('staff', 'country')
-    op.drop_column('staff', 'permanent_address')
-    op.drop_column('staff', 'religion')
-    op.drop_column('staff', 'marital_status')
+    with op.batch_alter_table('staff') as batch_op:
+        batch_op.drop_column('experience_years')
+        batch_op.drop_column('specialization')
+        batch_op.drop_column('highest_qualification')
+        batch_op.drop_column('bank_ifsc')
+        batch_op.drop_column('bank_account_number')
+        batch_op.drop_column('bank_name')
+        batch_op.drop_column('employment_type')
+        batch_op.drop_column('country')
+        batch_op.drop_column('permanent_address')
+        batch_op.drop_column('religion')
+        batch_op.drop_column('marital_status')

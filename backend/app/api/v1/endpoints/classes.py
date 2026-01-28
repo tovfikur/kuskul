@@ -1,17 +1,25 @@
 import uuid
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+logger = logging.getLogger(__name__)
+
 from app.api.deps import get_active_school_id, require_permission
-from app.core.problems import not_found, not_implemented
+from app.core.problems import not_found, problem
 from app.db.session import get_db
 from app.models.class_subject import ClassSubject
 from app.models.school_class import SchoolClass
 from app.models.section import Section
 from app.models.subject import Subject
+from app.models.fee_structure import FeeStructure
+from app.models.enrollment import Enrollment
+from app.models.subject_group import SubjectGroup
+from app.models.exam_schedule import ExamSchedule
+from app.models.teacher_assignment import StudentAttendance
 from app.schemas.classes import ClassCreate, ClassOut, ClassUpdate
 from app.schemas.sections import SectionOut
 from app.schemas.subjects import SubjectOut
@@ -74,6 +82,35 @@ def delete_class(class_id: uuid.UUID, db: Session = Depends(get_db), school_id=D
     c = db.get(SchoolClass, class_id)
     if not c or c.school_id != school_id:
         raise not_found("Class not found")
+
+    if db.execute(select(Section).where(Section.class_id == class_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete class {class_id} failed: Associated sections found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete class: It has associated sections.")
+
+    if db.execute(select(ClassSubject).where(ClassSubject.class_id == class_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete class {class_id} failed: Associated class subjects found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete class: It has associated subjects.")
+
+    if db.execute(select(FeeStructure).where(FeeStructure.class_id == class_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete class {class_id} failed: Associated fee structures found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete class: It has associated fee structures.")
+
+    if db.execute(select(Enrollment).where(Enrollment.class_id == class_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete class {class_id} failed: Associated enrollments found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete class: It has associated student enrollments.")
+
+    if db.execute(select(SubjectGroup).where(SubjectGroup.class_id == class_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete class {class_id} failed: Associated subject groups found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete class: It has associated subject groups.")
+
+    if db.execute(select(ExamSchedule).where(ExamSchedule.class_id == class_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete class {class_id} failed: Associated exam schedules found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete class: It has associated exam schedules.")
+
+    if db.execute(select(StudentAttendance).where(StudentAttendance.class_id == class_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete class {class_id} failed: Associated student attendance records found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete class: It has associated student attendance records.")
+
     db.delete(c)
     db.commit()
     return {"status": "ok"}

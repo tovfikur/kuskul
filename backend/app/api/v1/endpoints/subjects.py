@@ -1,18 +1,26 @@
 import uuid
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+logger = logging.getLogger(__name__)
+
 from app.api.deps import get_active_school_id, require_permission
 from app.core.problems import not_found, problem
 from app.db.session import get_db
 from app.models.class_subject import ClassSubject
+from app.models.curriculum_unit import CurriculumUnit
+from app.models.exam_schedule import ExamSchedule
+from app.models.online_exam import QuestionBankQuestion
 from app.models.school_class import SchoolClass
 from app.models.stream import Stream
-from app.models.subject_group import SubjectGroup
 from app.models.subject import Subject
+from app.models.subject_group import SubjectGroup
+from app.models.teacher_assignment import TeacherAssignment
+from app.models.timetable_entry import TimetableEntry
 from app.schemas.subjects import AssignSubjectToClassRequest, SubjectCreate, SubjectOut, SubjectUpdate
 
 router = APIRouter(dependencies=[Depends(require_permission("academic:read"))])
@@ -114,6 +122,31 @@ def delete_subject(subject_id: uuid.UUID, db: Session = Depends(get_db), school_
     s = db.get(Subject, subject_id)
     if not s or s.school_id != school_id:
         raise not_found("Subject not found")
+
+    if db.execute(select(CurriculumUnit).where(CurriculumUnit.subject_id == subject_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete subject {subject_id} failed: Associated curriculum units found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete subject: It has associated curriculum units.")
+
+    if db.execute(select(ClassSubject).where(ClassSubject.subject_id == subject_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete subject {subject_id} failed: Associated class subjects found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete subject: It is assigned to one or more classes.")
+
+    if db.execute(select(TeacherAssignment).where(TeacherAssignment.subject_id == subject_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete subject {subject_id} failed: Associated teacher assignments found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete subject: It has associated teacher assignments.")
+
+    if db.execute(select(ExamSchedule).where(ExamSchedule.subject_id == subject_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete subject {subject_id} failed: Associated exam schedules found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete subject: It has associated exam schedules.")
+
+    if db.execute(select(QuestionBankQuestion).where(QuestionBankQuestion.subject_id == subject_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete subject {subject_id} failed: Associated question bank questions found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete subject: It has associated question bank questions.")
+
+    if db.execute(select(TimetableEntry).where(TimetableEntry.subject_id == subject_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete subject {subject_id} failed: Associated timetable entries found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete subject: It is used in timetable entries.")
+
     db.delete(s)
     db.commit()
     return {"status": "ok"}

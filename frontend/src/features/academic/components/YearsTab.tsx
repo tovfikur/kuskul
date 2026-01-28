@@ -21,6 +21,7 @@ import {
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import { showToast } from "../../../app/toast";
 import {
   getAcademicYears,
   createAcademicYear,
@@ -59,8 +60,21 @@ export default function YearsTab() {
       await createAcademicYear(formData);
       setOpen(false);
       load();
-    } catch (e) {
+      showToast({
+        message: "Academic year created successfully",
+        severity: "success",
+      });
+    } catch (e: any) {
       console.error(e);
+      const detail = e.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.detail || "Failed to create academic year";
+      showToast({
+        message: msg,
+        severity: "error",
+      });
     }
   };
 
@@ -84,8 +98,21 @@ export default function YearsTab() {
       setEditYear(null);
       setFormData({ name: "", start_date: "", end_date: "" });
       load();
-    } catch (e) {
+      showToast({
+        message: "Academic year updated successfully",
+        severity: "success",
+      });
+    } catch (e: any) {
       console.error(e);
+      const detail = e.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.detail || "Failed to update academic year";
+      showToast({
+        message: msg,
+        severity: "error",
+      });
     }
   };
 
@@ -95,8 +122,18 @@ export default function YearsTab() {
       await deleteAcademicYear(deleteYear.id);
       setDeleteYear(null);
       load();
-    } catch (e) {
+      showToast({
+        message: "Academic year deleted successfully",
+        severity: "success",
+      });
+    } catch (e: any) {
       console.error(e);
+      const detail = e.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.detail || "Failed to delete academic year";
+      showToast({ message: msg, severity: "error" });
     }
   };
 
@@ -104,8 +141,21 @@ export default function YearsTab() {
     try {
       await setCurrentAcademicYear(id);
       load();
-    } catch (e) {
+      showToast({
+        message: "Current academic year set successfully",
+        severity: "success",
+      });
+    } catch (e: any) {
       console.error(e);
+      const detail = e.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.detail || "Failed to set current academic year";
+      showToast({
+        message: msg,
+        severity: "error",
+      });
     }
   };
 

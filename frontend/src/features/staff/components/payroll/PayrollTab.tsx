@@ -36,6 +36,7 @@ import {
   TrendingUp,
   Edit,
   Payment,
+  Download,
 } from "@mui/icons-material";
 import {
   listPayrollCycles,
@@ -47,6 +48,7 @@ import {
   listStaff,
   markPayslipPaid,
   updatePayslip,
+  approvePayrollCycle,
 } from "../../../../api/staffManagement";
 import type {
   PayrollCycle,
@@ -58,7 +60,8 @@ import type {
 export function PayrollTab() {
   // Data State
   const [cycles, setCycles] = useState<PayrollCycle[]>([]);
-  const [currentCycle, setCurrentCycle] = useState<PayrollCycleWithStats | null>(null);
+  const [currentCycle, setCurrentCycle] =
+    useState<PayrollCycleWithStats | null>(null);
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [staffMap, setStaffMap] = useState<Record<string, Staff>>({});
@@ -69,8 +72,12 @@ export function PayrollTab() {
   const [error, setError] = useState<string | null>(null);
 
   // Filter State
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState<number>(
+    new Date().getFullYear(),
+  );
+  const [selectedMonth, setSelectedMonth] = useState<number>(
+    new Date().getMonth() + 1,
+  );
   const [selectedCycleId, setSelectedCycleId] = useState<string>("");
 
   // Dialog State
@@ -113,17 +120,24 @@ export function PayrollTab() {
     setLoading(true);
     try {
       const res = await listPayrollCycles({ year: selectedYear, limit: 12 });
-      const items = (res as any).items || [];
+      // safeRequest returns { data: { items: [...] } }
+      const items = (res as any).data?.items || [];
       setCycles(items);
 
       // Auto-select current month cycle or first available
+      // Ensure strict type matching for month/year comparison
       const match = items.find(
-        (c: PayrollCycle) => c.month === selectedMonth && c.year === selectedYear
+        (c: PayrollCycle) =>
+          Number(c.month) === Number(selectedMonth) &&
+          Number(c.year) === Number(selectedYear),
       );
       if (match) {
         setSelectedCycleId(match.id);
       } else if (items.length > 0) {
-        setSelectedCycleId(items[0].id);
+        // If the selected month doesn't exist, we should NOT auto-select another month randomly
+        // because that confuses the user who thinks they are looking at "selectedMonth"
+        // Instead, we should clear the selection so the UI shows "Create" state for the selected month.
+        setSelectedCycleId("");
       } else {
         setSelectedCycleId("");
       }
@@ -138,10 +152,12 @@ export function PayrollTab() {
   const loadCycleDetails = async (id: string) => {
     try {
       const cycleRes = await getPayrollCycle(id);
-      setCurrentCycle(cycleRes as any);
+      if ((cycleRes as any).ok && (cycleRes as any).data) {
+        setCurrentCycle((cycleRes as any).data);
+      }
 
       const payslipsRes = await getCyclePayslips(id, { limit: 100 });
-      setPayslips((payslipsRes as any).items || []);
+      setPayslips((payslipsRes as any).data?.items || []);
     } catch (err) {
       console.error("Failed to load cycle details", err);
     }
@@ -151,14 +167,27 @@ export function PayrollTab() {
     setProcessing(true);
     setError(null);
     try {
-      await createPayrollCycle({
+      const res = await createPayrollCycle({
         month: selectedMonth,
         year: selectedYear,
         notes: `Payroll for ${getMonthName(selectedMonth)} ${selectedYear}`,
       });
-      await loadCycles();
+
+      if ((res as any).ok) {
+        await loadCycles();
+      } else {
+        const detail = (res as any).data?.detail || "";
+        // If cycle already exists, just reload to show it
+        if ((res as any).status === 400 && detail.includes("already exists")) {
+          await loadCycles();
+          setError(null);
+        } else {
+          setError(detail || "Failed to create cycle. It may already exist.");
+        }
+      }
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to create cycle. It may already exist.");
+      console.error("Network error creating cycle", err);
+      setError("Network error occurred");
     } finally {
       setProcessing(false);
     }
@@ -170,13 +199,41 @@ export function PayrollTab() {
 
     setProcessing(true);
     try {
-      await processPayrollCycle(currentCycle.id, {
+      const res = await processPayrollCycle(currentCycle.id, {
         auto_generate_payslips: true,
         include_inactive_staff: false,
       });
-      await loadCycleDetails(currentCycle.id);
+      if ((res as any).ok) {
+        await loadCycleDetails(currentCycle.id);
+      } else {
+        setError((res as any).data?.detail || "Failed to process payroll");
+      }
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to process payroll");
+      setError("Network error occurred");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleApproveCycle = async () => {
+    if (!currentCycle) return;
+    if (
+      !confirm(
+        "Approve this payroll cycle? This will lock edits and enable payment processing.",
+      )
+    )
+      return;
+
+    setProcessing(true);
+    try {
+      const res = await approvePayrollCycle(currentCycle.id);
+      if ((res as any).ok) {
+        await loadCycleDetails(currentCycle.id);
+      } else {
+        setError((res as any).data?.detail || "Failed to approve cycle");
+      }
+    } catch (err: any) {
+      setError("Network error occurred");
     } finally {
       setProcessing(false);
     }
@@ -188,10 +245,14 @@ export function PayrollTab() {
 
     setProcessing(true);
     try {
-      await completePayrollCycle(currentCycle.id);
-      await loadCycleDetails(currentCycle.id);
+      const res = await completePayrollCycle(currentCycle.id);
+      if ((res as any).ok) {
+        await loadCycleDetails(currentCycle.id);
+      } else {
+        setError((res as any).data?.detail || "Failed to complete cycle");
+      }
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to complete cycle");
+      setError("Network error occurred");
     } finally {
       setProcessing(false);
     }
@@ -215,11 +276,15 @@ export function PayrollTab() {
     if (!selectedPayslip) return;
     setProcessing(true);
     try {
-      await updatePayslip(selectedPayslip.id, editData);
-      await loadCycleDetails(currentCycle!.id);
-      setDetailDialogOpen(false);
+      const res = await updatePayslip(selectedPayslip.id, editData);
+      if ((res as any).ok) {
+        await loadCycleDetails(currentCycle!.id);
+        setDetailDialogOpen(false);
+      } else {
+        alert((res as any).data?.detail || "Failed to update payslip");
+      }
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to update payslip");
+      alert("Network error occurred");
     } finally {
       setProcessing(false);
     }
@@ -228,13 +293,17 @@ export function PayrollTab() {
   const handleMarkPaid = async (payslipId: string) => {
     if (!confirm("Mark this payslip as paid?")) return;
     try {
-      await markPayslipPaid(payslipId, {
+      const res = await markPayslipPaid(payslipId, {
         payment_date: new Date().toISOString().split("T")[0],
         payment_reference: `PAY-${Date.now()}`,
       });
-      await loadCycleDetails(currentCycle!.id);
+      if ((res as any).ok) {
+        await loadCycleDetails(currentCycle!.id);
+      } else {
+        alert((res as any).data?.detail || "Failed to mark as paid");
+      }
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to mark as paid");
+      alert("Network error occurred");
     }
   };
 
@@ -257,6 +326,8 @@ export function PayrollTab() {
         return "default";
       case "processing":
         return "info";
+      case "approved":
+        return "primary";
       case "completed":
         return "success";
       case "paid":
@@ -267,7 +338,9 @@ export function PayrollTab() {
   };
 
   const cycleForSelectedDate = cycles.find(
-    (c) => c.month === selectedMonth && c.year === selectedYear
+    (c) =>
+      Number(c.month) === Number(selectedMonth) &&
+      Number(c.year) === Number(selectedYear),
   );
 
   const enrichedPayslips = useMemo(() => {
@@ -275,7 +348,9 @@ export function PayrollTab() {
       const staff = staffMap[p.staff_id];
       return {
         ...p,
-        staff_name: staff ? `${staff.first_name} ${staff.last_name}` : "Unknown",
+        staff_name: staff
+          ? `${staff.first_name} ${staff.last_name}`
+          : "Unknown",
         staff_photo: staff?.profile_photo_url,
         employee_id: staff?.employee_id,
       };
@@ -312,7 +387,14 @@ export function PayrollTab() {
           </Typography>
 
           {/* Period Selector */}
-          <Box sx={{ mt: 3, bgcolor: "rgba(255,255,255,0.15)", borderRadius: 2, p: 2 }}>
+          <Box
+            sx={{
+              mt: 3,
+              bgcolor: "rgba(255,255,255,0.15)",
+              borderRadius: 2,
+              p: 2,
+            }}
+          >
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
               <CalendarMonth fontSize="small" />
               <Typography variant="body2" fontWeight={500}>
@@ -369,8 +451,19 @@ export function PayrollTab() {
         {/* Cycle Stats */}
         {currentCycle ? (
           <Box sx={{ flex: 1, display: "flex", flexDirection: "column", p: 3 }}>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-              <Typography variant="subtitle2" fontWeight={700} color="text.secondary">
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                mb: 3,
+              }}
+            >
+              <Typography
+                variant="subtitle2"
+                fontWeight={700}
+                color="text.secondary"
+              >
                 CYCLE STATUS
               </Typography>
               <Chip
@@ -383,9 +476,20 @@ export function PayrollTab() {
             {/* Stats Grid */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid size={{ xs: 6 }}>
-                <Box sx={{ p: 2, bgcolor: "#e8f5e9", borderRadius: 2, textAlign: "center" }}>
+                <Box
+                  sx={{
+                    p: 2,
+                    bgcolor: "#e8f5e9",
+                    borderRadius: 2,
+                    textAlign: "center",
+                  }}
+                >
                   <AttachMoney sx={{ fontSize: 32, color: "success.main" }} />
-                  <Typography variant="h6" fontWeight={700} color="success.main">
+                  <Typography
+                    variant="h6"
+                    fontWeight={700}
+                    color="success.main"
+                  >
                     {formatCurrency(currentCycle.total_amount)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -394,9 +498,20 @@ export function PayrollTab() {
                 </Box>
               </Grid>
               <Grid size={{ xs: 6 }}>
-                <Box sx={{ p: 2, bgcolor: "#e3f2fd", borderRadius: 2, textAlign: "center" }}>
+                <Box
+                  sx={{
+                    p: 2,
+                    bgcolor: "#e3f2fd",
+                    borderRadius: 2,
+                    textAlign: "center",
+                  }}
+                >
                   <People sx={{ fontSize: 32, color: "primary.main" }} />
-                  <Typography variant="h6" fontWeight={700} color="primary.main">
+                  <Typography
+                    variant="h6"
+                    fontWeight={700}
+                    color="primary.main"
+                  >
                     {currentCycle.payslip_count || payslips.length}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -405,9 +520,20 @@ export function PayrollTab() {
                 </Box>
               </Grid>
               <Grid size={{ xs: 6 }}>
-                <Box sx={{ p: 2, bgcolor: "#fff3e0", borderRadius: 2, textAlign: "center" }}>
+                <Box
+                  sx={{
+                    p: 2,
+                    bgcolor: "#fff3e0",
+                    borderRadius: 2,
+                    textAlign: "center",
+                  }}
+                >
                   <CheckCircle sx={{ fontSize: 32, color: "warning.main" }} />
-                  <Typography variant="h6" fontWeight={700} color="warning.main">
+                  <Typography
+                    variant="h6"
+                    fontWeight={700}
+                    color="warning.main"
+                  >
                     {currentCycle.paid_count || 0}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -416,7 +542,14 @@ export function PayrollTab() {
                 </Box>
               </Grid>
               <Grid size={{ xs: 6 }}>
-                <Box sx={{ p: 2, bgcolor: "#ffebee", borderRadius: 2, textAlign: "center" }}>
+                <Box
+                  sx={{
+                    p: 2,
+                    bgcolor: "#ffebee",
+                    borderRadius: 2,
+                    textAlign: "center",
+                  }}
+                >
                   <TrendingUp sx={{ fontSize: 32, color: "error.main" }} />
                   <Typography variant="h6" fontWeight={700} color="error.main">
                     {currentCycle.pending_count || payslips.length}
@@ -429,22 +562,42 @@ export function PayrollTab() {
             </Grid>
 
             {/* Actions */}
-            <Box sx={{ mt: "auto", display: "flex", flexDirection: "column", gap: 1.5 }}>
-              {currentCycle.status === "draft" && (
+            <Box
+              sx={{
+                mt: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: 1.5,
+              }}
+            >
+              {(currentCycle.status === "draft" ||
+                currentCycle.status === "processing") && (
                 <Button
-                  variant="contained"
+                  variant={
+                    currentCycle.status === "draft" ? "contained" : "outlined"
+                  }
                   fullWidth
+                  color={
+                    currentCycle.status === "processing" ? "warning" : "primary"
+                  }
                   startIcon={<PlayArrow />}
                   onClick={handleProcessCycle}
                   disabled={processing}
-                  sx={{
-                    py: 1.5,
-                    background: "linear-gradient(90deg, #43a047 0%, #66bb6a 100%)",
-                    fontWeight: 600,
-                    boxShadow: "0 4px 14px rgba(67, 160, 71, 0.4)",
-                  }}
+                  sx={
+                    currentCycle.status === "draft"
+                      ? {
+                          py: 1.5,
+                          background:
+                            "linear-gradient(90deg, #43a047 0%, #66bb6a 100%)",
+                          fontWeight: 600,
+                          boxShadow: "0 4px 14px rgba(67, 160, 71, 0.4)",
+                        }
+                      : { py: 1.5, fontWeight: 600 }
+                  }
                 >
-                  {payslips.length > 0 ? "Regenerate Payslips" : "Process Payroll"}
+                  {payslips.length > 0
+                    ? "Regenerate Payslips"
+                    : "Process Payroll"}
                 </Button>
               )}
 
@@ -453,11 +606,28 @@ export function PayrollTab() {
                   variant="contained"
                   fullWidth
                   startIcon={<CheckCircle />}
-                  onClick={handleCompleteCycle}
+                  onClick={handleApproveCycle}
                   disabled={processing}
                   sx={{
                     py: 1.5,
-                    background: "linear-gradient(90deg, #2e7d32 0%, #43a047 100%)",
+                    fontWeight: 600,
+                  }}
+                >
+                  Approve Cycle
+                </Button>
+              )}
+
+              {currentCycle.status === "approved" && (
+                <Button
+                  variant="contained"
+                  fullWidth
+                  startIcon={<CheckCircle />}
+                  onClick={handleCompleteCycle}
+                  disabled={processing || (currentCycle.pending_count || 0) > 0}
+                  sx={{
+                    py: 1.5,
+                    background:
+                      "linear-gradient(90deg, #2e7d32 0%, #43a047 100%)",
                     fontWeight: 600,
                   }}
                 >
@@ -476,7 +646,15 @@ export function PayrollTab() {
             </Box>
           </Box>
         ) : (
-          <Box sx={{ flex: 1, p: 3, display: "flex", flexDirection: "column", gap: 3 }}>
+          <Box
+            sx={{
+              flex: 1,
+              p: 3,
+              display: "flex",
+              flexDirection: "column",
+              gap: 3,
+            }}
+          >
             {error && (
               <Alert severity="error" onClose={() => setError(null)}>
                 {error}
@@ -486,8 +664,14 @@ export function PayrollTab() {
             {!cycleForSelectedDate ? (
               <>
                 <Box sx={{ textAlign: "center", py: 4 }}>
-                  <Receipt sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
-                  <Typography variant="body1" color="text.secondary" gutterBottom>
+                  <Receipt
+                    sx={{ fontSize: 64, color: "text.disabled", mb: 2 }}
+                  />
+                  <Typography
+                    variant="body1"
+                    color="text.secondary"
+                    gutterBottom
+                  >
                     No payroll cycle for this period
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -502,7 +686,8 @@ export function PayrollTab() {
                   disabled={processing}
                   sx={{
                     py: 1.5,
-                    background: "linear-gradient(90deg, #43a047 0%, #66bb6a 100%)",
+                    background:
+                      "linear-gradient(90deg, #43a047 0%, #66bb6a 100%)",
                     fontWeight: 600,
                     boxShadow: "0 4px 14px rgba(67, 160, 71, 0.4)",
                   }}
@@ -512,7 +697,8 @@ export function PayrollTab() {
               </>
             ) : (
               <Alert severity="info">
-                Cycle exists with status: <strong>{cycleForSelectedDate.status}</strong>
+                Cycle exists with status:{" "}
+                <strong>{cycleForSelectedDate.status}</strong>
               </Alert>
             )}
           </Box>
@@ -537,14 +723,23 @@ export function PayrollTab() {
             Payslips
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {enrichedPayslips.length} payslip{enrichedPayslips.length !== 1 ? "s" : ""} generated
+            {enrichedPayslips.length} payslip
+            {enrichedPayslips.length !== 1 ? "s" : ""} generated
           </Typography>
         </Box>
 
         {/* Content */}
         <Box sx={{ flex: 1, overflow: "auto" }}>
           {loading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%", p: 4 }}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                height: "100%",
+                p: 4,
+              }}
+            >
               <CircularProgress />
             </Box>
           ) : enrichedPayslips.length === 0 ? (
@@ -564,7 +759,11 @@ export function PayrollTab() {
                 No payslips generated yet
               </Typography>
               {currentCycle?.status === "draft" && (
-                <Button variant="outlined" onClick={handleProcessCycle} sx={{ mt: 2 }}>
+                <Button
+                  variant="outlined"
+                  onClick={handleProcessCycle}
+                  sx={{ mt: 2 }}
+                >
                   Generate Payslips
                 </Button>
               )}
@@ -586,8 +785,13 @@ export function PayrollTab() {
                 {enrichedPayslips.map((payslip: any) => (
                   <TableRow key={payslip.id} hover>
                     <TableCell>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                        <Avatar src={payslip.staff_photo} sx={{ width: 32, height: 32 }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
+                      >
+                        <Avatar
+                          src={payslip.staff_photo}
+                          sx={{ width: 32, height: 32 }}
+                        >
                           {payslip.staff_name[0]}
                         </Avatar>
                         <Box>
@@ -600,8 +804,12 @@ export function PayrollTab() {
                         </Box>
                       </Box>
                     </TableCell>
-                    <TableCell align="right">{formatCurrency(payslip.basic_salary)}</TableCell>
-                    <TableCell align="right">{formatCurrency(payslip.gross_salary)}</TableCell>
+                    <TableCell align="right">
+                      {formatCurrency(payslip.basic_salary)}
+                    </TableCell>
+                    <TableCell align="right">
+                      {formatCurrency(payslip.gross_salary)}
+                    </TableCell>
                     <TableCell align="right" sx={{ color: "error.main" }}>
                       {formatCurrency(payslip.total_deductions)}
                     </TableCell>
@@ -612,27 +820,42 @@ export function PayrollTab() {
                       <Chip
                         label={payslip.status}
                         size="small"
-                        color={payslip.status === "paid" ? "success" : "default"}
+                        color={
+                          payslip.status === "paid" ? "success" : "default"
+                        }
                         variant="outlined"
                       />
                     </TableCell>
                     <TableCell align="center">
                       <Tooltip title="View Details">
-                        <IconButton size="small" onClick={() => handleViewDetails(payslip)}>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleViewDetails(payslip)}
+                        >
                           <Visibility fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      {payslip.status !== "paid" && currentCycle?.status !== "completed" && (
-                        <Tooltip title="Mark Paid">
-                          <IconButton
-                            size="small"
-                            color="success"
-                            onClick={() => handleMarkPaid(payslip.id)}
-                          >
-                            <Payment fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
+                      <Tooltip title="Download PDF">
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => alert("PDF Download coming soon")}
+                        >
+                          <Download fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      {payslip.status !== "paid" &&
+                        currentCycle?.status === "approved" && (
+                          <Tooltip title="Mark Paid">
+                            <IconButton
+                              size="small"
+                              color="success"
+                              onClick={() => handleMarkPaid(payslip.id)}
+                            >
+                              <Payment fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -650,7 +873,13 @@ export function PayrollTab() {
         fullWidth
         PaperProps={{ sx: { borderRadius: 3 } }}
       >
-        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           <Box>
             <Typography variant="h6" fontWeight={700}>
               Payslip Details
@@ -668,7 +897,9 @@ export function PayrollTab() {
         </DialogTitle>
         <DialogContent>
           {selectedPayslip && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 3, pt: 2 }}>
+            <Box
+              sx={{ display: "flex", flexDirection: "column", gap: 3, pt: 2 }}
+            >
               {/* Summary Cards */}
               <Grid container spacing={2}>
                 <Grid size={{ xs: 4 }}>
@@ -676,7 +907,11 @@ export function PayrollTab() {
                     <Typography variant="caption" color="text.secondary">
                       Gross Salary
                     </Typography>
-                    <Typography variant="h6" fontWeight={700} color="primary.main">
+                    <Typography
+                      variant="h6"
+                      fontWeight={700}
+                      color="primary.main"
+                    >
                       {formatCurrency(selectedPayslip.gross_salary)}
                     </Typography>
                   </Paper>
@@ -686,17 +921,28 @@ export function PayrollTab() {
                     <Typography variant="caption" color="text.secondary">
                       Deductions
                     </Typography>
-                    <Typography variant="h6" fontWeight={700} color="error.main">
+                    <Typography
+                      variant="h6"
+                      fontWeight={700}
+                      color="error.main"
+                    >
                       {formatCurrency(selectedPayslip.total_deductions)}
                     </Typography>
                   </Paper>
                 </Grid>
                 <Grid size={{ xs: 4 }}>
-                  <Paper variant="outlined" sx={{ p: 2, textAlign: "center", bgcolor: "#e8f5e9" }}>
+                  <Paper
+                    variant="outlined"
+                    sx={{ p: 2, textAlign: "center", bgcolor: "#e8f5e9" }}
+                  >
                     <Typography variant="caption" color="text.secondary">
                       Net Salary
                     </Typography>
-                    <Typography variant="h6" fontWeight={700} color="success.main">
+                    <Typography
+                      variant="h6"
+                      fontWeight={700}
+                      color="success.main"
+                    >
                       {formatCurrency(selectedPayslip.net_salary)}
                     </Typography>
                   </Paper>
@@ -712,10 +958,15 @@ export function PayrollTab() {
                     fullWidth
                     value={editData.basic_salary}
                     onChange={(e) =>
-                      setEditData({ ...editData, basic_salary: Number(e.target.value) })
+                      setEditData({
+                        ...editData,
+                        basic_salary: Number(e.target.value),
+                      })
                     }
                     InputProps={{
-                      startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+                      startAdornment: (
+                        <InputAdornment position="start">₹</InputAdornment>
+                      ),
                     }}
                   />
                   <TextField
@@ -724,7 +975,10 @@ export function PayrollTab() {
                     fullWidth
                     value={editData.working_days}
                     onChange={(e) =>
-                      setEditData({ ...editData, working_days: Number(e.target.value) })
+                      setEditData({
+                        ...editData,
+                        working_days: Number(e.target.value),
+                      })
                     }
                   />
                   <TextField
@@ -733,7 +987,10 @@ export function PayrollTab() {
                     fullWidth
                     value={editData.present_days}
                     onChange={(e) =>
-                      setEditData({ ...editData, present_days: Number(e.target.value) })
+                      setEditData({
+                        ...editData,
+                        present_days: Number(e.target.value),
+                      })
                     }
                   />
                   <TextField
@@ -742,27 +999,48 @@ export function PayrollTab() {
                     fullWidth
                     value={editData.leave_days}
                     onChange={(e) =>
-                      setEditData({ ...editData, leave_days: Number(e.target.value) })
+                      setEditData({
+                        ...editData,
+                        leave_days: Number(e.target.value),
+                      })
                     }
                   />
-                  <Box sx={{ display: "flex", gap: 2, justifyContent: "flex-end" }}>
+                  <Box
+                    sx={{ display: "flex", gap: 2, justifyContent: "flex-end" }}
+                  >
                     <Button onClick={() => setEditMode(false)}>Cancel</Button>
-                    <Button variant="contained" onClick={handleSaveEdit} disabled={processing}>
+                    <Button
+                      variant="contained"
+                      onClick={handleSaveEdit}
+                      disabled={processing}
+                    >
                       Save Changes
                     </Button>
                   </Box>
                 </Box>
               ) : (
                 <Box>
-                  <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      mb: 2,
+                    }}
+                  >
                     <Typography variant="subtitle2" fontWeight={700}>
                       Salary Breakdown
                     </Typography>
-                    {currentCycle?.status !== "completed" && selectedPayslip.status !== "paid" && (
-                      <Button size="small" startIcon={<Edit />} onClick={() => setEditMode(true)}>
-                        Edit
-                      </Button>
-                    )}
+                    {currentCycle?.status !== "completed" &&
+                      currentCycle?.status !== "approved" &&
+                      selectedPayslip.status !== "paid" && (
+                        <Button
+                          size="small"
+                          startIcon={<Edit />}
+                          onClick={() => setEditMode(true)}
+                        >
+                          Edit
+                        </Button>
+                      )}
                   </Box>
                   <Grid container spacing={2}>
                     <Grid size={{ xs: 6 }}>

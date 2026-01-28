@@ -32,7 +32,11 @@ import {
   createMaintenanceTicket,
   updateMaintenanceTicket,
 } from "../../../../api/logistics";
-import type { MaintenanceTicket, TicketPriority, TicketStatus } from "../../logisticsTypes";
+import type {
+  MaintenanceTicket,
+  TicketPriority,
+  TicketStatus,
+} from "../../logisticsTypes";
 import StatusChip from "../shared/StatusChip";
 import { showToast } from "../../../../app/toast";
 
@@ -46,7 +50,9 @@ export default function MaintenanceTab() {
   const [priorityFilter, setPriorityFilter] = useState("");
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingTicket, setEditingTicket] = useState<MaintenanceTicket | null>(null);
+  const [editingTicket, setEditingTicket] = useState<MaintenanceTicket | null>(
+    null,
+  );
 
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [ticketToClose, setTicketToClose] = useState<MaintenanceTicket | null>(
@@ -74,8 +80,11 @@ export default function MaintenanceTab() {
       });
       setTickets(result.items);
       setTotal(result.total);
-    } catch (error) {
-      showToast({ severity: "error", message: "Failed to load maintenance tickets" });
+    } catch {
+      showToast({
+        severity: "error",
+        message: "Failed to load maintenance tickets",
+      });
     } finally {
       setLoading(false);
     }
@@ -100,7 +109,7 @@ export default function MaintenanceTab() {
       setDialogOpen(false);
       resetForm();
       loadTickets();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to create ticket" });
     }
   };
@@ -122,7 +131,7 @@ export default function MaintenanceTab() {
       setEditingTicket(null);
       resetForm();
       loadTickets();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to update ticket" });
     }
   };
@@ -166,12 +175,14 @@ export default function MaintenanceTab() {
       setCloseDialogOpen(false);
       setTicketToClose(null);
       loadTickets();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to update ticket" });
     }
   };
 
-  const getPriorityColor = (priority: TicketPriority): "error" | "warning" | "default" => {
+  const getPriorityColor = (
+    priority: TicketPriority,
+  ): "error" | "warning" | "default" => {
     switch (priority) {
       case "high":
         return "error";
@@ -285,7 +296,10 @@ export default function MaintenanceTab() {
                       </TableCell>
                       <TableCell align="right">
                         <Tooltip title="Edit">
-                          <IconButton size="small" onClick={() => openEdit(ticket)}>
+                          <IconButton
+                            size="small"
+                            onClick={() => openEdit(ticket)}
+                          >
                             <Edit fontSize="small" />
                           </IconButton>
                         </Tooltip>
@@ -305,7 +319,10 @@ export default function MaintenanceTab() {
                   ))}
                   {tickets.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} sx={{ textAlign: "center", py: 4 }}>
+                      <TableCell
+                        colSpan={7}
+                        sx={{ textAlign: "center", py: 4 }}
+                      >
                         <Typography color="text.secondary">
                           No maintenance tickets found
                         </Typography>
@@ -321,7 +338,9 @@ export default function MaintenanceTab() {
               page={page}
               onPageChange={(_, p) => setPage(p)}
               rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={(e) => setRowsPerPage(Number(e.target.value))}
+              onRowsPerPageChange={(e) =>
+                setRowsPerPage(Number(e.target.value))
+              }
               rowsPerPageOptions={[10, 20, 50]}
             />
           </>
@@ -338,7 +357,9 @@ export default function MaintenanceTab() {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>{editingTicket ? "Edit Ticket" : "New Ticket"}</DialogTitle>
+        <DialogTitle>
+          {editingTicket ? "Edit Ticket" : "New Ticket"}
+        </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
             <Grid size={{ xs: 12 }}>
@@ -357,7 +378,9 @@ export default function MaintenanceTab() {
                 rows={3}
                 label="Description"
                 value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, description: e.target.value })
+                }
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
@@ -366,7 +389,12 @@ export default function MaintenanceTab() {
                 <Select
                   value={form.priority}
                   label="Priority"
-                  onChange={(e) => setForm({ ...form, priority: e.target.value as TicketPriority })}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      priority: e.target.value as TicketPriority,
+                    })
+                  }
                 >
                   <MenuItem value="low">Low</MenuItem>
                   <MenuItem value="medium">Medium</MenuItem>
@@ -380,7 +408,9 @@ export default function MaintenanceTab() {
                 <Select
                   value={form.status}
                   label="Status"
-                  onChange={(e) => setForm({ ...form, status: e.target.value as TicketStatus })}
+                  onChange={(e) =>
+                    setForm({ ...form, status: e.target.value as TicketStatus })
+                  }
                 >
                   <MenuItem value="open">Open</MenuItem>
                   <MenuItem value="in_progress">In Progress</MenuItem>
@@ -402,7 +432,9 @@ export default function MaintenanceTab() {
                 fullWidth
                 label="Assigned To (User ID)"
                 value={form.assigned_to_user_id}
-                onChange={(e) => setForm({ ...form, assigned_to_user_id: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, assigned_to_user_id: e.target.value })
+                }
                 placeholder="Optional"
               />
             </Grid>
@@ -419,10 +451,12 @@ export default function MaintenanceTab() {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => {
-            setDialogOpen(false);
-            setEditingTicket(null);
-          }}>
+          <Button
+            onClick={() => {
+              setDialogOpen(false);
+              setEditingTicket(null);
+            }}
+          >
             Cancel
           </Button>
           <Button

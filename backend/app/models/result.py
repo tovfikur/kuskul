@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, Uuid
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, Uuid, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -18,5 +18,6 @@ class Result(Base):
     obtained_marks: Mapped[int] = mapped_column(Integer, nullable=False)
     percentage: Mapped[float] = mapped_column(Float, nullable=False)
     grade_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("grades.id"), index=True, nullable=True)
+    remarks: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

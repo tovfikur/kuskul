@@ -17,14 +17,16 @@ depends_on = None
 
 
 def upgrade():
-    op.alter_column('staff', 'photo_url',
-               existing_type=sa.VARCHAR(length=500),
-               type_=sa.Text(),
-               existing_nullable=True)
+    with op.batch_alter_table('staff') as batch_op:
+        batch_op.alter_column('photo_url',
+                   existing_type=sa.VARCHAR(length=500),
+                   type_=sa.Text(),
+                   existing_nullable=True)
 
 
 def downgrade():
-    op.alter_column('staff', 'photo_url',
-               existing_type=sa.Text(),
-               type_=sa.VARCHAR(length=500),
-               existing_nullable=True)
+    with op.batch_alter_table('staff') as batch_op:
+        batch_op.alter_column('photo_url',
+                   existing_type=sa.Text(),
+                   type_=sa.VARCHAR(length=500),
+                   existing_nullable=True)

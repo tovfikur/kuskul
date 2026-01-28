@@ -72,7 +72,7 @@ export default function AssetsTab() {
       });
       setAssets(result.items);
       setTotal(result.total);
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to load assets" });
     } finally {
       setLoading(false);
@@ -98,7 +98,7 @@ export default function AssetsTab() {
       setDialogOpen(false);
       resetForm();
       loadAssets();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to create asset" });
     }
   };
@@ -120,7 +120,7 @@ export default function AssetsTab() {
       setEditingAsset(null);
       resetForm();
       loadAssets();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to update asset" });
     }
   };
@@ -164,7 +164,7 @@ export default function AssetsTab() {
       setRetireDialogOpen(false);
       setAssetToRetire(null);
       loadAssets();
-    } catch (error) {
+    } catch {
       showToast({ severity: "error", message: "Failed to retire asset" });
     }
   };

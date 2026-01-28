@@ -1,15 +1,28 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_active_school_id, require_permission
 from app.core.problems import not_found, problem
 from app.db.session import get_db
+from app.models.academic_calendar_settings import AcademicCalendarSettings
 from app.models.academic_year import AcademicYear
+from app.models.curriculum_unit import CurriculumUnit
+from app.models.enrollment import Enrollment
+from app.models.exam import Exam
+from app.models.fee_due import FeeDue
+from app.models.fee_payment import FeePayment
+from app.models.fee_structure import FeeStructure
+from app.models.teacher_assignment import TeacherAssignment
+from app.models.term import Term
+from app.models.timetable_entry import TimetableEntry
 from app.schemas.academic_years import AcademicYearCreate, AcademicYearOut, AcademicYearUpdate
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(require_permission("academic:read"))])
 
@@ -107,6 +120,46 @@ def delete_academic_year(year_id: uuid.UUID, db: Session = Depends(get_db), scho
     year = db.get(AcademicYear, year_id)
     if not year or year.school_id != school_id:
         raise not_found("Academic year not found")
+
+    # Automatically delete associated calendar settings as they are auto-created and shouldn't block deletion
+    db.execute(delete(AcademicCalendarSettings).where(AcademicCalendarSettings.academic_year_id == year_id))
+
+    if db.execute(select(Term).where(Term.academic_year_id == year_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete academic year {year_id} failed: Associated terms found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete academic year: It has associated terms.")
+
+    if db.execute(select(Enrollment).where(Enrollment.academic_year_id == year_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete academic year {year_id} failed: Associated enrollments found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete academic year: It has associated enrollments.")
+
+    if db.execute(select(Exam).where(Exam.academic_year_id == year_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete academic year {year_id} failed: Associated exams found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete academic year: It has associated exams.")
+
+    if db.execute(select(CurriculumUnit).where(CurriculumUnit.academic_year_id == year_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete academic year {year_id} failed: Associated curriculum units found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete academic year: It has associated curriculum units.")
+
+    if db.execute(select(FeeStructure).where(FeeStructure.academic_year_id == year_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete academic year {year_id} failed: Associated fee structures found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete academic year: It has associated fee structures.")
+
+    if db.execute(select(FeeDue).where(FeeDue.academic_year_id == year_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete academic year {year_id} failed: Associated fee dues found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete academic year: It has associated fee dues.")
+
+    if db.execute(select(FeePayment).where(FeePayment.academic_year_id == year_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete academic year {year_id} failed: Associated fee payments found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete academic year: It has associated fee payments.")
+
+    if db.execute(select(TeacherAssignment).where(TeacherAssignment.academic_year_id == year_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete academic year {year_id} failed: Associated teacher assignments found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete academic year: It has associated teacher assignments.")
+
+    if db.execute(select(TimetableEntry).where(TimetableEntry.academic_year_id == year_id).limit(1)).scalar_one_or_none():
+        logger.warning(f"Delete academic year {year_id} failed: Associated timetable entries found.")
+        raise problem(status_code=409, title="Conflict", detail="Cannot delete academic year: It has associated timetable entries.")
+
     db.delete(year)
     db.commit()
     return {"status": "ok"}

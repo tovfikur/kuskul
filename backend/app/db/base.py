@@ -66,3 +66,10 @@ from app.models.online_exam import (
     QuestionBankCategory,
     QuestionBankQuestion,
 )
+from app.models.staff_extended import Department, Designation, StaffContract
+from app.models.payroll import PayrollCycle, Payslip
+from app.models.asset import Asset, MaintenanceTicket
+from app.models.inventory import InventoryItem, InventoryLocation, StockMovement
+from app.models.procurement import PurchaseRequest, PurchaseRequestLine, PurchaseOrder
+from app.models.vendor import Vendor
+from app.models.staff_leave import LeaveType, LeaveBalance, StaffLeaveRequest

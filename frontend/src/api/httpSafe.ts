@@ -15,7 +15,11 @@ export async function safeRequest<T>(config: AxiosRequestConfig): Promise<SafeRe
     return { ok: true, status: resp.status, data: resp.data as T };
   }
   // Debug: log error responses
-  console.error("[API Error]", resp.status, config.url, JSON.stringify(resp.data, null, 2));
+  try {
+    console.error("[API Error]", resp.status, config.url, JSON.stringify(resp.data, null, 2));
+  } catch (e) {
+    console.error("[API Error]", resp.status, config.url, "Could not stringify response data");
+  }
   return { ok: false, status: resp.status, data: resp.data as unknown };
 }
 

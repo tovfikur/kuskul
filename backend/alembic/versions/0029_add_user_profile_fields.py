@@ -17,9 +17,16 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column('users', sa.Column('full_name', sa.String(length=200), nullable=True))
-    op.add_column('users', sa.Column('phone', sa.String(length=32), nullable=True))
-    op.add_column('users', sa.Column('photo_url', sa.String(length=500), nullable=True))
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    user_columns = [col['name'] for col in insp.get_columns('users')]
+
+    if 'full_name' not in user_columns:
+        op.add_column('users', sa.Column('full_name', sa.String(length=200), nullable=True))
+    if 'phone' not in user_columns:
+        op.add_column('users', sa.Column('phone', sa.String(length=32), nullable=True))
+    if 'photo_url' not in user_columns:
+        op.add_column('users', sa.Column('photo_url', sa.String(length=500), nullable=True))
 
 
 def downgrade():

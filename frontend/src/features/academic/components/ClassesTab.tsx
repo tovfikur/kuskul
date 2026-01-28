@@ -30,6 +30,7 @@ import {
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import { showToast } from "../../../app/toast";
 import {
   getClasses,
   createClass,
@@ -101,8 +102,14 @@ export default function ClassesTab() {
       await createClass(classForm);
       setOpenClassDialog(false);
       loadClasses();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      const detail = e.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.detail || "Failed to create class";
+      showToast({ message: msg, severity: "error" });
     }
   };
 
@@ -130,8 +137,14 @@ export default function ClassesTab() {
         is_active: true,
       });
       loadClasses();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      const detail = e.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.detail || "Failed to update class";
+      showToast({ message: msg, severity: "error" });
     }
   };
 
@@ -145,8 +158,15 @@ export default function ClassesTab() {
         setSections([]);
       }
       loadClasses();
-    } catch (e) {
+      showToast({ message: "Class deleted successfully", severity: "success" });
+    } catch (e: any) {
       console.error(e);
+      const detail = e.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.detail || "Failed to delete class";
+      showToast({ message: msg, severity: "error" });
     }
   };
 
@@ -179,8 +199,14 @@ export default function ClassesTab() {
       // reload sections
       const data = await getSections(selectedClass.id);
       setSections(data);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      const detail = e.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.detail || "Failed to create section";
+      showToast({ message: msg, severity: "error" });
     }
   };
 
@@ -214,22 +240,28 @@ export default function ClassesTab() {
         const data = await getSections(selectedClass.id);
         setSections(data);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      const detail = e.response?.data?.detail;
+      const msg = typeof detail === "string" ? detail : detail?.detail || "Failed to update section";
+      showToast({ message: msg, severity: "error" });
     }
   };
 
   const handleConfirmDeleteSection = async () => {
-    if (!deleteSectionTarget) return;
+    if (!deleteSectionTarget || !selectedClass) return;
     try {
       await deleteSection(deleteSectionTarget.id);
       setDeleteSectionTarget(null);
-      if (selectedClass) {
-        const data = await getSections(selectedClass.id);
-        setSections(data);
-      }
-    } catch (e) {
+      // reload sections
+      const data = await getSections(selectedClass.id);
+      setSections(data);
+      showToast({ message: "Section deleted successfully", severity: "success" });
+    } catch (e: any) {
       console.error(e);
+      const detail = e.response?.data?.detail;
+      const msg = typeof detail === "string" ? detail : detail?.detail || "Failed to delete section";
+      showToast({ message: msg, severity: "error" });
     }
   };
 

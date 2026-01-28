@@ -12,7 +12,8 @@ def _add_column_if_missing(table_name: str, column: sa.Column) -> None:
     bind = op.get_bind()
     existing = {c["name"] for c in inspect(bind).get_columns(table_name)}
     if column.name not in existing:
-        op.add_column(table_name, column)
+        with op.batch_alter_table(table_name) as batch_op:
+            batch_op.add_column(column)
 
 
 def _create_index_if_missing(index_name: str, table_name: str, columns: list[str]) -> None:

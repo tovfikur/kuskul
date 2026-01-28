@@ -63,7 +63,7 @@ def seed_demo_data():
             db.refresh(admin_user)
 
         # Ensure rich demo data for the demo school
-        from app.models import stream, subject, staff, teacher_assignment
+        from app.models import stream, subject, staff, teacher_assignment, staff_extended
         years = [
             {"name": "2023", "start_date": "2023-01-01", "end_date": "2023-12-31", "is_current": False},
             {"name": "2024", "start_date": "2024-01-01", "end_date": "2024-12-31", "is_current": True},
@@ -178,6 +178,23 @@ def seed_demo_data():
                 db.refresh(tobj)
             staff_objs.append(tobj)
         print(f"Created staff: {[t.id for t in staff_objs]}")
+
+        # Staff Contracts
+        for s in staff_objs:
+            contract = db.query(staff_extended.StaffContract).filter_by(staff_id=s.id).first()
+            if not contract:
+                contract = staff_extended.StaffContract(
+                    staff_id=s.id,
+                    contract_type="permanent",
+                    start_date=datetime.utcnow(),
+                    salary=50000,
+                    working_hours_per_week=40,
+                    status="active",
+                    created_at=datetime.utcnow()
+                )
+                db.add(contract)
+        db.commit()
+        print("Created staff contracts.")
 
         # Assign teachers to sections/subjects for current year
         for idx, sec in enumerate(section_objs):
@@ -374,8 +391,6 @@ def seed_demo_data():
         if not acs:
             acs = academic_calendar_settings.AcademicCalendarSettings(
                 academic_year_id=year_objs[-1].id,
-                holidays_enabled=True,
-                events_enabled=True,
                 created_at=datetime.utcnow(),
             )
             db.add(acs)

@@ -28,6 +28,10 @@ from app.models.student_guardian import StudentGuardian
 from app.models.teacher_assignment import StudentAttendance
 from app.models.timetable_entry import TimetableEntry
 from app.models.time_slot import TimeSlot
+from app.models.result import Result
+from app.models.exam import Exam
+from app.models.grade import Grade
+from app.models.discipline_record import DisciplineRecord
 from app.models.user import User
 from app.models.role import Role
 from app.models.membership import Membership
@@ -588,8 +592,97 @@ def get_student_marks() -> None:
 
 
 @router.get("/{student_id}/results")
-def get_student_results() -> None:
-    raise not_implemented("Student results is not implemented yet")
+def get_student_results(
+    student_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    school_id=Depends(get_active_school_id),
+) -> list[dict]:
+    s = db.get(Student, student_id)
+    if not s or s.school_id != school_id:
+        raise not_found("Student not found")
+    rows = db.execute(
+        select(Result, Exam, AcademicYear, Grade)
+        .join(Exam, Exam.id == Result.exam_id)
+        .join(AcademicYear, AcademicYear.id == Exam.academic_year_id)
+        .outerjoin(Grade, Grade.id == Result.grade_id)
+        .where(Result.student_id == student_id)
+        .order_by(Exam.start_date.desc())
+    ).all()
+    return [
+        {
+            "id": str(r.Result.id),
+            "exam_name": r.Exam.name,
+            "academic_year": r.AcademicYear.name,
+            "total_marks": r.Result.total_marks,
+            "obtained_marks": r.Result.obtained_marks,
+            "percentage": r.Result.percentage,
+            "grade": r.Grade.name if r.Grade else None,
+            "remarks": getattr(r.Result, "remarks", None),
+            "date": r.Exam.start_date.isoformat() if r.Exam.start_date else None,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/{student_id}/promotions")
+def get_student_promotions(
+    student_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    school_id=Depends(get_active_school_id),
+) -> list[dict]:
+    s = db.get(Student, student_id)
+    if not s or s.school_id != school_id:
+        raise not_found("Student not found")
+    
+    rows = db.execute(
+        select(Enrollment, AcademicYear, SchoolClass, Section)
+        .join(AcademicYear, AcademicYear.id == Enrollment.academic_year_id)
+        .join(SchoolClass, SchoolClass.id == Enrollment.class_id)
+        .outerjoin(Section, Section.id == Enrollment.section_id)
+        .where(Enrollment.student_id == student_id)
+        .order_by(AcademicYear.start_date.desc())
+    ).all()
+
+    return [
+        {
+            "id": str(r.Enrollment.id),
+            "academic_year": r.AcademicYear.name,
+            "class_name": r.SchoolClass.name,
+            "section_name": r.Section.name if r.Section else None,
+            "status": r.Enrollment.status,
+            "roll_number": r.Enrollment.roll_number,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/{student_id}/discipline")
+def get_student_discipline(
+    student_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    school_id=Depends(get_active_school_id),
+) -> list[dict]:
+    s = db.get(Student, student_id)
+    if not s or s.school_id != school_id:
+        raise not_found("Student not found")
+
+    rows = db.execute(
+        select(DisciplineRecord)
+        .where(DisciplineRecord.student_id == student_id)
+        .order_by(DisciplineRecord.created_at.desc())
+    ).scalars().all()
+
+    return [
+        {
+            "id": str(d.id),
+            "category": d.category or "General",
+            "note": d.note,
+            "is_positive": d.is_positive,
+            "date": d.created_at.date().isoformat(),
+            # "reported_by": ... # could fetch user name if needed
+        }
+        for d in rows
+    ]
 
 
 @router.get("/{student_id}/report-card/{exam_id}")

@@ -27,6 +27,7 @@ import {
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import { showToast } from "../../../app/toast";
 import {
   getSubjects,
   createSubject,
@@ -64,10 +65,10 @@ export default function SubjectsTab() {
   const [selectedClassId, setSelectedClassId] = useState("");
 
   const [editSubjectState, setEditSubjectState] = useState<Subject | null>(
-    null
+    null,
   );
   const [deleteSubjectState, setDeleteSubjectState] = useState<Subject | null>(
-    null
+    null,
   );
   const [editForm, setEditForm] = useState({
     name: "",
@@ -125,8 +126,21 @@ export default function SubjectsTab() {
         is_active: true,
       });
       load();
-    } catch (e) {
+      showToast({
+        message: "Subject created successfully",
+        severity: "success",
+      });
+    } catch (e: any) {
       console.error(e);
+      const detail = e.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.detail || "Failed to create subject";
+      showToast({
+        message: msg,
+        severity: "error",
+      });
     }
   };
 
@@ -169,8 +183,21 @@ export default function SubjectsTab() {
         is_active: true,
       });
       load();
-    } catch (e) {
+      showToast({
+        message: "Subject updated successfully",
+        severity: "success",
+      });
+    } catch (e: any) {
       console.error(e);
+      const detail = e.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.detail || "Failed to update subject";
+      showToast({
+        message: msg,
+        severity: "error",
+      });
     }
   };
 
@@ -180,8 +207,18 @@ export default function SubjectsTab() {
       await deleteSubject(deleteSubjectState.id);
       setDeleteSubjectState(null);
       load();
-    } catch (e) {
+      showToast({
+        message: "Subject deleted successfully",
+        severity: "success",
+      });
+    } catch (e: any) {
       console.error(e);
+      const detail = e.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.detail || "Failed to delete subject";
+      showToast({ message: msg, severity: "error" });
     }
   };
 
@@ -191,8 +228,21 @@ export default function SubjectsTab() {
       await assignSubjectToClass(assignSubject.id, selectedClassId);
       setAssignSubject(null);
       setSelectedClassId("");
-    } catch (e) {
+      showToast({
+        message: "Subject assigned successfully",
+        severity: "success",
+      });
+    } catch (e: any) {
       console.error(e);
+      const detail = e.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.detail || "Failed to assign subject";
+      showToast({
+        message: msg,
+        severity: "error",
+      });
     }
   };
 

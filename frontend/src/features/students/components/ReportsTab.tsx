@@ -29,8 +29,10 @@ import {
   TableChart,
   Assessment,
   TrendingUp,
+  Person,
 } from "@mui/icons-material";
 import { getStudents, type Student } from "../../../api/people";
+import IndividualReportTab from "./IndividualReportTab";
 import {
   getClasses,
   getSections,
@@ -120,13 +122,18 @@ export default function ReportsTab() {
     male: students.filter((s) => s.gender?.toLowerCase() === "male").length,
     female: students.filter((s) => s.gender?.toLowerCase() === "female").length,
     active: students.filter((s) => s.status?.toLowerCase() === "active").length,
-    inactive: students.filter((s) => s.status?.toLowerCase() === "inactive").length,
+    inactive: students.filter((s) => s.status?.toLowerCase() === "inactive")
+      .length,
   };
 
   const genderDistribution = [
     { label: "Male", value: stats.male, color: "info.main" },
     { label: "Female", value: stats.female, color: "secondary.main" },
-    { label: "Other", value: stats.total - stats.male - stats.female, color: "grey.500" },
+    {
+      label: "Other",
+      value: stats.total - stats.male - stats.female,
+      color: "grey.500",
+    },
   ];
 
   const statusDistribution = [
@@ -199,10 +206,10 @@ export default function ReportsTab() {
       </Box>
 
       {/* Report Type Tabs - Golden Ratio Design */}
-      <Paper 
+      <Paper
         elevation={0}
-        sx={{ 
-          mb: 4, 
+        sx={{
+          mb: 4,
           borderRadius: 3,
           border: "1px solid",
           borderColor: "divider",
@@ -211,27 +218,33 @@ export default function ReportsTab() {
         <Tabs
           value={activeReportTab}
           onChange={(_, v) => setActiveReportTab(v)}
-          sx={{ 
+          sx={{
             borderBottom: "1px solid",
             borderColor: "divider",
             px: 2,
           }}
         >
-          <Tab 
-            label="Overview Statistics" 
-            icon={<TrendingUp />} 
+          <Tab
+            label="Overview Statistics"
+            icon={<TrendingUp />}
             iconPosition="start"
             sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.95rem" }}
           />
-          <Tab 
-            label="Student List" 
-            icon={<TableChart />} 
+          <Tab
+            label="Student List"
+            icon={<TableChart />}
             iconPosition="start"
             sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.95rem" }}
           />
-          <Tab 
-            label="Distribution Analysis" 
-            icon={<Assessment />} 
+          <Tab
+            label="Distribution Analysis"
+            icon={<Assessment />}
+            iconPosition="start"
+            sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.95rem" }}
+          />
+          <Tab
+            label="Individual Report"
+            icon={<Person />}
             iconPosition="start"
             sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.95rem" }}
           />
@@ -239,10 +252,10 @@ export default function ReportsTab() {
       </Paper>
 
       {/* Filters - Golden Ratio Spacing */}
-      <Paper 
+      <Paper
         elevation={0}
-        sx={{ 
-          p: 3, 
+        sx={{
+          p: 3,
           mb: 4,
           borderRadius: 3,
           border: "1px solid",
@@ -323,9 +336,9 @@ export default function ReportsTab() {
             </FormControl>
           </Grid>
         </Grid>
-        
+
         <Divider sx={{ my: 3 }} />
-        
+
         <Stack direction="row" spacing={2}>
           <Button
             variant="contained"
@@ -368,7 +381,11 @@ export default function ReportsTab() {
                 }}
               >
                 <CardContent sx={{ p: 3 }}>
-                  <Typography color="text.secondary" variant="body2" sx={{ mb: 1.5, fontWeight: 500 }}>
+                  <Typography
+                    color="text.secondary"
+                    variant="body2"
+                    sx={{ mb: 1.5, fontWeight: 500 }}
+                  >
                     Total Students
                   </Typography>
                   <Typography variant="h3" fontWeight={700} color="primary">
@@ -394,10 +411,18 @@ export default function ReportsTab() {
                 }}
               >
                 <CardContent sx={{ p: 3 }}>
-                  <Typography color="success.dark" variant="body2" sx={{ mb: 1.5, fontWeight: 500 }}>
+                  <Typography
+                    color="success.dark"
+                    variant="body2"
+                    sx={{ mb: 1.5, fontWeight: 500 }}
+                  >
                     Active Students
                   </Typography>
-                  <Typography variant="h3" fontWeight={700} color="success.main">
+                  <Typography
+                    variant="h3"
+                    fontWeight={700}
+                    color="success.main"
+                  >
                     {stats.active}
                   </Typography>
                 </CardContent>
@@ -420,7 +445,11 @@ export default function ReportsTab() {
                 }}
               >
                 <CardContent sx={{ p: 3 }}>
-                  <Typography color="info.dark" variant="body2" sx={{ mb: 1.5, fontWeight: 500 }}>
+                  <Typography
+                    color="info.dark"
+                    variant="body2"
+                    sx={{ mb: 1.5, fontWeight: 500 }}
+                  >
                     Male Students
                   </Typography>
                   <Typography variant="h3" fontWeight={700} color="info.main">
@@ -446,10 +475,18 @@ export default function ReportsTab() {
                 }}
               >
                 <CardContent sx={{ p: 3 }}>
-                  <Typography color="secondary.dark" variant="body2" sx={{ mb: 1.5, fontWeight: 500 }}>
+                  <Typography
+                    color="secondary.dark"
+                    variant="body2"
+                    sx={{ mb: 1.5, fontWeight: 500 }}
+                  >
                     Female Students
                   </Typography>
-                  <Typography variant="h3" fontWeight={700} color="secondary.main">
+                  <Typography
+                    variant="h3"
+                    fontWeight={700}
+                    color="secondary.main"
+                  >
                     {stats.female}
                   </Typography>
                 </CardContent>
@@ -460,11 +497,11 @@ export default function ReportsTab() {
           {/* Distribution Charts */}
           <Grid container spacing={3}>
             <Grid container item xs={12} md={6}>
-              <Paper 
+              <Paper
                 elevation={0}
-                sx={{ 
+                sx={{
                   width: "100%",
-                  p: 4, 
+                  p: 4,
                   borderRadius: 3,
                   border: "1px solid",
                   borderColor: "divider",
@@ -473,22 +510,40 @@ export default function ReportsTab() {
                 <Typography variant="h6" fontWeight={700} gutterBottom>
                   Gender Distribution
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 3 }}
+                >
                   Breakdown by gender category
                 </Typography>
                 {genderDistribution.map((item) => (
                   <Box key={item.label} sx={{ mb: 3 }}>
-                    <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      sx={{ mb: 1 }}
+                    >
                       <Typography variant="body2" fontWeight={600}>
                         {item.label}
                       </Typography>
-                      <Typography variant="body2" fontWeight={600} color={item.color}>
-                        {item.value} ({stats.total > 0 ? ((item.value / stats.total) * 100).toFixed(1) : 0}%)
+                      <Typography
+                        variant="body2"
+                        fontWeight={600}
+                        color={item.color}
+                      >
+                        {item.value} (
+                        {stats.total > 0
+                          ? ((item.value / stats.total) * 100).toFixed(1)
+                          : 0}
+                        %)
                       </Typography>
                     </Stack>
                     <LinearProgress
                       variant="determinate"
-                      value={stats.total > 0 ? (item.value / stats.total) * 100 : 0}
+                      value={
+                        stats.total > 0 ? (item.value / stats.total) * 100 : 0
+                      }
                       sx={{
                         height: 10,
                         borderRadius: 5,
@@ -505,11 +560,11 @@ export default function ReportsTab() {
             </Grid>
 
             <Grid container item xs={12} md={6}>
-              <Paper 
+              <Paper
                 elevation={0}
-                sx={{ 
+                sx={{
                   width: "100%",
-                  p: 4, 
+                  p: 4,
                   borderRadius: 3,
                   border: "1px solid",
                   borderColor: "divider",
@@ -518,22 +573,40 @@ export default function ReportsTab() {
                 <Typography variant="h6" fontWeight={700} gutterBottom>
                   Status Distribution
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 3 }}
+                >
                   Active vs inactive students
                 </Typography>
                 {statusDistribution.map((item) => (
                   <Box key={item.label} sx={{ mb: 3 }}>
-                    <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      sx={{ mb: 1 }}
+                    >
                       <Typography variant="body2" fontWeight={600}>
                         {item.label}
                       </Typography>
-                      <Typography variant="body2" fontWeight={600} color={item.color}>
-                        {item.value} ({stats.total > 0 ? ((item.value / stats.total) * 100).toFixed(1) : 0}%)
+                      <Typography
+                        variant="body2"
+                        fontWeight={600}
+                        color={item.color}
+                      >
+                        {item.value} (
+                        {stats.total > 0
+                          ? ((item.value / stats.total) * 100).toFixed(1)
+                          : 0}
+                        %)
                       </Typography>
                     </Stack>
                     <LinearProgress
                       variant="determinate"
-                      value={stats.total > 0 ? (item.value / stats.total) * 100 : 0}
+                      value={
+                        stats.total > 0 ? (item.value / stats.total) * 100 : 0
+                      }
                       sx={{
                         height: 10,
                         borderRadius: 5,
@@ -584,7 +657,9 @@ export default function ReportsTab() {
                 ) : students.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                      <Typography color="text.secondary">No data found</Typography>
+                      <Typography color="text.secondary">
+                        No data found
+                      </Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -629,11 +704,11 @@ export default function ReportsTab() {
         <Box>
           <Grid container spacing={3}>
             <Grid container item xs={12}>
-              <Paper 
+              <Paper
                 elevation={0}
-                sx={{ 
+                sx={{
                   width: "100%",
-                  p: 4, 
+                  p: 4,
                   borderRadius: 3,
                   border: "1px solid",
                   borderColor: "divider",
@@ -642,7 +717,11 @@ export default function ReportsTab() {
                 <Typography variant="h6" fontWeight={700} gutterBottom>
                   Detailed Gender Analysis
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 4 }}
+                >
                   Comprehensive breakdown of student demographics
                 </Typography>
                 <Grid container spacing={3}>
@@ -658,26 +737,51 @@ export default function ReportsTab() {
                         }}
                       >
                         <CardContent sx={{ p: 3, textAlign: "center" }}>
-                          <Typography color="text.secondary" gutterBottom variant="body2" fontWeight={500}>
+                          <Typography
+                            color="text.secondary"
+                            gutterBottom
+                            variant="body2"
+                            fontWeight={500}
+                          >
                             {item.label}
                           </Typography>
-                          <Typography variant="h2" fontWeight={700} color={item.color} sx={{ my: 2 }}>
+                          <Typography
+                            variant="h2"
+                            fontWeight={700}
+                            color={item.color}
+                            sx={{ my: 2 }}
+                          >
                             {item.value}
                           </Typography>
-                          <Typography variant="body1" color="text.secondary" fontWeight={600}>
-                            {stats.total > 0 ? ((item.value / stats.total) * 100).toFixed(1) : 0}% of total
+                          <Typography
+                            variant="body1"
+                            color="text.secondary"
+                            fontWeight={600}
+                          >
+                            {stats.total > 0
+                              ? ((item.value / stats.total) * 100).toFixed(1)
+                              : 0}
+                            % of total
                           </Typography>
                         </CardContent>
                       </Card>
                     </Grid>
                   ))}
                 </Grid>
-                <Box sx={{ mt: 4, pt: 3, borderTop: "1px solid", borderColor: "divider" }}>
+                <Box
+                  sx={{
+                    mt: 4,
+                    pt: 3,
+                    borderTop: "1px solid",
+                    borderColor: "divider",
+                  }}
+                >
                   <Typography variant="body2" color="text.secondary">
                     Total students analyzed: <strong>{stats.total}</strong>
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Report generated: <strong>{new Date().toLocaleString()}</strong>
+                    Report generated:{" "}
+                    <strong>{new Date().toLocaleString()}</strong>
                   </Typography>
                 </Box>
               </Paper>
@@ -685,6 +789,8 @@ export default function ReportsTab() {
           </Grid>
         </Box>
       )}
+
+      {activeReportTab === 3 && <IndividualReportTab />}
     </Box>
   );
 }
