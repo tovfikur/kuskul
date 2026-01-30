@@ -8,6 +8,8 @@ const AUTH_STORAGE_KEY = "kuskul_auth";
 type AuthState = {
   accessToken: string | null;
   email: string | null;
+  isPlatformAdmin: boolean;
+  tenantId: string | null;
   memberships: Array<{
     school_id: string;
     role_id: string;
@@ -53,6 +55,8 @@ const storedAuth = getStoredAuth();
 const initialState: AuthState = {
   accessToken: storedAuth.token,
   email: null,
+  isPlatformAdmin: false,
+  tenantId: null,
   memberships: [],
   activeSchoolId: storedAuth.schoolId,
   status: "idle",
@@ -114,9 +118,12 @@ const slice = createSlice({
         state.status = "idle";
         state.sessionChecked = true;
         state.email = action.payload.profile.email;
+        state.isPlatformAdmin = !!action.payload.profile.is_platform_admin;
+        state.tenantId = action.payload.profile.tenant_id ?? null;
         state.memberships = action.payload.profile.memberships;
-        state.activeSchoolId =
-          action.payload.profile.memberships[0]?.school_id ?? null;
+        state.activeSchoolId = state.isPlatformAdmin
+          ? null
+          : action.payload.profile.memberships[0]?.school_id ?? null;
         // Keep existing token or use null (cookie-based auth)
         if (action.payload.token) {
           state.accessToken = action.payload.token;
@@ -128,6 +135,8 @@ const slice = createSlice({
         state.sessionChecked = true;
         state.accessToken = null;
         state.email = null;
+        state.isPlatformAdmin = false;
+        state.tenantId = null;
         state.memberships = [];
         state.activeSchoolId = null;
         saveAuthToStorage(null, null);
@@ -141,9 +150,12 @@ const slice = createSlice({
         state.sessionChecked = true;
         state.accessToken = action.payload.token.access_token;
         state.email = action.payload.profile.email;
+        state.isPlatformAdmin = !!action.payload.profile.is_platform_admin;
+        state.tenantId = action.payload.profile.tenant_id ?? null;
         state.memberships = action.payload.profile.memberships;
-        state.activeSchoolId =
-          action.payload.profile.memberships[0]?.school_id ?? null;
+        state.activeSchoolId = state.isPlatformAdmin
+          ? null
+          : action.payload.profile.memberships[0]?.school_id ?? null;
         saveAuthToStorage(state.accessToken, state.activeSchoolId);
       })
       .addCase(signIn.rejected, (state) => {
@@ -153,6 +165,8 @@ const slice = createSlice({
       .addCase(signOut.fulfilled, (state) => {
         state.accessToken = null;
         state.email = null;
+        state.isPlatformAdmin = false;
+        state.tenantId = null;
         state.memberships = [];
         state.activeSchoolId = null;
         state.status = "idle";

@@ -23,7 +23,7 @@ services:
       API_V1_PREFIX: /api/v1
       DATABASE_URL: postgresql+psycopg://kuskul:kuskul@db:5432/kuskul
       JWT_SECRET_KEY: change-me-please-32-bytes
-      CORS_ORIGINS: http://localhost:3000
+      CORS_ORIGINS: http://localhost:3000,http://admin.localhost:3000
       REFRESH_TOKEN_COOKIE_SECURE: "false"
       REFRESH_TOKEN_COOKIE_SAMESITE: lax
       RATE_LIMIT_ENABLED: "false"
@@ -43,7 +43,8 @@ services:
     image: node:20
     working_dir: /app
     environment:
-      VITE_API_BASE_URL: http://localhost:8000/api/v1
+      VITE_API_BASE_URL: /api/v1
+      VITE_PROXY_TARGET: http://api:8000
     ports:
       - "3000:5173"
     volumes:

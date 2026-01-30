@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select, delete
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_active_school_id, get_current_user, require_permission
+from app.api.deps import get_active_school_id, get_current_user, require_permission, get_current_tenant_id
 from app.core.problems import not_found, problem
 from app.db.session import get_db
 from app.models.document import Document
@@ -101,11 +101,11 @@ def _generate_admission_no(db: Session, school_id: uuid.UUID) -> Optional[str]:
     
     return f"{prefix}{next_num}"
 
-
 @router.get("", response_model=dict)
 def list_students(
     db: Session = Depends(get_db),
     school_id=Depends(get_active_school_id),
+    tenant_id: Optional[uuid.UUID] = Depends(get_current_tenant_id),
     page: int = 1,
     limit: int = 20,
     class_id: Optional[uuid.UUID] = None,
@@ -118,6 +118,8 @@ def list_students(
     offset = (page - 1) * limit if page > 1 else 0
 
     base = select(Student).where(Student.school_id == school_id)
+    if tenant_id:
+        base = base.where(Student.tenant_id == tenant_id)
     if search:
         base = base.where(
             (Student.first_name.ilike(f"%{search}%"))

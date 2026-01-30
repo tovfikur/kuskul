@@ -9,6 +9,12 @@ export function setupInterceptors() {
     const state = store.getState();
     const token = state.auth.accessToken;
     const schoolId = state.auth.activeSchoolId;
+    const isBareHost =
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
+    const tenantSubdomain = isBareHost
+      ? localStorage.getItem("kuskul_tenant_subdomain")
+      : null;
 
     if (token) {
       config.headers = config.headers ?? {};
@@ -22,14 +28,11 @@ export function setupInterceptors() {
       }
     }
 
-    // Debug: Log requests to staff endpoints
-    if (config.url?.includes("/staff/")) {
-      console.log("[DEBUG] API Request:", {
-        url: config.url,
-        schoolId: schoolId,
-        hasSchoolIdHeader: !!config.headers?.["X-School-Id"],
-        headers: config.headers,
-      });
+    if (tenantSubdomain) {
+      config.headers = config.headers ?? {};
+      if (!config.headers["X-Tenant-Subdomain"]) {
+        config.headers["X-Tenant-Subdomain"] = tenantSubdomain;
+      }
     }
 
     return config;

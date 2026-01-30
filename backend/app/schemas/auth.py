@@ -38,6 +38,8 @@ class MeResponse(BaseModel):
     user_id: uuid.UUID
     email: EmailStr
     memberships: list[dict]
+    is_platform_admin: bool = False
+    tenant_id: Optional[uuid.UUID] = None
 
 
 class ParentRegisterRequest(BaseModel):

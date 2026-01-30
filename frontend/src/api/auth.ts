@@ -3,6 +3,7 @@ import { api } from "./client";
 export type LoginRequest = {
   email: string;
   password: string;
+  tenant_subdomain?: string;
 };
 
 export type TokenResponse = {
@@ -18,10 +19,19 @@ export type MeResponse = {
     role_id: string;
     school_name: string;
   }>;
+  is_platform_admin: boolean;
+  tenant_id?: string | null;
 };
 
 export async function login(payload: LoginRequest): Promise<TokenResponse> {
-  const resp = await api.post("/auth/login", payload);
+  const headers = payload.tenant_subdomain
+    ? { "X-Tenant-Subdomain": payload.tenant_subdomain }
+    : undefined;
+  const resp = await api.post(
+    "/auth/login",
+    { email: payload.email, password: payload.password },
+    { headers }
+  );
   return resp.data as TokenResponse;
 }
 

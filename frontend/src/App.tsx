@@ -3,7 +3,10 @@ import { Route, Routes } from "react-router-dom";
 
 import { LoginPage } from "./features/auth/LoginPage";
 import { RequireAuth } from "./features/auth/RequireAuth";
+import { RequirePlatformAdmin } from "./features/auth/RequirePlatformAdmin";
+import { RequireTenantUser } from "./features/auth/RequireTenantUser";
 import DashboardPage from "./pages/DashboardPage";
+import LandingPage from "./pages/LandingPage";
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
 
@@ -17,10 +20,12 @@ import LogisticsPage from "./features/logistics/LogisticsPage";
 import SettingsPage from "./features/settings/SettingsPage";
 import SystemUsersPage from "./features/settings/SystemUsersPage";
 import UsersPage from "./features/users/UsersPage";
+import { SaasAdminPage } from "./features/saas/SaasAdminPage";
 
 function App() {
   return (
     <Routes>
+      <Route path="/" element={<LandingPage />} />
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
       </Route>
@@ -28,11 +33,13 @@ function App() {
       <Route
         element={
           <RequireAuth>
-            <MainLayout />
+            <RequireTenantUser>
+              <MainLayout />
+            </RequireTenantUser>
           </RequireAuth>
         }
       >
-        <Route path="/" element={<DashboardPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/academic" element={<AcademicPage />} />
         <Route path="/students" element={<StudentsPage />} />
         <Route path="/staff" element={<StaffPage />} />
@@ -44,6 +51,17 @@ function App() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/users" element={<SystemUsersPage />} />
       </Route>
+
+      <Route
+        path="/saas-admin"
+        element={
+          <RequireAuth>
+            <RequirePlatformAdmin>
+              <SaasAdminPage />
+            </RequirePlatformAdmin>
+          </RequireAuth>
+        }
+      />
     </Routes>
   );
 }

@@ -2,11 +2,11 @@ from datetime import datetime, timezone
 
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, has_permission, is_super_admin, require_permission
+from app.api.deps import get_current_user, has_permission, require_permission
 from app.core.problems import not_found, problem
 from app.core.seed import ensure_default_roles
 from app.db.session import get_db
@@ -19,19 +19,17 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[SchoolOut])
-def list_schools(db: Session = Depends(get_db), user=Depends(get_current_user)) -> list[SchoolOut]:
-    # If super admin, return all schools
-    from app.api.deps import is_super_admin
-    if is_super_admin(db, user.id):
-        schools = db.execute(select(School)).scalars().all()
-        return [SchoolOut(id=s.id, name=s.name, code=s.code, is_active=s.is_active) for s in schools]
-    # Otherwise, only schools with membership
-    school_ids = db.execute(
-        select(Membership.school_id).where(Membership.user_id == user.id, Membership.is_active.is_(True))
+def list_schools(request: Request, db: Session = Depends(get_db), user=Depends(get_current_user)) -> list[SchoolOut]:
+    tenant_id = request.state.tenant_id
+    schools = db.execute(
+        select(School)
+        .join(Membership, Membership.school_id == School.id)
+        .where(
+            Membership.user_id == user.id,
+            Membership.is_active.is_(True),
+            School.tenant_id == tenant_id,
+        )
     ).scalars().all()
-    if not school_ids:
-        return []
-    schools = db.execute(select(School).where(School.id.in_(school_ids))).scalars().all()
     return [SchoolOut(id=s.id, name=s.name, code=s.code, is_active=s.is_active) for s in schools]
 
 
@@ -55,9 +53,8 @@ def create_school(payload: SchoolCreate, db: Session = Depends(get_db), user=Dep
 
 @router.get("/{school_id}", response_model=SchoolOut)
 def get_school(school_id: uuid.UUID, db: Session = Depends(get_db), user=Depends(get_current_user)) -> SchoolOut:
-    if not is_super_admin(db, user.id):
-        if not has_permission(db, user_id=user.id, school_id=school_id, permission="schools:read"):
-            raise not_found("School not found")
+    if not has_permission(db, user_id=user.id, school_id=school_id, permission="schools:read"):
+        raise not_found("School not found")
     school = db.get(School, school_id)
     if not school:
         raise not_found("School not found")
@@ -71,9 +68,8 @@ def update_school(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ) -> SchoolOut:
-    if not is_super_admin(db, user.id):
-        if not has_permission(db, user_id=user.id, school_id=school_id, permission="schools:write"):
-            raise not_found("School not found")
+    if not has_permission(db, user_id=user.id, school_id=school_id, permission="schools:write"):
+        raise not_found("School not found")
 
     school = db.get(School, school_id)
     if not school:
@@ -99,9 +95,8 @@ def delete_school(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ) -> dict[str, str]:
-    if not is_super_admin(db, user.id):
-        if not has_permission(db, user_id=user.id, school_id=school_id, permission="schools:write"):
-            raise not_found("School not found")
+    if not has_permission(db, user_id=user.id, school_id=school_id, permission="schools:write"):
+        raise not_found("School not found")
     school = db.get(School, school_id)
     if not school:
         raise not_found("School not found")

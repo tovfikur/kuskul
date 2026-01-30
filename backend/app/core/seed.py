@@ -9,11 +9,13 @@ from app.models.exam_type_master import ExamTypeMaster
 from app.models.membership import Membership
 from app.models.role import Role
 from app.models.school import School
+from app.models.tenant import Tenant
 from app.models.user import User
 
 
 def ensure_default_roles(db: Session) -> None:
     seed_roles = {
+        "platform_admin": {"allow": ["platform:tenants:read", "platform:tenants:write"]},
         "super_admin": {"allow": ["super:*"]},
         "admin": {
             "allow": [
@@ -211,6 +213,40 @@ def ensure_default_roles(db: Session) -> None:
     db.flush()
 
 
+def ensure_platform_admin(db: Session) -> None:
+    email = "platform@kuskul.com"
+    password = "password123"
+    school_code = "KUSKUL_PLATFORM"
+    school_name = "KusKul Platform"
+
+    ensure_default_roles(db)
+
+    now = datetime.now(timezone.utc)
+    user = db.scalar(select(User).where(User.email == email))
+    if not user:
+        user = User(
+            email=email,
+            password_hash=hash_password(password),
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(user)
+        db.flush()
+
+    school = db.scalar(select(School).where(School.code == school_code))
+    if not school:
+        school = School(name=school_name, code=school_code, is_active=True, created_at=now)
+        db.add(school)
+        db.flush()
+
+    role = db.scalar(select(Role).where(Role.name == "platform_admin"))
+    existing_membership = db.scalar(select(Membership).where(Membership.user_id == user.id, Membership.school_id == school.id))
+    if role and not existing_membership:
+        db.add(Membership(user_id=user.id, school_id=school.id, role_id=role.id, is_active=True, created_at=now))
+    db.flush()
+
+
 def ensure_default_exam_types(db: Session) -> None:
     bind = db.get_bind()
     if not inspect(bind).has_table("exam_type_master"):
@@ -319,16 +355,40 @@ def ensure_default_admin(db: Session) -> None:
     password = "password123"
     school_code = "KUSKUL_DEMO"
     school_name = "KusKul Demo School"
+    tenant_subdomain = "demo"
+    tenant_name = "KusKul Demo"
 
     ensure_default_roles(db)
     ensure_default_exam_types(db)
 
+    now = datetime.now(timezone.utc)
+    tenant = db.scalar(select(Tenant).where(Tenant.subdomain == tenant_subdomain))
+    if not tenant:
+        tenant = Tenant(
+            name=tenant_name,
+            subdomain=tenant_subdomain,
+            custom_domain=None,
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(tenant)
+        db.flush()
+
     existing_user = db.scalar(select(User).where(User.email == email))
     if existing_user:
+        if existing_user.tenant_id != tenant.id:
+            existing_user.tenant_id = tenant.id
+            existing_user.updated_at = now
+        db.flush()
+        school = db.scalar(select(School).where(School.code == school_code))
+        if school and school.tenant_id != tenant.id:
+            school.tenant_id = tenant.id
+        db.flush()
         return
 
-    now = datetime.now(timezone.utc)
     user = User(
+        tenant_id=tenant.id,
         email=email,
         password_hash=hash_password(password),
         is_active=True,
@@ -339,8 +399,10 @@ def ensure_default_admin(db: Session) -> None:
 
     school = db.scalar(select(School).where(School.code == school_code))
     if not school:
-        school = School(name=school_name, code=school_code, is_active=True, created_at=now)
+        school = School(tenant_id=tenant.id, name=school_name, code=school_code, is_active=True, created_at=now)
         db.add(school)
+    elif school.tenant_id != tenant.id:
+        school.tenant_id = tenant.id
 
     role = db.scalar(select(Role).where(Role.name == "admin"))
     db.flush()

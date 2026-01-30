@@ -31,16 +31,20 @@ class Settings(BaseSettings):
     @property
     def cors_allow_origins(self) -> list[str]:
         s = (self.cors_origins or "").strip()
+        origins = []
         if not s:
             return []
         if s.startswith("["):
             try:
                 parsed = json.loads(s)
                 if isinstance(parsed, list):
-                    return [str(x).strip() for x in parsed if str(x).strip()]
+                    origins = [str(x).strip() for x in parsed if str(x).strip()]
             except Exception:
-                return []
-        return [part.strip() for part in s.split(",") if part.strip()]
+                pass
+        else:
+            origins = [part.strip() for part in s.split(",") if part.strip()]
+            
+        return origins
 
 
 settings = Settings()

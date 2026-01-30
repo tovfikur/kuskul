@@ -19,6 +19,8 @@ test("Super Admin login flow", async ({ page }) => {
       body: JSON.stringify({
         user_id: "1",
         email: "admin@kuskul.com",
+        is_platform_admin: false,
+        tenant_id: "tenant-1",
         memberships: [
           {
             school_id: "school-1",
@@ -32,16 +34,18 @@ test("Super Admin login flow", async ({ page }) => {
 
   await page.goto("/login");
 
+  if (await page.locator('input[name="tenant_subdomain"]').isVisible()) {
+    await page.fill('input[name="tenant_subdomain"]', "demo");
+  }
+
   await page.fill('input[name="email"]', "admin@kuskul.com");
   await page.fill('input[name="password"]', "password123");
 
   await page.click('button[type="submit"]');
 
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/dashboard");
 
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-
-  await expect(page.getByText("Total Students")).toBeVisible();
+  await expect(page.getByText(/Welcome to/i)).toBeVisible();
 
   const academicNav = page.getByRole("button", { name: "Academic" });
   if (!(await academicNav.isVisible())) {

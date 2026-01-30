@@ -1,5 +1,6 @@
 from app.db.session import Base
 
+from app.models.tenant import Tenant
 from app.models.membership import Membership
 from app.models.refresh_token import RefreshToken
 from app.models.role import Role

@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Cookie, Depends, Response
+from fastapi import APIRouter, Cookie, Depends, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -55,57 +55,25 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
 
 
 @router.post("/register", response_model=TokenResponse)
-def register(payload: RegisterRequest, response: Response, db: Session = Depends(get_db)) -> TokenResponse:
-    existing = db.scalar(select(User).where(User.email == payload.email))
-    if existing:
-        raise problem(status_code=409, title="Conflict", detail="Email already registered")
-
-    now = datetime.now(timezone.utc)
-    user = User(email=payload.email, password_hash=hash_password(payload.password), is_active=True, created_at=now, updated_at=now)
-    db.add(user)
-
-    school_existing = db.scalar(select(School).where(School.code == payload.school_code))
-    if school_existing:
-        raise problem(status_code=409, title="Conflict", detail="School code already exists")
-
-    school = School(name=payload.school_name, code=payload.school_code, is_active=True, created_at=now)
-    db.add(school)
-
-    ensure_default_roles(db)
-    role = db.scalar(select(Role).where(Role.name == "admin"))
-
-    db.flush()
-    membership = Membership(user_id=user.id, school_id=school.id, role_id=role.id, is_active=True, created_at=now)
-    db.add(membership)
-
-    raw_refresh = new_refresh_token()
-    refresh = RefreshToken(
-        user_id=user.id,
-        token_hash=hash_refresh_token(raw_refresh),
-        expires_at=now + timedelta(days=settings.refresh_token_expires_days),
-        revoked_at=None,
-        created_at=now,
-    )
-    db.add(refresh)
-    db.commit()
-
-    _set_refresh_cookie(response, raw_refresh)
-    access = create_access_token(subject=str(user.id), claims={"email": user.email})
-    return TokenResponse(access_token=access)
+def register(payload: RegisterRequest, response: Response, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
+    raise not_implemented("Use SaaS admin to provision tenants")
 
 
 @router.post("/register-parent", response_model=TokenResponse)
-def register_parent(payload: ParentRegisterRequest, response: Response, db: Session = Depends(get_db)) -> TokenResponse:
+def register_parent(payload: ParentRegisterRequest, response: Response, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
+    tenant_id = getattr(request.state, "tenant_id", None)
+    if tenant_id is None:
+        raise forbidden("Tenant is required")
     existing = db.scalar(select(User).where(User.email == payload.email))
     if existing:
         raise problem(status_code=409, title="Conflict", detail="Email already registered")
 
-    school = db.scalar(select(School).where(School.code == payload.school_code))
+    school = db.scalar(select(School).where(School.code == payload.school_code, School.tenant_id == tenant_id))
     if not school or not school.is_active:
         raise not_found("School not found")
 
     now = datetime.now(timezone.utc)
-    user = User(email=payload.email, password_hash=hash_password(payload.password), is_active=True, created_at=now, updated_at=now)
+    user = User(tenant_id=tenant_id, email=payload.email, password_hash=hash_password(payload.password), is_active=True, created_at=now, updated_at=now)
     db.add(user)
 
     ensure_default_roles(db)
@@ -159,16 +127,43 @@ def register_parent(payload: ParentRegisterRequest, response: Response, db: Sess
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)) -> TokenResponse:
+def login(payload: LoginRequest, response: Response, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
     user = db.scalar(select(User).where(User.email == payload.email))
     if not user or not user.is_active:
         raise unauthorized("Invalid credentials")
     if not verify_password(payload.password, user.password_hash):
         raise unauthorized("Invalid credentials")
 
-    has_membership = db.scalar(select(Membership).where(Membership.user_id == user.id, Membership.is_active.is_(True)))
-    if not has_membership:
-        raise forbidden("User has no active school membership")
+    tenant_id = getattr(request.state, "tenant_id", None)
+    is_saas_admin = bool(getattr(request.state, "is_saas_admin", False))
+    if is_saas_admin:
+        if user.tenant_id is not None:
+            raise unauthorized("Invalid tenant context")
+        platform_membership = db.execute(
+            select(Membership)
+            .join(Role, Role.id == Membership.role_id)
+            .where(Membership.user_id == user.id, Membership.is_active.is_(True), Role.name == "platform_admin")
+            .limit(1)
+        ).scalar_one_or_none()
+        if not platform_membership:
+            raise forbidden("Platform admin access required")
+    else:
+        if tenant_id is None:
+            raise forbidden("Tenant is required")
+        if user.tenant_id != tenant_id:
+            raise unauthorized("Invalid tenant context")
+        has_membership = db.execute(
+            select(Membership)
+            .join(School, School.id == Membership.school_id)
+            .where(
+                Membership.user_id == user.id,
+                Membership.is_active.is_(True),
+                School.tenant_id == tenant_id,
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        if not has_membership:
+            raise forbidden("User has no active school membership")
 
     now = datetime.now(timezone.utc)
     raw_refresh = new_refresh_token()
@@ -361,4 +356,16 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)) ->
             "role_id": str(m.role_id),
             "school_name": s.name
         })
-    return MeResponse(user_id=user.id, email=user.email, memberships=items)
+    is_platform_admin = db.execute(
+        select(Membership)
+        .join(Role, Role.id == Membership.role_id)
+        .where(Membership.user_id == user.id, Membership.is_active.is_(True), Role.name == "platform_admin")
+        .limit(1)
+    ).scalar_one_or_none() is not None
+    return MeResponse(
+        user_id=user.id,
+        email=user.email,
+        memberships=items,
+        is_platform_admin=is_platform_admin,
+        tenant_id=user.tenant_id,
+    )

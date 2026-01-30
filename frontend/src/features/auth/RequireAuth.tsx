@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { Box, CircularProgress } from "@mui/material";
 
@@ -8,6 +8,7 @@ import { restoreSession } from "./authSlice";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const dispatch = useAppDispatch();
+  const location = useLocation();
   const token = useAppSelector((s) => s.auth.accessToken);
   const sessionChecked = useAppSelector((s) => s.auth.sessionChecked);
   const status = useAppSelector((s) => s.auth.status);
@@ -37,7 +38,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   // If session checked and no token, redirect to login
   if (!token) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   return children;

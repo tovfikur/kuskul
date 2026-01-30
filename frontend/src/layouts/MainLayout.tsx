@@ -68,7 +68,7 @@ export default function MainLayout() {
   };
 
   const menuItems = [
-    { text: "Dashboard", icon: <DashboardIcon />, path: "/" },
+    { text: "Dashboard", icon: <DashboardIcon />, path: "/dashboard" },
     { text: "Academic", icon: <MenuBook />, path: "/academic" },
     { text: "Students", icon: <SchoolIcon />, path: "/students" },
     { text: "Staff", icon: <Badge />, path: "/staff" },

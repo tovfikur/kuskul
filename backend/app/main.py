@@ -10,9 +10,10 @@ from app.core.config import settings
 from app.core.rate_limit import InMemoryRateLimiter, RateLimitRule
 from app.core.security import decode_access_token
 from app.core.audit import write_audit_log
-from app.core.seed import ensure_default_admin
+from app.core.seed import ensure_default_admin, ensure_platform_admin
 from fastapi.staticfiles import StaticFiles
 from app.db.session import SessionLocal
+from app.core.tenant_middleware import TenantMiddleware
 
 
 def create_app() -> FastAPI:
@@ -126,6 +127,7 @@ def create_app() -> FastAPI:
     db = SessionLocal()
     try:
         ensure_default_admin(db)
+        ensure_platform_admin(db)
         
         # Fix invalid emails ending in .local
         from sqlalchemy import text
@@ -144,9 +146,12 @@ def create_app() -> FastAPI:
     finally:
         db.close()
 
+    app.add_middleware(TenantMiddleware)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allow_origins,
+        allow_origin_regex=r"http://.*\.(localhost|lvh\.me):\d+" if settings.environment == "development" else None,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
