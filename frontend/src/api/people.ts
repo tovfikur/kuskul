@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { AxiosRequestConfig } from "axios";
 
 export type Student = {
   id: string;
@@ -69,7 +70,7 @@ export type Guardian = {
 export type StudentDocument = {
   id: string;
   school_id: string;
-  uploaded_by_user_id: string;
+  uploaded_by_user_id?: string | null;
   entity_type: string;
   entity_id: string;
   filename: string;
@@ -162,6 +163,16 @@ export async function createUser(payload: {
   is_active?: boolean;
 }): Promise<User> {
   const resp = await api.post("/users", payload);
+  return resp.data;
+}
+
+export async function createTeacherUserFromStaff(payload: {
+  email: string;
+  password?: string;
+  full_name?: string;
+  is_active?: boolean;
+}): Promise<User> {
+  const resp = await api.post("/users/teacher-from-staff", payload);
   return resp.data;
 }
 
@@ -270,8 +281,8 @@ export async function createStudent(payload: {
   hostel_status?: string | null;
   library_card_no?: string | null;
   status?: string;
-}): Promise<Student> {
-  const resp = await api.post("/students", payload);
+}, config?: AxiosRequestConfig): Promise<Student> {
+  const resp = await api.post("/students", payload, config);
   return resp.data;
 }
 
@@ -336,19 +347,32 @@ export async function deleteStudent(studentId: string): Promise<void> {
 export async function uploadStudentPhoto(
   studentId: string,
   file: File,
+  config?: AxiosRequestConfig,
 ): Promise<void> {
   const formData = new FormData();
   formData.append("file", file);
-  await api.post(`/students/${studentId}/photo`, formData);
+  await api.post(`/students/${studentId}/photo`, formData, config);
 }
 
 export async function uploadStudentDocument(
   studentId: string,
   file: File,
+  documentType?: "transfer_certificate" | "birth_certificate",
+  config?: AxiosRequestConfig,
 ): Promise<StudentDocument> {
   const formData = new FormData();
   formData.append("file", file);
-  const resp = await api.post(`/students/${studentId}/documents`, formData);
+  if (documentType) {
+    formData.append("document_type", documentType);
+  }
+  const resp = await api.post(`/students/${studentId}/documents`, formData, config);
+  return resp.data;
+}
+
+export async function getStudentDocuments(
+  studentId: string,
+): Promise<StudentDocument[]> {
+  const resp = await api.get(`/students/${studentId}/documents`);
   return resp.data;
 }
 
@@ -370,8 +394,8 @@ export async function createGuardian(payload: {
   emergency_contact_name?: string | null;
   emergency_contact_phone?: string | null;
   address?: string | null;
-}): Promise<Guardian> {
-  const resp = await api.post("/guardians", payload);
+}, config?: AxiosRequestConfig): Promise<Guardian> {
+  const resp = await api.post("/guardians", payload, config);
   return resp.data;
 }
 
@@ -396,17 +420,19 @@ export async function updateGuardian(
 export async function uploadGuardianPhoto(
   guardianId: string,
   file: File,
+  config?: AxiosRequestConfig,
 ): Promise<void> {
   const formData = new FormData();
   formData.append("file", file);
-  await api.post(`/guardians/${guardianId}/photo`, formData);
+  await api.post(`/guardians/${guardianId}/photo`, formData, config);
 }
 
 export async function linkGuardianToStudent(
   studentId: string,
   payload: { guardian_id: string; relation?: string; is_primary?: boolean },
+  config?: AxiosRequestConfig,
 ): Promise<void> {
-  await api.post(`/students/${studentId}/guardians`, payload);
+  await api.post(`/students/${studentId}/guardians`, payload, config);
 }
 
 export type GuardianWithRelation = Guardian & {
@@ -427,7 +453,7 @@ export type Enrollment = {
   academic_year_id: string;
   class_id: string;
   section_id: string | null;
-  roll_number: number | null;
+  roll_number: string | null;
   status: string;
 };
 
@@ -449,15 +475,15 @@ export async function createEnrollment(payload: {
   academic_year_id: string;
   class_id: string;
   section_id?: string | null;
-  roll_number?: number | null;
+  roll_number?: string | null;
   status?: string;
-}): Promise<Enrollment> {
+}, config?: AxiosRequestConfig): Promise<Enrollment> {
   const resp = await api.post("/enrollments", {
     ...payload,
     section_id: payload.section_id ?? null,
     roll_number: payload.roll_number ?? null,
     status: payload.status ?? "active",
-  });
+  }, config);
   return resp.data;
 }
 
@@ -467,12 +493,24 @@ export async function updateEnrollment(
     academic_year_id?: string;
     class_id?: string;
     section_id?: string | null;
-    roll_number?: number | null;
+    roll_number?: string | null;
     status?: string;
   },
 ): Promise<Enrollment> {
   const resp = await api.put(`/enrollments/${enrollmentId}`, payload);
   return resp.data;
+}
+
+export async function getNextEnrollmentRollNumber(payload: {
+  academic_year_id: string;
+  class_id: string;
+  section_id: string;
+  roll_type?: "admission" | "student";
+}): Promise<string> {
+  const resp = await api.get("/enrollments/next-roll-number", {
+    params: payload,
+  });
+  return resp.data.roll_number;
 }
 
 export type StudentAttendanceRecord = {
@@ -482,7 +520,32 @@ export type StudentAttendanceRecord = {
   class_id: string | null;
   section_id: string | null;
   status: string;
+  is_late: boolean;
 };
+
+export async function getStudentAttendanceByDate(
+  attendanceDate: string,
+  params?: { class_id?: string; section_id?: string },
+): Promise<StudentAttendanceRecord[]> {
+  const resp = await api.get(`/attendance/students/date/${attendanceDate}`, {
+    params,
+  });
+  return resp.data;
+}
+
+export async function markStudentAttendance(payload: {
+  attendance_date: string;
+  class_id?: string | null;
+  section_id?: string | null;
+  items: Array<{ student_id: string; status: string }>;
+}): Promise<{ marked: number }> {
+  const resp = await api.post("/attendance/students/mark", {
+    ...payload,
+    class_id: payload.class_id || null,
+    section_id: payload.section_id || null,
+  });
+  return resp.data;
+}
 
 export async function getStudentAttendance(
   studentId: string,
@@ -557,15 +620,24 @@ export async function getStudentTimetable(
 
 export async function bulkImportStudentsCsv(file: File): Promise<{
   created: number;
+  skipped?: number;
+  errors?: Array<{ row: string; reason: string }>;
 }> {
   const formData = new FormData();
   formData.append("file", file);
-  const resp = await api.post("/students/bulk-import", formData);
+  const resp = await api.post("/students/bulk-import", formData, {
+    suppressSuccessToast: true,
+  });
   return resp.data;
 }
 
 export async function exportStudentsCsv(): Promise<Blob> {
   const resp = await api.get("/students/export", { responseType: "blob" });
+  return resp.data as Blob;
+}
+
+export async function downloadStudentImportTemplate(): Promise<Blob> {
+  const resp = await api.get("/students/import-template", { responseType: "blob" });
   return resp.data as Blob;
 }
 
@@ -579,10 +651,16 @@ export async function downloadStudentIdCard(studentId: string): Promise<Blob> {
 export async function getStaff(
   page = 1,
   limit = 100,
+  is_teacher?: boolean
 ): Promise<{ items: Staff[]; total: number }> {
-  const resp = await api.get("/staff", {
-    params: { page, limit },
-  });
+  const params: { page: number; limit: number; is_teacher?: boolean } = {
+    page,
+    limit,
+  };
+  if (is_teacher !== undefined) {
+    params.is_teacher = is_teacher;
+  }
+  const resp = await api.get("/staff", { params });
   return resp.data;
 }
 
@@ -746,11 +824,33 @@ export async function downloadStaffQr(staffId: string): Promise<Blob> {
 }
 
 export async function getUsers(
-  page = 1,
+  pageOrParams:
+    | number
+    | {
+        page?: number;
+        limit?: number;
+        email?: string;
+        search?: string;
+        role?: string;
+        is_active?: boolean;
+        include_inactive?: boolean;
+      } = 1,
   limit = 100,
 ): Promise<{ items: User[]; total: number }> {
+  const params =
+    typeof pageOrParams === "number"
+      ? { page: pageOrParams, limit }
+      : {
+          page: pageOrParams.page ?? 1,
+          limit: pageOrParams.limit ?? 100,
+          email: pageOrParams.email,
+          search: pageOrParams.search,
+          role: pageOrParams.role,
+          is_active: pageOrParams.is_active,
+          include_inactive: pageOrParams.include_inactive,
+        };
   const resp = await api.get("/users", {
-    params: { page, limit },
+    params,
   });
   return resp.data;
 }
@@ -773,7 +873,7 @@ export type StudentPromotion = {
   class_name: string;
   section_name?: string;
   status: string;
-  roll_number?: number;
+  roll_number?: string;
 };
 
 export type StudentDiscipline = {

@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -14,6 +14,10 @@ class CommunicationLogOut(BaseModel):
     recipient: str
     subject: Optional[str]
     body: Optional[str]
+    student_id: Optional[uuid.UUID] = None
+    category: Optional[str] = None
+    provider_result: Optional[str] = None
+    created_at: datetime
 
 
 class SendSmsRequest(BaseModel):
@@ -25,4 +29,9 @@ class SendEmailRequest(BaseModel):
     recipients: list[str] = Field(min_length=1)
     subject: str = Field(min_length=1, max_length=200)
     body: str = Field(min_length=1, max_length=2000)
+
+
+class TestSmsRequest(BaseModel):
+    recipient: str = Field(min_length=1, max_length=50)
+    message: str = Field(min_length=1, max_length=2000)
 

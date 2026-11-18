@@ -35,6 +35,8 @@ type StudentSettings = {
   auto_generate_admission_no: boolean;
   admission_no_prefix: string;
   admission_no_start_from: number;
+  medium_configuration: string[];
+  shift_configuration: string[];
   require_admission_approval: boolean;
   include_photo_on_id_card: boolean;
   include_barcode_on_id_card: boolean;
@@ -56,6 +58,8 @@ const defaultSettings: StudentSettings = {
   auto_generate_admission_no: true,
   admission_no_prefix: "STU",
   admission_no_start_from: 1001,
+  medium_configuration: ["Bangla", "English"],
+  shift_configuration: ["Morning", "Day"],
   require_admission_approval: true,
   include_photo_on_id_card: true,
   include_barcode_on_id_card: true,
@@ -89,10 +93,10 @@ export default function SettingsTab() {
       const response = await api.get("/settings/students.settings");
       if (response.data && response.data.value && response.data.value.trim() !== "") {
         const loadedSettings = JSON.parse(response.data.value);
-        setSettings(loadedSettings);
+        setSettings({ ...defaultSettings, ...loadedSettings });
       }
       // If value is empty, keep using defaultSettings
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to load settings:", err);
       showToast({ 
         severity: "error", 
@@ -103,9 +107,22 @@ export default function SettingsTab() {
     }
   }
 
-  function handleChange(key: keyof StudentSettings, value: any) {
+  function handleChange<K extends keyof StudentSettings>(
+    key: K,
+    value: StudentSettings[K],
+  ) {
     setSettings((prev) => ({ ...prev, [key]: value }));
     setHasChanges(true);
+  }
+
+  function handleMultiSelectChange<K extends keyof StudentSettings>(
+    key: K,
+    value: string | string[],
+  ) {
+    handleChange(
+      key,
+      (typeof value === "string" ? value.split(",") : value) as StudentSettings[K],
+    );
   }
 
   async function handleSave() {
@@ -166,7 +183,7 @@ export default function SettingsTab() {
 
       <Grid container spacing={3}>
         {/* Admission Settings */}
-        <Grid container item xs={12}>
+        <Grid container size={{ xs: 12 }}>
           <Card
             elevation={0}
             sx={{
@@ -186,7 +203,7 @@ export default function SettingsTab() {
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={3}>
-                <Grid container item xs={12}>
+                <Grid container size={{ xs: 12 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -209,7 +226,7 @@ export default function SettingsTab() {
                   />
                 </Grid>
                 
-                <Grid container item xs={12} sm={6}>
+                <Grid container size={{ xs: 12, sm: 6 }}>
                   <TextField
                     label="Admission Number Prefix"
                     value={settings.admission_no_prefix}
@@ -220,7 +237,7 @@ export default function SettingsTab() {
                   />
                 </Grid>
                 
-                <Grid container item xs={12} sm={6}>
+                <Grid container size={{ xs: 12, sm: 6 }}>
                   <TextField
                     label="Start Numbering From"
                     type="number"
@@ -233,8 +250,52 @@ export default function SettingsTab() {
                     sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
                   />
                 </Grid>
+
+                <Grid container size={{ xs: 12, sm: 6 }}>
+                  <FormControl fullWidth>
+                    <InputLabel>Medium Configuration</InputLabel>
+                    <Select
+                      multiple
+                      value={settings.medium_configuration}
+                      label="Medium Configuration"
+                      onChange={(e) =>
+                        handleMultiSelectChange(
+                          "medium_configuration",
+                          e.target.value,
+                        )
+                      }
+                      renderValue={(selected) => selected.join(", ")}
+                      sx={{ borderRadius: 2 }}
+                    >
+                      <MenuItem value="Bangla">Bangla</MenuItem>
+                      <MenuItem value="English">English</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid container size={{ xs: 12, sm: 6 }}>
+                  <FormControl fullWidth>
+                    <InputLabel>Shift Configuration</InputLabel>
+                    <Select
+                      multiple
+                      value={settings.shift_configuration}
+                      label="Shift Configuration"
+                      onChange={(e) =>
+                        handleMultiSelectChange(
+                          "shift_configuration",
+                          e.target.value,
+                        )
+                      }
+                      renderValue={(selected) => selected.join(", ")}
+                      sx={{ borderRadius: 2 }}
+                    >
+                      <MenuItem value="Morning">Morning</MenuItem>
+                      <MenuItem value="Day">Day</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
                 
-                <Grid container item xs={12}>
+                <Grid container size={{ xs: 12 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -262,7 +323,7 @@ export default function SettingsTab() {
         </Grid>
 
         {/* ID Card Settings */}
-        <Grid container item xs={12}>
+        <Grid container size={{ xs: 12 }}>
           <Card
             elevation={0}
             sx={{
@@ -282,7 +343,7 @@ export default function SettingsTab() {
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={3}>
-                <Grid container item xs={12}>
+                <Grid container size={{ xs: 12 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -305,7 +366,7 @@ export default function SettingsTab() {
                   />
                 </Grid>
                 
-                <Grid container item xs={12}>
+                <Grid container size={{ xs: 12 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -328,7 +389,7 @@ export default function SettingsTab() {
                   />
                 </Grid>
                 
-                <Grid container item xs={12} sm={6}>
+                <Grid container size={{ xs: 12, sm: 6 }}>
                   <TextField
                     label="ID Card Validity (Years)"
                     type="number"
@@ -347,7 +408,7 @@ export default function SettingsTab() {
         </Grid>
 
         {/* Academic Settings */}
-        <Grid container item xs={12}>
+        <Grid container size={{ xs: 12 }}>
           <Card
             elevation={0}
             sx={{
@@ -367,7 +428,7 @@ export default function SettingsTab() {
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={3}>
-                <Grid container item xs={12} sm={6}>
+                <Grid container size={{ xs: 12, sm: 6 }}>
                   <FormControl fullWidth>
                     <InputLabel>Default Student Status</InputLabel>
                     <Select
@@ -383,7 +444,7 @@ export default function SettingsTab() {
                   </FormControl>
                 </Grid>
                 
-                <Grid container item xs={12}>
+                <Grid container size={{ xs: 12 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -406,7 +467,7 @@ export default function SettingsTab() {
                   />
                 </Grid>
                 
-                <Grid container item xs={12}>
+                <Grid container size={{ xs: 12 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -432,7 +493,7 @@ export default function SettingsTab() {
         </Grid>
 
         {/* Portal Access Settings */}
-        <Grid container item xs={12}>
+        <Grid container size={{ xs: 12 }}>
           <Card
             elevation={0}
             sx={{
@@ -452,7 +513,7 @@ export default function SettingsTab() {
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={3}>
-                <Grid container item xs={12}>
+                <Grid container size={{ xs: 12 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -473,7 +534,7 @@ export default function SettingsTab() {
                   />
                 </Grid>
                 
-                <Grid container item xs={12}>
+                <Grid container size={{ xs: 12 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -494,7 +555,7 @@ export default function SettingsTab() {
                   />
                 </Grid>
                 
-                <Grid container item xs={12}>
+                <Grid container size={{ xs: 12 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -522,7 +583,7 @@ export default function SettingsTab() {
         </Grid>
 
         {/* Fee Settings */}
-        <Grid container item xs={12}>
+        <Grid container size={{ xs: 12 }}>
           <Card
             elevation={0}
             sx={{
@@ -542,7 +603,7 @@ export default function SettingsTab() {
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={3}>
-                <Grid container item xs={12} sm={6}>
+                <Grid container size={{ xs: 12, sm: 6 }}>
                   <FormControl fullWidth>
                     <InputLabel>Default Fee Category</InputLabel>
                     <Select
@@ -559,7 +620,7 @@ export default function SettingsTab() {
                   </FormControl>
                 </Grid>
                 
-                <Grid container item xs={12}>
+                <Grid container size={{ xs: 12 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -587,7 +648,7 @@ export default function SettingsTab() {
         </Grid>
 
         {/* Advanced Settings */}
-        <Grid container item xs={12}>
+        <Grid container size={{ xs: 12 }}>
           <Card
             elevation={0}
             sx={{
@@ -607,7 +668,7 @@ export default function SettingsTab() {
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={3}>
-                <Grid container item xs={12}>
+                <Grid container size={{ xs: 12 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -628,7 +689,7 @@ export default function SettingsTab() {
                   />
                 </Grid>
                 
-                <Grid container item xs={12}>
+                <Grid container size={{ xs: 12 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -651,7 +712,7 @@ export default function SettingsTab() {
                   />
                 </Grid>
                 
-                <Grid container item xs={12}>
+                <Grid container size={{ xs: 12 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -679,7 +740,7 @@ export default function SettingsTab() {
         </Grid>
 
         {/* Action Buttons - Golden Ratio Spacing */}
-        <Grid container item xs={12}>
+        <Grid container size={{ xs: 12 }}>
           <Paper
             elevation={0}
             sx={{

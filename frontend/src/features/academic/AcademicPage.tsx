@@ -41,7 +41,7 @@ export default function AcademicPage() {
       case "classes":
         return "Classes & Sections";
       case "subjectGroups":
-        return "Subject Groups";
+        return "Compulsory Subjects";
       case "subjects":
         return "Subjects";
       case "teacherMapping":

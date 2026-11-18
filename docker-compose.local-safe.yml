@@ -1,0 +1,16 @@
+services:
+  db:
+    ports: !override
+      - "${KUSKUL_DB_PORT:-15432}:5432"
+
+  redis:
+    ports: !override
+      - "${KUSKUL_REDIS_PORT:-16379}:6379"
+
+  api:
+    ports: !override
+      - "${KUSKUL_API_PORT:-18000}:8000"
+
+  web:
+    ports: !override
+      - "${KUSKUL_WEB_PORT:-13000}:5173"

@@ -7,6 +7,22 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     role_name: str = Field(min_length=2, max_length=64)
+    full_name: Optional[str] = Field(default=None, max_length=200)
+    is_active: bool = True
+
+    @field_validator("password")
+    @classmethod
+    def _bcrypt_max_bytes(cls, v: str) -> str:
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("password must be at most 72 bytes")
+        return v
+
+
+class TeacherUserFromStaffCreate(BaseModel):
+    email: EmailStr
+    full_name: Optional[str] = Field(default=None, max_length=200)
+    password: str = Field(default="12345678", min_length=8, max_length=128)
+    is_active: bool = True
 
     @field_validator("password")
     @classmethod

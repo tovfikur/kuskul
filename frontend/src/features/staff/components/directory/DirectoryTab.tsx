@@ -44,12 +44,14 @@ import {
   School,
   AccountBalance,
   AttachMoney,
+  PersonAdd,
 } from "@mui/icons-material";
 import {
   listStaff,
   createStaff,
   updateStaff,
   deleteStaff,
+  getNextStaffEmployeeId,
   listDepartments,
   listDesignations,
   listStaffContracts,
@@ -60,6 +62,8 @@ import {
   type Designation,
   type StaffContract,
 } from "../../../../api/staffManagement";
+import { createTeacherUserFromStaff, getUsers } from "../../../../api/people";
+import { showToast } from "../../../../app/toast";
 
 // Extended staff form data
 interface StaffFormData {
@@ -170,6 +174,9 @@ export default function DirectoryTab() {
   const [activeStep, setActiveStep] = useState(0);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [creatingTeacherUserIds, setCreatingTeacherUserIds] = useState<
+    string[]
+  >([]);
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -260,9 +267,31 @@ export default function DirectoryTab() {
     setLoading(false);
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     setEditingStaff(null);
-    setFormData(defaultFormData);
+    let initialDesignationId = "";
+    const teacherDesig = designations.find((d) =>
+      d.title.toLowerCase().includes("teacher")
+    );
+    if (teacherDesig) {
+      initialDesignationId = teacherDesig.id;
+    }
+
+    let nextEmployeeId = "";
+    try {
+      const result = await getNextStaffEmployeeId();
+      if (result.ok && result.data?.employee_id) {
+        nextEmployeeId = result.data.employee_id;
+      }
+    } catch (error) {
+      console.error("Failed to generate employee ID:", error);
+    }
+    
+    setFormData({
+      ...defaultFormData,
+      employee_id: nextEmployeeId,
+      designation_id: initialDesignationId,
+    });
     setError("");
     setActiveStep(0);
     setPreviewPhoto(null);
@@ -285,14 +314,15 @@ export default function DirectoryTab() {
     try {
       const contractsResponse = await listStaffContracts(staffMember.id);
       if (contractsResponse.ok && contractsResponse.data) {
-        setStaffContracts(contractsResponse.data);
-        if (contractsResponse.data.length > 0) {
+        const contractDataList = contractsResponse.data as any[];
+        setStaffContracts(contractDataList);
+        if (contractDataList.length > 0) {
           // Use the most recent contract
-          const contract = contractsResponse.data[0];
+          const contract = contractDataList[0];
           contractData = {
             contract_id: contract.id,
             contract_type: contract.contract_type,
-            salary_amount: contract.salary,
+            salary_amount: Number(contract.salary),
             allowances_list: Object.entries(contract.allowances || {}).map(
               ([label, amount]) => ({
                 label,
@@ -383,82 +413,162 @@ export default function DirectoryTab() {
       return;
     }
 
-    const apiData: any = {
-      ...formData,
-      // Ensure specific fields are undefined if empty strings to match backend optionality
+    // Only send staff-model fields — keep contract/salary fields separate
+    const staffPayload = {
+      employee_id: formData.employee_id,
+      first_name: formData.first_name,
+      last_name: formData.last_name,
+      email: formData.email,
+      phone: formData.phone || undefined,
+      gender: formData.gender || undefined,
+      date_of_birth: formData.date_of_birth || undefined,
+      blood_group: formData.blood_group || undefined,
+      marital_status: formData.marital_status || undefined,
+      nationality: formData.nationality || undefined,
+      religion: formData.religion || undefined,
+      present_address: formData.present_address || undefined,
+      permanent_address: formData.permanent_address || undefined,
+      city: formData.city || undefined,
+      state: formData.state || undefined,
+      postal_code: formData.postal_code || undefined,
+      country: formData.country || undefined,
+      emergency_contact_name: formData.emergency_contact_name || undefined,
+      emergency_contact_phone: formData.emergency_contact_phone || undefined,
+      emergency_contact_relation: formData.emergency_contact_relation || undefined,
       department_id: formData.department_id || undefined,
       designation_id: formData.designation_id || undefined,
       date_of_joining: formData.date_of_joining || undefined,
-      phone: formData.phone || undefined,
-      date_of_birth: formData.date_of_birth || undefined,
+      employment_type: formData.employment_type || undefined,
+      status: formData.status || undefined,
+      highest_qualification: formData.highest_qualification || undefined,
+      specialization: formData.specialization || undefined,
       experience_years: formData.experience_years || undefined,
+      bank_name: formData.bank_name || undefined,
+      bank_account_number: formData.bank_account_number || undefined,
+      bank_ifsc: formData.bank_ifsc || undefined,
+      profile_photo_url: formData.profile_photo_url || undefined,
     };
 
     const result = editingStaff
-      ? await updateStaff(editingStaff.id, apiData)
-      : await createStaff(apiData);
+      ? await updateStaff(editingStaff.id, staffPayload)
+      : await createStaff(staffPayload);
 
-    if (result.ok) {
-      // Handle Contract Save
-      const staffId = result.data.id;
-
-      const allowances =
-        formData.allowances_list?.reduce(
-          (acc, curr) => {
-            if (curr.label) acc[curr.label] = Number(curr.amount);
-            return acc;
-          },
-          {} as Record<string, number>,
-        ) || {};
-
-      const deductions =
-        formData.deductions_list?.reduce(
-          (acc, curr) => {
-            if (curr.label) acc[curr.label] = Number(curr.amount);
-            return acc;
-          },
-          {} as Record<string, number>,
-        ) || {};
-
-      const contractPayload = {
-        contract_type: formData.contract_type || "permanent",
-        start_date:
-          formData.date_of_joining || new Date().toISOString().split("T")[0],
-        salary: Number(formData.salary_amount) || 0,
-        salary_currency: "BDT",
-        allowances,
-        deductions,
-        working_hours_per_week: 40,
-        status: "active",
-      };
-
-      try {
-        if (formData.contract_id) {
-          await updateStaffContract(
-            staffId,
-            formData.contract_id,
-            contractPayload,
-          );
-        } else {
-          await createStaffContract(staffId, contractPayload);
-        }
-      } catch (err) {
-        console.error("Failed to save contract", err);
-        // We don't block the staff save if contract save fails, but maybe we should show a warning?
-        // For now, we proceed.
-      }
-
-      setDialogOpen(false);
-      loadStaff();
-    } else {
-      setError("Failed to save staff member");
+    if (!result.ok) {
+      const detail = (result.data as any)?.detail || "Failed to save staff member";
+      setError(typeof detail === "string" ? detail : JSON.stringify(detail));
+      return;
     }
+
+    const staffId = (result.data as any).id;
+
+    // Save contract (salary / allowances / deductions)
+    const allowances =
+      formData.allowances_list?.reduce(
+        (acc, curr) => {
+          if (curr.label) acc[curr.label] = Number(curr.amount);
+          return acc;
+        },
+        {} as Record<string, number>,
+      ) ?? {};
+
+    const deductions =
+      formData.deductions_list?.reduce(
+        (acc, curr) => {
+          if (curr.label) acc[curr.label] = Number(curr.amount);
+          return acc;
+        },
+        {} as Record<string, number>,
+      ) ?? {};
+
+    const contractPayload = {
+      contract_type: formData.contract_type || "permanent",
+      start_date:
+        formData.date_of_joining || new Date().toISOString().split("T")[0],
+      salary: Number(formData.salary_amount) || 0,
+      salary_currency: "BDT",
+      allowances,
+      deductions,
+      working_hours_per_week: 40,
+      status: "active",
+    };
+
+    try {
+      const contractRes = formData.contract_id
+        ? await updateStaffContract(staffId, formData.contract_id, contractPayload)
+        : await createStaffContract(staffId, contractPayload);
+
+      if (!(contractRes as any).ok) {
+        const detail = (contractRes as any)?.data?.detail || "Failed to save salary/contract";
+        showToast({
+          severity: "warning",
+          message: `Profile saved, but salary update failed: ${typeof detail === "string" ? detail : JSON.stringify(detail)}`,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to save contract", err);
+      showToast({ severity: "warning", message: "Profile saved, but salary/contract could not be updated." });
+    }
+
+    setDialogOpen(false);
+    loadStaff();
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this staff member?")) return;
     const result = await deleteStaff(id);
     if (result.ok) loadStaff();
+  };
+
+  const handleCreateTeacherUser = async (staffMember: Staff) => {
+    const email = staffMember.email?.trim().toLowerCase();
+    if (!email) {
+      window.alert("Staff email is required to create a teacher user.");
+      return;
+    }
+
+    setCreatingTeacherUserIds((prev) => [...prev, staffMember.id]);
+    try {
+      const existingTeachers = await getUsers({
+        email,
+        role: "teacher",
+        limit: 10,
+        include_inactive: true,
+      });
+      const alreadyTeacher = existingTeachers.items.some(
+        (user) => user.email.toLowerCase() === email && user.role_name === "teacher",
+      );
+
+      if (alreadyTeacher) {
+        window.alert("Already Teacher role user.");
+        return;
+      }
+
+      await createTeacherUserFromStaff({
+        email,
+        password: "12345678",
+        full_name: [staffMember.first_name, staffMember.last_name]
+          .filter(Boolean)
+          .join(" "),
+        is_active: true,
+      });
+      window.alert("Teacher role user created successfully.");
+      showToast({
+        severity: "success",
+        message: "Teacher role user created successfully",
+      });
+    } catch (error: any) {
+      const responseDetail = error?.response?.data?.detail;
+      const detail =
+        (typeof responseDetail === "object" && responseDetail?.detail) ||
+        responseDetail ||
+        error?.message ||
+        "Failed to create teacher role user.";
+      window.alert(typeof detail === "string" ? detail : JSON.stringify(detail));
+    } finally {
+      setCreatingTeacherUserIds((prev) =>
+        prev.filter((id) => id !== staffMember.id),
+      );
+    }
   };
 
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -730,6 +840,15 @@ export default function DirectoryTab() {
                   <TableCell align="right">
                     <IconButton
                       size="small"
+                      onClick={() => handleCreateTeacherUser(m)}
+                      disabled={creatingTeacherUserIds.includes(m.id)}
+                      sx={{ color: "#2e7d32" }}
+                      title="Create Teacher User"
+                    >
+                      <PersonAdd fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
                       onClick={() => handleEdit(m)}
                       sx={{ color: "#1976d2" }}
                     >
@@ -960,6 +1079,7 @@ export default function DirectoryTab() {
                       fullWidth
                       size="small"
                       value={formData.employee_id}
+                      InputProps={{ readOnly: true }}
                       onChange={(e) =>
                         updateField("employee_id", e.target.value)
                       }
@@ -1285,10 +1405,9 @@ export default function DirectoryTab() {
                           placeholder="Label (e.g., House Rent)"
                           value={item.label}
                           onChange={(e) => {
-                            const newList = [
-                              ...(formData.allowances_list || []),
-                            ];
-                            newList[index].label = e.target.value;
+                            const newList = (formData.allowances_list || []).map(
+                              (it, i) => i === index ? { ...it, label: e.target.value } : it,
+                            );
                             updateField("allowances_list", newList);
                           }}
                           sx={{ flex: 2 }}
@@ -1299,10 +1418,9 @@ export default function DirectoryTab() {
                           placeholder="Amount"
                           value={item.amount}
                           onChange={(e) => {
-                            const newList = [
-                              ...(formData.allowances_list || []),
-                            ];
-                            newList[index].amount = Number(e.target.value);
+                            const newList = (formData.allowances_list || []).map(
+                              (it, i) => i === index ? { ...it, amount: Number(e.target.value) } : it,
+                            );
                             updateField("allowances_list", newList);
                           }}
                           sx={{ flex: 1 }}
@@ -1310,13 +1428,12 @@ export default function DirectoryTab() {
                         <IconButton
                           size="small"
                           color="error"
-                          onClick={() => {
-                            const newList = [
-                              ...(formData.allowances_list || []),
-                            ];
-                            newList.splice(index, 1);
-                            updateField("allowances_list", newList);
-                          }}
+                          onClick={() =>
+                            updateField(
+                              "allowances_list",
+                              (formData.allowances_list || []).filter((_, i) => i !== index),
+                            )
+                          }
                         >
                           <Delete fontSize="small" />
                         </IconButton>
@@ -1370,10 +1487,9 @@ export default function DirectoryTab() {
                           placeholder="Label (e.g., Tax)"
                           value={item.label}
                           onChange={(e) => {
-                            const newList = [
-                              ...(formData.deductions_list || []),
-                            ];
-                            newList[index].label = e.target.value;
+                            const newList = (formData.deductions_list || []).map(
+                              (it, i) => i === index ? { ...it, label: e.target.value } : it,
+                            );
                             updateField("deductions_list", newList);
                           }}
                           sx={{ flex: 2 }}
@@ -1384,10 +1500,9 @@ export default function DirectoryTab() {
                           placeholder="Amount"
                           value={item.amount}
                           onChange={(e) => {
-                            const newList = [
-                              ...(formData.deductions_list || []),
-                            ];
-                            newList[index].amount = Number(e.target.value);
+                            const newList = (formData.deductions_list || []).map(
+                              (it, i) => i === index ? { ...it, amount: Number(e.target.value) } : it,
+                            );
                             updateField("deductions_list", newList);
                           }}
                           sx={{ flex: 1 }}
@@ -1395,13 +1510,12 @@ export default function DirectoryTab() {
                         <IconButton
                           size="small"
                           color="error"
-                          onClick={() => {
-                            const newList = [
-                              ...(formData.deductions_list || []),
-                            ];
-                            newList.splice(index, 1);
-                            updateField("deductions_list", newList);
-                          }}
+                          onClick={() =>
+                            updateField(
+                              "deductions_list",
+                              (formData.deductions_list || []).filter((_, i) => i !== index),
+                            )
+                          }
                         >
                           <Delete fontSize="small" />
                         </IconButton>
@@ -1433,7 +1547,7 @@ export default function DirectoryTab() {
                     >
                       <Typography variant="body2">Basic:</Typography>
                       <Typography variant="body2">
-                        ৳{formData.salary_amount || 0}
+                        ৳{Number(formData.salary_amount) || 0}
                       </Typography>
                     </Box>
                     <Box
@@ -1481,7 +1595,7 @@ export default function DirectoryTab() {
                       </Typography>
                       <Typography variant="subtitle2" fontWeight={600}>
                         ৳
-                        {(formData.salary_amount || 0) +
+                        {(Number(formData.salary_amount) || 0) +
                           (formData.allowances_list?.reduce(
                             (acc, curr) => acc + (Number(curr.amount) || 0),
                             0,

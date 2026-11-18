@@ -3,15 +3,17 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_active_school_id, require_permission
+from app.api.deps import get_active_school_id, get_current_user, require_permission
 from app.core.problems import not_found, problem
 from app.db.session import get_db
+from app.models.document import Document
 from app.models.staff import Staff
 from app.models.staff_extended import Department, Designation, StaffContract
+from app.models.user import User
 from app.schemas.staff_extended import (
     DepartmentCreate,
     DepartmentOut,
@@ -445,7 +447,7 @@ def _contract_out(c: StaffContract) -> StaffContractOut:
     )
 
 
-@router.get("/staff/{staff_id}/contracts", response_model=list[StaffContractOut])
+@router.get("/{staff_id}/contracts", response_model=list[StaffContractOut])
 def list_staff_contracts(
     staff_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -465,7 +467,7 @@ def list_staff_contracts(
     return [_contract_out(r) for r in rows]
 
 
-@router.post("/staff/{staff_id}/contracts", response_model=StaffContractOut, dependencies=[Depends(require_permission("staff:write"))])
+@router.post("/{staff_id}/contracts", response_model=StaffContractOut, dependencies=[Depends(require_permission("staff:write"))])
 def create_staff_contract(
     staff_id: uuid.UUID,
     payload: StaffContractCreate,
@@ -520,7 +522,7 @@ def create_staff_contract(
     return _contract_out(contract)
 
 
-@router.get("/staff/{staff_id}/contracts/{contract_id}", response_model=StaffContractOut)
+@router.get("/{staff_id}/contracts/{contract_id}", response_model=StaffContractOut)
 def get_staff_contract(
     staff_id: uuid.UUID,
     contract_id: uuid.UUID,
@@ -539,7 +541,7 @@ def get_staff_contract(
     return _contract_out(contract)
 
 
-@router.put("/staff/{staff_id}/contracts/{contract_id}", response_model=StaffContractOut, dependencies=[Depends(require_permission("staff:write"))])
+@router.put("/{staff_id}/contracts/{contract_id}", response_model=StaffContractOut, dependencies=[Depends(require_permission("staff:write"))])
 def update_staff_contract(
     staff_id: uuid.UUID,
     contract_id: uuid.UUID,
@@ -592,7 +594,55 @@ def update_staff_contract(
     return _contract_out(contract)
 
 
-@router.patch("/staff/{staff_id}/contracts/{contract_id}/terminate", response_model=StaffContractOut, dependencies=[Depends(require_permission("staff:write"))])
+@router.post(
+    "/{staff_id}/contracts/{contract_id}/document",
+    response_model=StaffContractOut,
+    dependencies=[Depends(require_permission("staff:write")), Depends(require_permission("documents:write"))],
+)
+def upload_staff_contract_document(
+    staff_id: uuid.UUID,
+    contract_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    school_id=Depends(get_active_school_id),
+) -> StaffContractOut:
+    """Upload and attach a document to a staff contract."""
+    staff = db.get(Staff, staff_id)
+    if not staff or staff.school_id != school_id:
+        raise not_found("Staff not found")
+
+    contract = db.get(StaffContract, contract_id)
+    if not contract or contract.staff_id != staff_id:
+        raise not_found("Contract not found")
+
+    if not file.filename:
+        raise problem(status_code=400, title="Bad Request", detail="Missing filename")
+
+    content = file.file.read()
+    now = datetime.now(timezone.utc)
+    d = Document(
+        school_id=school_id,
+        uploaded_by_user_id=user.id,
+        entity_type="staff_contract",
+        entity_id=str(contract_id),
+        filename=file.filename,
+        content_type=file.content_type,
+        content=content,
+        created_at=now,
+    )
+    db.add(d)
+    db.commit()
+    db.refresh(d)
+
+    contract.contract_document_url = f"/documents/{d.id}/download"
+    contract.updated_at = now
+    db.commit()
+    db.refresh(contract)
+    return _contract_out(contract)
+
+
+@router.patch("/{staff_id}/contracts/{contract_id}/terminate", response_model=StaffContractOut, dependencies=[Depends(require_permission("staff:write"))])
 def terminate_staff_contract(
     staff_id: uuid.UUID,
     contract_id: uuid.UUID,

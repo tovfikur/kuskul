@@ -14,8 +14,16 @@ from app.core.seed import ensure_default_roles
 from app.db.session import get_db
 from app.models.membership import Membership
 from app.models.role import Role
+from app.models.school import School
 from app.models.user import User
-from app.schemas.users import UserCreate, UserDetail, UserList, UserOut, UserUpdate
+from app.schemas.users import (
+    TeacherUserFromStaffCreate,
+    UserCreate,
+    UserDetail,
+    UserList,
+    UserOut,
+    UserUpdate,
+)
 
 router = APIRouter(dependencies=[Depends(require_permission("users:read"))])
 
@@ -120,7 +128,14 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), school_id=De
         raise problem(status_code=400, title="Bad Request", detail="Unknown role_name")
 
     now = datetime.now(timezone.utc)
-    user = User(email=payload.email, password_hash=hash_password(payload.password), is_active=True, created_at=now, updated_at=now)
+    user = User(
+        email=payload.email,
+        full_name=payload.full_name,
+        password_hash=hash_password(payload.password),
+        is_active=payload.is_active,
+        created_at=now,
+        updated_at=now,
+    )
     db.add(user)
     db.flush()
 
@@ -135,6 +150,120 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), school_id=De
         photo_url=user.photo_url,
         is_active=user.is_active,
         role_name=role.name
+    )
+
+
+@router.post(
+    "/teacher-from-staff",
+    response_model=UserOut,
+    dependencies=[Depends(require_permission("users:write"))],
+)
+def create_teacher_user_from_staff(
+    payload: TeacherUserFromStaffCreate,
+    db: Session = Depends(get_db),
+    school_id=Depends(get_active_school_id),
+) -> UserOut:
+    ensure_default_roles(db)
+    role = db.scalar(select(Role).where(Role.name == "teacher"))
+    if not role:
+        raise problem(status_code=400, title="Bad Request", detail="Unknown teacher role")
+
+    now = datetime.now(timezone.utc)
+    email = str(payload.email).strip().lower()
+    full_name = payload.full_name.strip() if payload.full_name else None
+
+    school = db.get(School, school_id)
+    if not school:
+        raise problem(status_code=400, title="Bad Request", detail="Active school not found")
+
+    user = db.scalar(select(User).where(func.lower(User.email) == email))
+    if user:
+        if user.tenant_id is not None and user.tenant_id != school.tenant_id:
+            raise problem(
+                status_code=409,
+                title="Conflict",
+                detail="Email already belongs to another tenant.",
+            )
+
+        teacher_membership = db.scalar(
+            select(Membership).where(
+                Membership.user_id == user.id,
+                Membership.school_id == school_id,
+                Membership.role_id == role.id,
+                Membership.is_active.is_(True),
+            )
+        )
+        if teacher_membership:
+            raise problem(
+                status_code=409,
+                title="Conflict",
+                detail="Already Teacher role user.",
+            )
+
+        membership_row = db.execute(
+            select(Membership, Role.name)
+            .join(Role, Role.id == Membership.role_id)
+            .where(
+                Membership.user_id == user.id,
+                Membership.school_id == school_id,
+                Membership.is_active.is_(True),
+            )
+        ).first()
+        membership = membership_row[0] if membership_row else None
+        existing_role_name = membership_row[1] if membership_row else None
+        if membership:
+            raise problem(
+                status_code=409,
+                title="Conflict",
+                detail=f"Email already exists with {existing_role_name} role in this school.",
+            )
+        else:
+            db.add(
+                Membership(
+                    user_id=user.id,
+                    school_id=school_id,
+                    role_id=role.id,
+                    is_active=True,
+                    created_at=now,
+                )
+            )
+            user.tenant_id = school.tenant_id
+            user.password_hash = hash_password(payload.password)
+
+        if full_name:
+            user.full_name = full_name
+        user.is_active = payload.is_active
+        user.updated_at = now
+    else:
+        user = User(
+            email=email,
+            full_name=full_name,
+            password_hash=hash_password(payload.password),
+            is_active=payload.is_active,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(user)
+        db.flush()
+        db.add(
+            Membership(
+                user_id=user.id,
+                school_id=school_id,
+                role_id=role.id,
+                is_active=True,
+                created_at=now,
+            )
+        )
+
+    db.commit()
+    return UserOut(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        phone=user.phone,
+        photo_url=user.photo_url,
+        is_active=user.is_active,
+        role_name=role.name,
     )
 
 

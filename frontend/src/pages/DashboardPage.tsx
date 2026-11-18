@@ -4,9 +4,6 @@ import {
   Card,
   CardContent,
   Typography,
-  Select,
-  MenuItem,
-  FormControl,
   CircularProgress,
   Avatar,
   Button,
@@ -14,7 +11,6 @@ import {
   ListItem,
   ListItemText,
   Divider,
-  Chip,
 } from "@mui/material";
 import {
   School,
@@ -30,18 +26,23 @@ import {
   Bar,
   Cell,
 } from "recharts";
-import { useAppDispatch, useAppSelector } from "../app/hooks";
-import { setActiveSchoolId } from "../features/auth/authSlice";
+import { useAppSelector } from "../app/hooks";
 import {
   getAdminDashboard,
-  getFinancialStats,
-  getEnrollmentTrends,
   getPerformanceTrends,
   getUpcomingEvents,
-  type EnrollmentTrend,
+  type AdminDashboardData,
   type PerformanceTrend,
   type Event as CalendarEvent,
 } from "../api/analytics";
+import {
+  getTimetable,
+  getSubjects,
+  getTimeSlots,
+  type TimetableEntry,
+  type Subject,
+  type TimeSlot,
+} from "../api/academic";
 import { format } from "date-fns";
 
 // Color Palette matching reference
@@ -81,11 +82,19 @@ function MetricCard({ label, value, icon, color, loading }: MetricCardProps) {
 }
 
 export default function DashboardPage() {
-  const dispatch = useAppDispatch();
   const memberships = useAppSelector((s) => s.auth.memberships);
   const activeSchoolId = useAppSelector((s) => s.auth.activeSchoolId);
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>({ admin: null, performance: [], events: [] });
+  const [data, setData] = useState<{
+    admin: AdminDashboardData | null;
+    performance: PerformanceTrend[];
+    events: CalendarEvent[];
+    timetable: {
+      entries: TimetableEntry[];
+      subjects: Record<string, Subject>;
+      slots: Record<string, TimeSlot>;
+    };
+  }>({ admin: null, performance: [], events: [], timetable: { entries: [], subjects: {}, slots: {} } });
 
   useEffect(() => {
     if (!activeSchoolId) return;
@@ -95,12 +104,30 @@ export default function DashboardPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [admin, perf, events] = await Promise.all([
+      // Timetable stores days as 0=Mon…6=Sun; JS getDay() returns 0=Sun…6=Sat
+      const jsDay = new Date().getDay();
+      const today = jsDay === 0 ? 6 : jsDay - 1;
+      const [admin, perf, events, timetableEntries, allSubjects, allSlots] = await Promise.all([
         getAdminDashboard(),
         getPerformanceTrends().catch(() => []),
         getUpcomingEvents().catch(() => []),
+        getTimetable({ day_of_week: today }).catch(() => []),
+        getSubjects().catch(() => []),
+        getTimeSlots().catch(() => []),
       ]);
-      setData({ admin, performance: perf, events });
+      
+      const subjectMap: Record<string, Subject> = {};
+      allSubjects.forEach(s => subjectMap[s.id] = s);
+      
+      const slotMap: Record<string, TimeSlot> = {};
+      allSlots.forEach(s => slotMap[s.id] = s);
+
+      setData({ 
+        admin, 
+        performance: perf, 
+        events,
+        timetable: { entries: timetableEntries, subjects: subjectMap, slots: slotMap }
+      });
     } finally {
       setLoading(false);
     }
@@ -117,32 +144,40 @@ export default function DashboardPage() {
     { stage: "Preschool", count: Math.floor(totalStudents * 0.2), color: COLORS.green },
   ];
 
-  const months = [
-    { name: "January", color: COLORS.coral }, { name: "February", color: COLORS.yellow }, { name: "March", color: COLORS.yellow },
-    { name: "April", color: COLORS.green, current: true }, { name: "May", color: COLORS.yellow }, { name: "June", color: COLORS.yellow },
-    { name: "July", color: COLORS.coral }, { name: "August", color: COLORS.yellow }, { name: "September", color: COLORS.yellow },
-    { name: "October", color: COLORS.coral }, { name: "November", color: COLORS.yellow }, { name: "December", color: COLORS.coral },
-  ];
-
-  const topPerformers = data.performance.slice(0, 3).map((p: any, i: number) => ({
-    name: p.exam_name, score: p.avg_pct, rank: i + 1, color: [COLORS.green, COLORS.purple, COLORS.yellow][i],
+  const topPerformers = data.performance.slice(0, 3).map((p, i) => ({
+    name: p.exam_name,
+    score: p.avg_pct,
+    rank: i + 1,
+    color: [COLORS.green, COLORS.purple, COLORS.yellow][i],
   }));
+
+  // Group timetable entries by time slot
+  const slotGroups: Record<string, TimetableEntry[]> = {};
+  data.timetable.entries.forEach(entry => {
+    if (!slotGroups[entry.time_slot_id]) {
+      slotGroups[entry.time_slot_id] = [];
+    }
+    slotGroups[entry.time_slot_id].push(entry);
+  });
+  
+  // Sort slots by start time
+  const sortedSlotIds = Object.keys(slotGroups).sort((a, b) => {
+    const slotA = data.timetable.slots[a];
+    const slotB = data.timetable.slots[b];
+    if (!slotA || !slotB) return 0;
+    return slotA.start_time.localeCompare(slotB.start_time);
+  });
 
   return (
     <Box sx={{ bgcolor: COLORS.bg, minHeight: "100vh", p: 3 }}>
       {/* Header */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700, color: COLORS.textPrimary }}>Welcome to {schoolName}</Typography>
-        <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-          <Typography variant="body2" sx={{ color: COLORS.textSecondary, fontWeight: 600 }}>
-            School Year {currentYear} - {currentYear + 1}
-          </Typography>
-          <FormControl size="small" sx={{ minWidth: 180 }}>
-            <Select value={activeSchoolId ?? ""} onChange={(e) => dispatch(setActiveSchoolId(e.target.value || null))} sx={{ bgcolor: "white", fontSize: "0.875rem" }}>
-              {memberships.map((m) => (<MenuItem key={m.school_id} value={m.school_id}>{m.school_name}</MenuItem>))}
-            </Select>
-          </FormControl>
-        </Box>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, color: COLORS.textPrimary }}>
+          Welcome to {schoolName}
+        </Typography>
+        <Typography variant="body2" sx={{ color: COLORS.textSecondary, mt: 0.5 }}>
+          School Year {currentYear} – {currentYear + 1}
+        </Typography>
       </Box>
 
       {/* Row 1: Metric Cards */}
@@ -167,13 +202,60 @@ export default function DashboardPage() {
             </Typography>
           </Box>
 
-          <Box sx={{ py: 6, textAlign: "center" }}>
-            <Typography variant="body2" color="text.secondary">
-              Timetable integration coming soon
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Connect to timetable API to display today's schedule
-            </Typography>
+          <Box sx={{ py: 2, textAlign: "left", maxHeight: 300, overflow: "auto" }}>
+            {sortedSlotIds.length === 0 ? (
+              <Box sx={{ py: 4, textAlign: "center" }}>
+                 <Typography variant="body2" color="text.secondary">
+                    No classes scheduled for today.
+                 </Typography>
+              </Box>
+            ) : (
+              <List sx={{ p: 0 }}>
+                {sortedSlotIds.map((slotId, index) => {
+                  const slot = data.timetable.slots[slotId];
+                  const entries = slotGroups[slotId];
+                  if (!slot) return null;
+                  
+                  // Format time to 12hr AM/PM for display
+                  function formatTime(timeVal: string) {
+                     if (!timeVal) return "";
+                     const [hh, mm] = timeVal.split(":");
+                     let h = parseInt(hh, 10);
+                     const ampm = h >= 12 ? "PM" : "AM";
+                     h = h % 12 || 12;
+                     return `${h}:${mm} ${ampm}`;
+                  }
+                  
+                  return (
+                    <Box key={slotId}>
+                      <ListItem sx={{ px: 0, py: 1.5, flexDirection: "column", alignItems: "flex-start" }}>
+                        <Typography variant="caption" sx={{ color: COLORS.purple, fontWeight: 700, mb: 0.5 }}>
+                          {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
+                        </Typography>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, width: "100%" }}>
+                          {entries.map(entry => {
+                             const subject = entry.subject_id ? data.timetable.subjects[entry.subject_id] : null;
+                             return (
+                               <Box key={entry.id} sx={{ bgcolor: COLORS.bg, borderRadius: 1.5, px: 1.5, py: 1, border: `1px solid ${COLORS.border}`, flex: "1 1 calc(50% - 8px)" }}>
+                                 <Typography variant="body2" sx={{ fontWeight: 600, color: COLORS.textPrimary }}>
+                                   {subject ? subject.name : "Unassigned Subject"}
+                                 </Typography>
+                                 {entry.room && (
+                                   <Typography variant="caption" sx={{ color: COLORS.textSecondary, display: "block" }}>
+                                     Room: {entry.room}
+                                   </Typography>
+                                 )}
+                               </Box>
+                             );
+                          })}
+                        </Box>
+                      </ListItem>
+                      {index < sortedSlotIds.length - 1 && <Divider />}
+                    </Box>
+                  );
+                })}
+              </List>
+            )}
           </Box>
         </Card>
 
@@ -238,7 +320,7 @@ export default function DashboardPage() {
             <Box sx={{ py: 6, textAlign: "center", color: COLORS.textSecondary }}><Typography variant="body2">No performance data</Typography></Box>
           ) : (
             <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2 }}>
-              {topPerformers.map((performer: any) => (
+              {topPerformers.map((performer) => (
                 <Card key={performer.rank} elevation={0} sx={{ bgcolor: performer.color, color: "white", textAlign: "center", p: 2.5, borderRadius: 3 }}>
                   <Avatar sx={{ width: 64, height: 64, mx: "auto", mb: 1.5, bgcolor: "rgba(255,255,255,0.3)", fontSize: "1.5rem", fontWeight: 700 }}>{performer.rank}</Avatar>
                   <Typography variant="caption" fontWeight={600} sx={{ display: "block", mb: 0.5, fontSize: "0.7rem" }}>{performer.name.substring(0, 15)}</Typography>

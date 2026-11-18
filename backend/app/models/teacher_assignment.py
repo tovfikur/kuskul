@@ -29,6 +29,7 @@ class StudentAttendance(Base):
     section_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("sections.id"), index=True, nullable=True)
     class_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("classes.id"), index=True, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="present")
+    is_late: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
 

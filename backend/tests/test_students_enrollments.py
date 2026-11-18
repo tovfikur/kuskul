@@ -67,6 +67,40 @@ def test_students_crud_and_enrollment_flow(client):
     )
     assert enr.status_code == 200
     enrollment_id = enr.json()["id"]
+    assert enr.json()["roll_number"] == "5"
+
+    other = client.post(
+        "/api/v1/students",
+        headers=headers,
+        json={"first_name": "Jane", "last_name": "Roe", "admission_no": "ADM-002", "gender": "female"},
+    )
+    assert other.status_code == 200
+    custom = client.post(
+        "/api/v1/enrollments",
+        headers=headers,
+        json={
+            "student_id": other.json()["id"],
+            "academic_year_id": year_id,
+            "class_id": class_id,
+            "section_id": section_id,
+            "roll_number": "STU6A2026003",
+        },
+    )
+    assert custom.status_code == 200
+    assert custom.json()["roll_number"] == "STU6A2026003"
+
+    duplicate = client.post(
+        "/api/v1/enrollments",
+        headers=headers,
+        json={
+            "student_id": other.json()["id"],
+            "academic_year_id": year_id,
+            "class_id": class_id,
+            "section_id": section_id,
+            "roll_number": "5",
+        },
+    )
+    assert duplicate.status_code == 409
 
     enr_list = client.get(f"/api/v1/enrollments?class_id={class_id}", headers=headers)
     assert enr_list.status_code == 200

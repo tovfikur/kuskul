@@ -70,12 +70,8 @@ def import_students(
         s = Student(
             school_id=school_id,
             first_name=first_name,
-            last_name=r.get("last_name") or r.get("lastName") or None,
             admission_no=r.get("admission_no") or r.get("admissionNo") or None,
-            gender=r.get("gender") or None,
-            date_of_birth=_parse_date(r.get("date_of_birth") or r.get("dateOfBirth") or ""),
             status=r.get("status") or "active",
-            photo_url=r.get("photo_url") or r.get("photoUrl") or None,
             created_at=now,
         )
         db.add(s)

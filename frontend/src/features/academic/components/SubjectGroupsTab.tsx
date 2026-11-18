@@ -148,7 +148,7 @@ export default function SubjectGroupsTab() {
     <Box>
       <Box sx={{ mb: 2, display: "flex", justifyContent: "flex-end" }}>
         <Button variant="contained" onClick={() => setOpen(true)}>
-          Add Subject Group
+          Add Compulsory Subject
         </Button>
       </Box>
 
@@ -156,9 +156,9 @@ export default function SubjectGroupsTab() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Name</TableCell>
+              <TableCell>Subject Name</TableCell>
               <TableCell>Class</TableCell>
-              <TableCell>Stream</TableCell>
+              <TableCell>Group</TableCell>
               <TableCell>Type</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -195,7 +195,7 @@ export default function SubjectGroupsTab() {
             ))}
             {groups.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5}>No subject groups found.</TableCell>
+                <TableCell colSpan={5}>No compulsory subjects found.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -208,10 +208,10 @@ export default function SubjectGroupsTab() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Add Subject Group</DialogTitle>
+        <DialogTitle>Add Compulsory Subject</DialogTitle>
         <DialogContent>
           <TextField
-            label="Group Name (e.g. Compulsory)"
+            label="Subject Name (e.g. Bangla)"
             fullWidth
             margin="normal"
             value={form.name}
@@ -233,10 +233,10 @@ export default function SubjectGroupsTab() {
             </Select>
           </FormControl>
           <FormControl fullWidth margin="normal">
-            <InputLabel>Stream (optional)</InputLabel>
+            <InputLabel>Group (optional)</InputLabel>
             <Select
               value={form.stream_id}
-              label="Stream (optional)"
+              label="Group (optional)"
               onChange={(e) => setForm({ ...form, stream_id: e.target.value })}
             >
               <MenuItem value="">None</MenuItem>
@@ -281,10 +281,10 @@ export default function SubjectGroupsTab() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Edit Subject Group</DialogTitle>
+        <DialogTitle>Edit Compulsory Subject</DialogTitle>
         <DialogContent>
           <TextField
-            label="Group Name"
+            label="Subject Name"
             fullWidth
             margin="normal"
             value={editForm.name}
@@ -316,10 +316,10 @@ export default function SubjectGroupsTab() {
             </Select>
           </FormControl>
           <FormControl fullWidth margin="normal">
-            <InputLabel>Stream (optional)</InputLabel>
+            <InputLabel>Group (optional)</InputLabel>
             <Select
               value={editForm.stream_id}
-              label="Stream (optional)"
+              label="Group (optional)"
               onChange={(e) =>
                 setEditForm({
                   ...editForm,

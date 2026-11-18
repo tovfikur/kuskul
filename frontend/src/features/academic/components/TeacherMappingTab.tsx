@@ -78,7 +78,7 @@ export default function TeacherMappingTab() {
         getAcademicYears(),
         getClasses(),
         getSubjects(),
-        getStaff(),
+        getStaff(1, 100, true),
       ]);
       setYears(y);
       setClasses(c);

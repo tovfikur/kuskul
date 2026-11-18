@@ -12,6 +12,7 @@ export default function StatusChip({ status, size = "small" }: StatusChipProps) 
       case "active":
       case "approved":
       case "received":
+      case "closed":
       case "done":
       case "in_use":
         return "success";

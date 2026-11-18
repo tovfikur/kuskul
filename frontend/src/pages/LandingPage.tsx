@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
@@ -6,13 +6,13 @@ import {
   Container,
   Divider,
   Grid,
-  Link,
   Paper,
   Stack,
   Typography,
 } from "@mui/material";
 
 import { useAppSelector } from "../app/hooks";
+import { ScrollFrameHero, type HeroStage } from "../components/ScrollFrameHero";
 
 type Feature = {
   title: string;
@@ -58,251 +58,284 @@ const features: Feature[] = [
     description: "Events calendar and notices to keep everyone aligned.",
     glyph: "N",
   },
+
+];
+
+const heroStages: HeroStage[] = [
   {
-    title: "Settings",
-    description: "Tenant settings and system users administration.",
-    glyph: "C",
+    id: "stage-0",
+    type: "image",
+    src: "/header_resource/start.jpeg",
+    topLayer: "/header_resource/top-start.png",
+    title: "Your school, elevated.",
+    subtitle: "Efficiency re-imagined.", 
+    textVariant: "standard"
   },
+  {
+    id: "stage-1",
+    type: "video",
+    src: "/header_resource/202602040431-1.mp4",
+    title: "Admissions Made Simple",
+    subtitle: "From Chaos to Order",
+    textVariant: "chaos"
+  },
+  {
+    id: "stage-2",
+    type: "video",
+    src: "/header_resource/202602040431-2.mp4",
+    title: "Focus On Learning",
+    subtitle: "We handle the rest",
+    textVariant: "fade-zoom"
+  },
+  {
+    id: "stage-3",
+    type: "video",
+    src: "/header_resource/202602040431-3.mp4",
+    endFrame: "/header_resource/3rd-end.png",
+    title: "Connected Community",
+    subtitle: "Growing together daily",
+    textVariant: "bang"
+  },
+  {
+    id: "stage-4",
+    type: "video",
+    src: "/header_resource/202602040431-4.mp4",
+    title: "Financial Clarity",
+    subtitle: "Secure. Transparent. Easy.",
+    textVariant: "slide-down"
+  }
 ];
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const token = useAppSelector((s) => s.auth.accessToken);
-  const sessionChecked = useAppSelector((s) => s.auth.sessionChecked);
-  const status = useAppSelector((s) => s.auth.status);
-  const isPlatformAdmin = useAppSelector((s) => s.auth.isPlatformAdmin);
+  const token = useAppSelector((s: any) => s.auth.accessToken);
+  const sessionChecked = useAppSelector((s: any) => s.auth.sessionChecked);
+  const status = useAppSelector((s: any) => s.auth.status);
+  const isPlatformAdmin = useAppSelector((s: any) => s.auth.isPlatformAdmin);
+  const roleName = useAppSelector((s: any) => s.auth.memberships[0]?.role_name);
+
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    if (!sessionChecked || status === "loading") {
-      return;
+    if (!sessionChecked || status === "loading") return;
+    if (!token) return;
+    
+    if (isPlatformAdmin) {
+      navigate("/saas-admin", { replace: true });
+    } else if (roleName === "student") {
+      navigate("/student-portal", { replace: true });
+    } else if (roleName === "parent" || roleName === "guardian") {
+      navigate("/guardian-portal", { replace: true });
+    } else if (roleName === "teacher") {
+      navigate("/teacher-portal", { replace: true });
+    } else {
+      navigate("/dashboard", { replace: true });
     }
-    if (!token) {
-      return;
-    }
-    navigate(isPlatformAdmin ? "/saas-admin" : "/dashboard", { replace: true });
-  }, [isPlatformAdmin, navigate, sessionChecked, status, token]);
+  }, [isPlatformAdmin, navigate, sessionChecked, status, token, roleName]);
+
+  useEffect(() => {
+    const nodes = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-reveal]"),
+    );
+    if (nodes.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const key = (entry.target as HTMLElement).dataset.reveal;
+          if (!key) continue;
+          setRevealed((prev: Record<string, boolean>) => (prev[key] ? prev : { ...prev, [key]: true }));
+          observer.unobserve(entry.target);
+        }
+      },
+      { rootMargin: "0px 0px -12% 0px", threshold: 0.12 },
+    );
+
+    for (const n of nodes) observer.observe(n);
+    return () => observer.disconnect();
+  }, []);
+
+  const revealSx = (key: string) => ({
+    opacity: revealed[key] ? 1 : 0,
+    transform: revealed[key]
+      ? "perspective(1500px) rotateX(0deg) translateY(0) scale(1) translateZ(0)"
+      : "perspective(1500px) rotateX(60deg) translateY(100px) scale(0.85) translateZ(-100px)",
+    transformOrigin: "50% 100%", 
+    willChange: "transform, opacity",
+    transition: "opacity 1.2s cubic-bezier(0.2, 0.8, 0.2, 1), transform 1.4s cubic-bezier(0.2, 0.8, 0.2, 1)",
+  });
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
-      <Box
+      <Button
+        variant="contained"
+        onClick={() => navigate("/login")}
         sx={{
-          position: "relative",
-          overflow: "hidden",
-          bgcolor: "background.paper",
-          borderBottom: 1,
-          borderColor: "divider",
+          position: "fixed",
+          top: 24,
+          right: 24,
+          zIndex: 100,
+          borderRadius: 999,
+          px: 3,
+          py: 1,
+          bgcolor: "white",
+          color: "black",
+          boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+          fontWeight: 600,
+          "&:hover": {
+            bgcolor: "rgba(255,255,255,0.9)",
+            transform: "scale(1.05)",
+          },
+          transition: "all 0.2s ease",
         }}
       >
-        <Container maxWidth="lg" sx={{ py: 2 }}>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-              <Box
-                sx={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 2,
-                  bgcolor: "primary.main",
-                  color: "primary.contrastText",
-                  display: "grid",
-                  placeItems: "center",
-                  fontWeight: 900,
-                }}
-              >
-                K
-              </Box>
-              <Typography
-                variant="h6"
-                sx={{ fontWeight: 800, letterSpacing: -0.2 }}
-              >
-                KusKul
-              </Typography>
-            </Box>
-            <Button variant="contained" onClick={() => navigate("/login")}>
-              Sign in
-            </Button>
-          </Box>
-        </Container>
-      </Box>
+        Sign in
+      </Button>
 
-      <Container maxWidth="lg" sx={{ py: { xs: 6, md: 10 } }}>
-        <Grid container spacing={4} alignItems="center">
-          <Grid item xs={12} md={6}>
-            <Stack spacing={2.5}>
-              <Typography
-                variant="h3"
-                sx={{ fontWeight: 900, letterSpacing: -0.8, lineHeight: 1.1 }}
-              >
-                Multi-tenant school operations, built for scale.
-              </Typography>
-              <Typography
-                variant="body1"
-                color="text.secondary"
-                sx={{ fontSize: 16, lineHeight: 1.7 }}
-              >
-                KusKul keeps your academic, people, finance, and logistics
-                workflows in one secure system. Each school runs in complete
-                isolation, while platform admins manage tenants from a dedicated
-                SaaS console.
-              </Typography>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-                <Button
-                  size="large"
-                  variant="contained"
-                  onClick={() => navigate("/login")}
-                >
-                  Sign in
-                </Button>
-                <Button
-                  size="large"
-                  variant="outlined"
-                  onClick={() => {
-                    const el = document.getElementById("features");
-                    el?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }}
-                >
-                  Explore features
-                </Button>
-              </Stack>
-              <Stack direction="row" spacing={2} sx={{ pt: 1 }}>
-                <Paper
-                  variant="outlined"
-                  sx={{ px: 2, py: 1.25, borderRadius: 2 }}
-                >
-                  <Typography variant="caption" color="text.secondary">
-                    Tenant isolation
-                  </Typography>
-                  <Typography sx={{ fontWeight: 800 }}>
-                    By `tenant_id`
-                  </Typography>
-                </Paper>
-                <Paper
-                  variant="outlined"
-                  sx={{ px: 2, py: 1.25, borderRadius: 2 }}
-                >
-                  <Typography variant="caption" color="text.secondary">
-                    SaaS admin
-                  </Typography>
-                  <Typography sx={{ fontWeight: 800 }}>
-                    Manage schools
-                  </Typography>
-                </Paper>
-              </Stack>
-            </Stack>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Paper
-              elevation={0}
-              variant="outlined"
-              sx={{
-                borderRadius: 4,
-                p: 3,
-                bgcolor: "background.paper",
-              }}
-            >
-              <Stack spacing={2}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Why teams choose KusKul
-                </Typography>
-                <Stack spacing={1}>
-                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
-                    <Typography sx={{ fontWeight: 900 }}>
-                      True tenant isolation
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ mt: 0.5 }}
-                    >
-                      Every school’s data and access stays scoped to
-                      `tenant_id`.
-                    </Typography>
-                  </Paper>
-                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
-                    <Typography sx={{ fontWeight: 900 }}>
-                      SaaS-level control
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ mt: 0.5 }}
-                    >
-                      Provision tenants, reset admin access, and suspend schools
-                      instantly.
-                    </Typography>
-                  </Paper>
-                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
-                    <Typography sx={{ fontWeight: 900 }}>
-                      Operator-first UX
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ mt: 0.5 }}
-                    >
-                      Fast navigation, consistent dialogs, and predictable
-                      workflows.
-                    </Typography>
-                  </Paper>
-                </Stack>
-              </Stack>
-            </Paper>
-          </Grid>
-        </Grid>
+      {/* New Video Hero */}
+      <ScrollFrameHero stages={heroStages} />
 
-        <Box id="features" sx={{ pt: { xs: 8, md: 10 } }}>
-          <Stack spacing={1} sx={{ mb: 3 }}>
-            <Typography
-              variant="h5"
-              sx={{ fontWeight: 900, letterSpacing: -0.4 }}
-            >
-              Everything schools need
-            </Typography>
-            <Typography color="text.secondary">
-              Modular workflows that stay consistent across tenants.
-            </Typography>
-          </Stack>
-          <Grid container spacing={2.5}>
-            {features.map((f) => (
-              <Grid key={f.title} item xs={12} sm={6} md={3}>
+      <Container maxWidth="lg" sx={{ py: { xs: 7, md: 10 } }}>
+        <Box
+          data-reveal="preview"
+          sx={{ ...revealSx("preview"), mb: { xs: 7, md: 9 } }}
+        >
+          <Grid container spacing={2.5} sx={{ width: "100%" }}>
+            {[
+              {
+                title: "Secure by design",
+                desc: "Tenant-scoped queries, permissions, and audit trails.",
+              },
+              {
+                title: "Fast operations",
+                desc: "Operator-first UX across modules for daily workflows.",
+              },
+              {
+                title: "SaaS console",
+                desc: "Provision tenants and manage access securely.",
+              },
+            ].map((b) => (
+              <Grid key={b.title} size={{ xs: 12, md: 4 }}>
                 <Paper
                   variant="outlined"
                   sx={{
+                    p: 3,
+                    borderRadius: 5,
                     height: "100%",
-                    p: 2.5,
-                    borderRadius: 4,
-                    transition: "transform 120ms ease, box-shadow 120ms ease",
-                    "&:hover": { transform: "translateY(-2px)", boxShadow: 2 },
+                    background:
+                      "linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.78))",
+                    backdropFilter: "blur(10px)",
+                    transition: "transform 160ms ease, box-shadow 160ms ease",
+                    "&:hover": { transform: "translateY(-4px) rotateX(2deg)", boxShadow: 4 },
                   }}
                 >
-                  <Stack spacing={1.25}>
+                  <Typography sx={{ fontWeight: 950, letterSpacing: -0.2 }}>
+                    {b.title}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: 1, lineHeight: 1.7 }}
+                  >
+                    {b.desc}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+
+        <Box id="features" data-reveal="features" sx={{ minHeight: "60vh" }}>
+          
+          <Stack spacing={1} sx={{ mb: 6, textAlign: "center", ...revealSx("features") }}>
+            <Typography
+              variant="h3"
+              sx={{ 
+                  fontFamily: '"Oldenburg", serif',
+                  fontWeight: 400, 
+                  letterSpacing: "-0.02em",
+                  background: "linear-gradient(45deg, #1a237e 30%, #0d47a1 90%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  mb: 1
+              }}
+            >
+              Everything your campus needs
+            </Typography>
+            <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 600, mx: "auto", fontFamily: '"Plus Jakarta Sans", sans-serif', fontWeight: 400 }}>
+              Academic workflows and operations—designed for modern education.
+            </Typography>
+          </Stack>
+
+          
+          <Grid container spacing={3} sx={{ width: "100%" }}>
+            {features.map((f, i) => (
+              <Grid key={f.title} size={{ xs: 12, sm: 6, md: 3 }}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    height: "100%",
+                    p: 3,
+                    borderRadius: 4,
+                    // Glassmorphism
+                    background: "linear-gradient(135deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.2) 100%)",
+                    backdropFilter: "blur(20px)",
+                    border: "1px solid rgba(255, 255, 255, 0.5)",
+                    boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.05)",
+                    transition: "all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+                    
+                    // Staggered Reveal
+                    opacity: revealed["features"] ? 1 : 0,
+                    transform: revealed["features"] 
+                        ? "translateY(0) scale(1)" 
+                        : "translateY(40px) scale(0.9)",
+                    transitionDelay: `${i * 100}ms`, // Stagger effect
+
+                    "&:hover": { 
+                        transform: "translateY(-8px) scale(1.02)", 
+                        boxShadow: "0 20px 50px rgba(0,0,0,0.1)",
+                        border: "1px solid rgba(255, 255, 255, 0.8)",
+                        background: "linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.4) 100%)",
+                    },
+                  }}
+                >
+                  <Stack spacing={2}>
                     <Box
                       sx={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 2,
-                        bgcolor: "primary.main",
-                        color: "primary.contrastText",
-                        display: "grid",
-                        placeItems: "center",
-                        fontWeight: 900,
+                        width: 48,
+                        height: 48,
+                        borderRadius: "14px",
+                        background: "linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)",
+                        color: "#1565c0",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontWeight: 800,
+                        fontSize: "1.5rem",
+                        boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.6)",
+                        transition: "transform 0.3s ease",
+                        ".MuiPaper-root:hover &": {
+                            transform: "rotate(10deg) scale(1.1)",
+                            background: "linear-gradient(135deg, #2196f3 0%, #1976d2 100%)",
+                            color: "white"
+                        }
                       }}
                     >
                       {f.glyph}
                     </Box>
-                    <Typography sx={{ fontWeight: 900 }}>{f.title}</Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ lineHeight: 1.6 }}
-                    >
-                      {f.description}
-                    </Typography>
+                    <Box>
+                        <Typography variant="h6" sx={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontWeight: 700, mb: 1 }}>
+                            {f.title}
+                        </Typography>
+                        <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ lineHeight: 1.6, fontFamily: '"Plus Jakarta Sans", sans-serif' }}
+                        >
+                        {f.description}
+                        </Typography>
+                    </Box>
                   </Stack>
                 </Paper>
               </Grid>
@@ -310,50 +343,176 @@ export default function LandingPage() {
           </Grid>
         </Box>
 
-        <Box sx={{ mt: { xs: 8, md: 10 }, textAlign: "center" }}>
-          <Typography
-            variant="h5"
-            sx={{ fontWeight: 900, letterSpacing: -0.4 }}
-          >
-            Start with secure sign-in.
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 1 }}>
-            Platform admins manage tenants. Tenant admins run schools. Everyone
-            stays scoped.
-          </Typography>
-          <Button
-            size="large"
-            variant="contained"
-            sx={{ mt: 2 }}
-            onClick={() => navigate("/login")}
-          >
-            Sign in
-          </Button>
-        </Box>
-      </Container>
-
-      <Container maxWidth="lg" sx={{ pb: 5 }}>
-        <Divider sx={{ mb: 3 }} />
         <Box
-          sx={{
-            display: "flex",
-            flexDirection: { xs: "column", sm: "row" },
-            gap: 1.5,
-            alignItems: { sm: "center" },
-            justifyContent: "space-between",
-          }}
+          data-reveal="pricing"
+          sx={{ ...revealSx("pricing"), mt: { xs: 7, md: 9 } }}
         >
-          <Typography variant="body2" color="text.secondary">
-            © {new Date().getFullYear()} KusKul
-          </Typography>
-          <Stack direction="row" spacing={2}>
-            <Link href="#" underline="hover" color="text.secondary">
-              Privacy
-            </Link>
-            <Link href="#" underline="hover" color="text.secondary">
-              Terms
-            </Link>
+          <Stack
+            spacing={1}
+            sx={{ mb: 3, textAlign: { xs: "left", md: "center" } }}
+          >
+            <Typography
+              variant="h5"
+              sx={{ fontWeight: 950, letterSpacing: -0.5 }}
+            >
+              Simple, transparent pricing
+            </Typography>
+            <Typography color="text.secondary">
+              Start small, upgrade as your student body grows.
+            </Typography>
           </Stack>
+          <Grid
+            container
+            spacing={2.5}
+            alignItems="stretch"
+            sx={{ width: "100%" }}
+          >
+            {[
+              {
+                title: "Essential",
+                price: "Free",
+                note: "Up to 50 students",
+                items: ["Core academics", "Attendance tracking", "Basic reports"],
+                cta: "Try for free",
+              },
+              {
+                title: "Growth",
+                price: "$2",
+                note: "Per student / month",
+                items: [
+                  "All modules",
+                  "App for Parents",
+                  "SMS & Email",
+                ],
+                cta: "Get Started",
+                highlight: true,
+              },
+              {
+                title: "Campus",
+                price: "Custom",
+                note: "For large institutions",
+                items: [
+                  "Priority support",
+                  "Custom domain",
+                  "Dedicated training",
+                  "Data migration",
+                ],
+                cta: "Contact Sales",
+              },
+            ].map((p) => (
+              <Grid key={p.title} size={{ xs: 12, md: 4 }}>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 3,
+                    borderRadius: 5,
+                    height: "100%",
+                    position: "relative",
+                    overflow: "hidden",
+                    borderColor: p.highlight ? "primary.main" : "divider",
+                    boxShadow: p.highlight
+                      ? "0 18px 60px rgba(25,118,210,0.16)"
+                      : "none",
+                    transition: "transform 160ms ease, box-shadow 160ms ease",
+                    "&:hover": {
+                      transform: "translateY(-4px) rotateX(2deg)",
+                      boxShadow: p.highlight
+                        ? "0 22px 70px rgba(25,118,210,0.20)"
+                        : 4,
+                    },
+                  }}
+                >
+                  {p.highlight ? (
+                    <Box
+                      sx={{
+                        position: "absolute",
+                        inset: 0,
+                        pointerEvents: "none",
+                        background:
+                          "linear-gradient(135deg, rgba(25,118,210,0.10), rgba(156,39,176,0.06))",
+                      }}
+                    />
+                  ) : null}
+                  <Stack spacing={1.5} sx={{ position: "relative" }}>
+                    <Typography sx={{ fontWeight: 950, letterSpacing: -0.2 }}>
+                      {p.title}
+                    </Typography>
+                    <Typography
+                      variant="h4"
+                      sx={{ fontWeight: 950, letterSpacing: -0.8 }}
+                    >
+                      {p.price}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {p.note}
+                    </Typography>
+                    <Divider />
+                    <Stack spacing={0.75}>
+                      {p.items.map((it) => (
+                        <Typography key={it} variant="body2">
+                          • {it}
+                        </Typography>
+                      ))}
+                    </Stack>
+                    <Box sx={{ pt: 1 }}>
+                      <Button
+                        fullWidth
+                        variant={p.highlight ? "contained" : "outlined"}
+                        onClick={() =>
+                          p.cta === "Try for free" || p.cta === "Get Started"
+                            ? navigate("/login")
+                            : window.open(
+                                "mailto:sales@example.com?subject=School%20System%20Pricing",
+                                "_blank",
+                              )
+                        }
+                      >
+                        {p.cta}
+                      </Button>
+                    </Box>
+                  </Stack>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Box sx={{ mt: { xs: 6, md: 8 }, textAlign: "center" }}>
+            <Typography
+              variant="h5"
+              sx={{ fontWeight: 950, letterSpacing: -0.5 }}
+            >
+              Launch your school online. Run it efficiently.
+            </Typography>
+            <Typography color="text.secondary" sx={{ mt: 1 }}>
+              From admissions to exams, handle it all on one secure platform.
+            </Typography>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1.5}
+              justifyContent="center"
+              sx={{ mt: 2 }}
+            >
+              <Button
+                size="large"
+                variant="contained"
+                onClick={() => navigate("/login")}
+              >
+                Sign in
+              </Button>
+              <Button
+                size="large"
+                variant="outlined"
+                onClick={() =>
+                  window.open(
+                    "mailto:sales@example.com?subject=School%20System%20Demo",
+                    "_blank",
+                  )
+                }
+              >
+                Request demo
+              </Button>
+            </Stack>
+          </Box>
         </Box>
       </Container>
     </Box>

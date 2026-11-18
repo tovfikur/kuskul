@@ -9,6 +9,7 @@ import {
   TextField,
   Switch,
   FormControlLabel,
+  Checkbox,
   Button,
   Grid,
   Divider,
@@ -32,6 +33,7 @@ import {
   Save as SaveIcon,
   Refresh as RefreshIcon,
   Info as InfoIcon,
+  AutoAwesome as MagicWandIcon,
 } from "@mui/icons-material";
 import { api } from "../../api/client";
 import { showToast } from "../../app/toast";
@@ -126,14 +128,25 @@ export default function SettingsPage() {
     smtp_password: "",
     from_email: "",
     from_name: "",
-    sms_gateway_provider: "twilio",
+    sms_gateway_provider: "custom",
+    sms_gateway_url: "",
     sms_api_key: "",
     sms_sender_id: "",
+    sms_to_field: "to",
+    sms_message_field: "message",
+    sms_api_key_field: "apiKey",
+    sms_sender_field: "senderId",
+    sms_gateway_extra: "",
+    sms_gateway_format: "json",
+    sms_require_error_zero: false,
+    sms_error_field: "error",
     send_welcome_emails: true,
     send_attendance_alerts: true,
     send_fee_reminders: true,
     send_exam_reminders: true,
   });
+  const [testSms, setTestSms] = useState({ recipient: "", message: "" });
+  const [testingSms, setTestingSms] = useState(false);
 
   // Backup & Security Settings
   const [backupSecuritySettings, setBackupSecuritySettings] = useState({
@@ -169,7 +182,7 @@ export default function SettingsPage() {
     setLoading(true);
     try {
       // Load school profile
-      const profileResp = await api.get("/settings");
+      const profileResp = await api.get("/settings", { timeout: 15000 });
       const profileData = profileResp.data as Array<{ key: string; value: string }>;
       const profileMap = new Map(profileData.map((r) => [r.key, r.value]));
       
@@ -186,77 +199,25 @@ export default function SettingsPage() {
         motto: profileMap.get("school.profile.motto") || "",
       });
 
-      // Load student settings
-      try {
-        const studentResp = await api.get("/settings/students.settings");
-        if (studentResp.data && studentResp.data.value && studentResp.data.value.trim()) {
-          setStudentSettings(JSON.parse(studentResp.data.value));
+      // The collection response already includes every settings section.
+      // Read it once instead of requesting the same values sequentially.
+      const readSection = (key: string) => {
+        const value = profileMap.get(key);
+        if (!value?.trim()) return {};
+        try {
+          const parsed = JSON.parse(value);
+          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+        } catch {
+          console.error(`Invalid saved settings: ${key}`);
+          return {};
         }
-      } catch (err: any) {
-        if (err.response?.status !== 404) {
-          console.error("Failed to load student settings:", err);
-        }
-      }
-
-      // Load staff settings
-      try {
-        const staffResp = await api.get("/settings/staff.settings");
-        if (staffResp.data && staffResp.data.value && staffResp.data.value.trim()) {
-          setStaffSettings(JSON.parse(staffResp.data.value));
-        }
-      } catch (err: any) {
-        if (err.response?.status !== 404) {
-          console.error("Failed to load staff settings:", err);
-        }
-      }
-
-      // Load academic settings
-      try {
-        const academicResp = await api.get("/settings/academic.settings");
-        if (academicResp.data && academicResp.data.value && academicResp.data.value.trim()) {
-          setAcademicSettings(JSON.parse(academicResp.data.value));
-        }
-      } catch (err: any) {
-        if (err.response?.status !== 404) {
-          console.error("Failed to load academic settings:", err);
-        }
-      }
-
-      // Load email/SMS settings
-      try {
-        const emailSmsResp = await api.get("/settings/email_sms.settings");
-        if (emailSmsResp.data && emailSmsResp.data.value && emailSmsResp.data.value.trim()) {
-          setEmailSmsSettings(JSON.parse(emailSmsResp.data.value));
-        }
-      } catch (err: any) {
-        if (err.response?.status !== 404) {
-          console.error("Failed to load email/SMS settings:", err);
-        }
-      }
-
-      // Load backup/security settings
-      try {
-        const backupResp = await api.get("/settings/backup_security.settings");
-        if (backupResp.data && backupResp.data.value && backupResp.data.value.trim()) {
-          setBackupSecuritySettings(JSON.parse(backupResp.data.value));
-        }
-      } catch (err: any) {
-        if (err.response?.status !== 404) {
-          console.error("Failed to load backup/security settings:", err);
-        }
-      }
-
-      // Load system settings
-      try {
-        const systemResp = await api.get("/settings/system.settings");
-        if (systemResp.data && systemResp.data.value && systemResp.data.value.trim()) {
-          setSystemSettings(JSON.parse(systemResp.data.value));
-        }
-      } catch (err: any) {
-        if (err.response?.status !== 404) {
-          console.error("Failed to load system settings:", err);
-        }
-      }
+      };
+      setStudentSettings((prev) => ({ ...prev, ...readSection("students.settings") }));
+      setStaffSettings((prev) => ({ ...prev, ...readSection("staff.settings") }));
+      setAcademicSettings((prev) => ({ ...prev, ...readSection("academic.settings") }));
+      setEmailSmsSettings((prev) => ({ ...prev, ...readSection("email_sms.settings") }));
+      setBackupSecuritySettings((prev) => ({ ...prev, ...readSection("backup_security.settings") }));
+      setSystemSettings((prev) => ({ ...prev, ...readSection("system.settings") }));
 
       setHasChanges(false);
     } catch (error) {
@@ -335,6 +296,47 @@ export default function SettingsPage() {
     }
   }
 
+  function fillSmsNetbd() {
+    setEmailSmsSettings({
+      ...emailSmsSettings,
+      sms_gateway_provider: "smsnetbd",
+      sms_gateway_url: "https://api.sms.net.bd/sendsms",
+      sms_gateway_format: "form",
+      sms_to_field: "to",
+      sms_message_field: "msg",
+      sms_api_key_field: "api_key",
+      sms_sender_field: "sender_id",
+      sms_require_error_zero: true,
+      sms_error_field: "error",
+    });
+    setHasChanges(true);
+  }
+
+  async function sendTestSms() {
+    if (!testSms.recipient.trim() || !testSms.message.trim()) {
+      showToast({ severity: "error", message: "Enter a test recipient number and message." });
+      return;
+    }
+    setTestingSms(true);
+    try {
+      const response = await api.post("/communication-logs/test-sms", {
+        recipient: testSms.recipient.trim(),
+        message: testSms.message.trim(),
+      });
+      const result = response.data;
+      if (result.ok) {
+        showToast({ severity: "success", message: "Test SMS sent successfully." });
+      } else {
+        showToast({ severity: "error", message: result.detail || "Test SMS could not be sent." });
+      }
+    } catch (error) {
+      console.error("Failed to send test SMS", error);
+      showToast({ severity: "error", message: "Test SMS request failed." });
+    } finally {
+      setTestingSms(false);
+    }
+  }
+
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     if (hasChanges) {
       if (window.confirm("You have unsaved changes. Do you want to discard them?")) {
@@ -404,7 +406,7 @@ export default function SettingsPage() {
       {/* School Profile Tab */}
       <TabPanel value={currentTab} index={0}>
         <Grid container spacing={4.2}>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card sx={{ height: "100%" }}>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -473,7 +475,7 @@ export default function SettingsPage() {
             </Card>
           </Grid>
 
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card sx={{ height: "100%" }}>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -555,7 +557,7 @@ export default function SettingsPage() {
       <TabPanel value={currentTab} index={1}>
         <Grid container spacing={4.2}>
           {/* Admission Settings */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Box sx={{ display: "flex", alignItems: "center", mb: 2.6 }}>
@@ -632,7 +634,7 @@ export default function SettingsPage() {
           </Grid>
 
           {/* ID Card Settings */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -690,7 +692,7 @@ export default function SettingsPage() {
           </Grid>
 
           {/* Academic Settings */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -751,7 +753,7 @@ export default function SettingsPage() {
           </Grid>
 
           {/* Portal Access Settings */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -811,7 +813,7 @@ export default function SettingsPage() {
           </Grid>
 
           {/* Fee Settings */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -857,7 +859,7 @@ export default function SettingsPage() {
           </Grid>
 
           {/* Advanced Features */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -922,7 +924,7 @@ export default function SettingsPage() {
       <TabPanel value={currentTab} index={2}>
         <Grid container spacing={4.2}>
           {/* Employee ID Settings */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -975,7 +977,7 @@ export default function SettingsPage() {
           </Grid>
 
           {/* Attendance Settings */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -1032,7 +1034,7 @@ export default function SettingsPage() {
           </Grid>
 
           {/* Leave Management */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -1105,7 +1107,7 @@ export default function SettingsPage() {
       <TabPanel value={currentTab} index={3}>
         <Grid container spacing={4.2}>
           {/* Grading System */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -1163,7 +1165,7 @@ export default function SettingsPage() {
           </Grid>
 
           {/* Term System & Exams */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -1244,7 +1246,7 @@ export default function SettingsPage() {
       {/* System Settings Tab */}
       <TabPanel value={currentTab} index={4}>
         <Grid container spacing={4.2}>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -1310,7 +1312,7 @@ export default function SettingsPage() {
             </Card>
           </Grid>
 
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -1386,7 +1388,7 @@ export default function SettingsPage() {
       <TabPanel value={currentTab} index={5}>
         <Grid container spacing={4.2}>
           {/* Email Configuration */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -1470,7 +1472,7 @@ export default function SettingsPage() {
           </Grid>
 
           {/* SMS Configuration */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -1485,15 +1487,42 @@ export default function SettingsPage() {
                     label="SMS Gateway Provider"
                     onChange={(e) => {
                       setEmailSmsSettings({ ...emailSmsSettings, sms_gateway_provider: e.target.value });
+                      if (e.target.value === "smsnetbd") {
+                        fillSmsNetbd();
+                      }
                       setHasChanges(true);
                     }}
                   >
                     <MenuItem value="twilio">Twilio</MenuItem>
                     <MenuItem value="nexmo">Nexmo</MenuItem>
                     <MenuItem value="msg91">MSG91</MenuItem>
+                    <MenuItem value="smsnetbd">SMS.net.bd</MenuItem>
                     <MenuItem value="custom">Custom</MenuItem>
                   </Select>
                 </FormControl>
+
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<MagicWandIcon />}
+                  onClick={fillSmsNetbd}
+                  sx={{ mt: 1 }}
+                >
+                  Fill for SMS.net.bd
+                </Button>
+
+                <TextField
+                  fullWidth
+                  label="SMS Gateway URL"
+                  value={emailSmsSettings.sms_gateway_url}
+                  onChange={(e) => {
+                    setEmailSmsSettings({ ...emailSmsSettings, sms_gateway_url: e.target.value });
+                    setHasChanges(true);
+                  }}
+                  margin="normal"
+                  placeholder="https://your-sms-provider.example.com/api/send"
+                  helperText="Custom HTTP endpoint the backend POSTs the SMS to. Without this, guardian SMS stays queued (not delivered)."
+                />
                 
                 <TextField
                   fullWidth
@@ -1518,12 +1547,154 @@ export default function SettingsPage() {
                   margin="normal"
                   helperText="6 characters, e.g., SCHOOL"
                 />
+
+                <FormControl fullWidth margin="normal">
+                  <InputLabel>Request Body Format</InputLabel>
+                  <Select
+                    value={emailSmsSettings.sms_gateway_format}
+                    label="Request Body Format"
+                    onChange={(e) => {
+                      setEmailSmsSettings({ ...emailSmsSettings, sms_gateway_format: e.target.value });
+                      setHasChanges(true);
+                    }}
+                  >
+                    <MenuItem value="json">JSON</MenuItem>
+                    <MenuItem value="form">Form URL-encoded</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={emailSmsSettings.sms_require_error_zero}
+                      onChange={(e) => {
+                        setEmailSmsSettings({ ...emailSmsSettings, sms_require_error_zero: e.target.checked });
+                        setHasChanges(true);
+                      }}
+                    />
+                  }
+                  label="Provider reports failure in body (success only when error field is 0)"
+                  sx={{ mt: 1, alignItems: "flex-start" }}
+                />
+                {emailSmsSettings.sms_require_error_zero && (
+                  <TextField
+                    fullWidth
+                    label="Error field name"
+                    value={emailSmsSettings.sms_error_field}
+                    onChange={(e) => {
+                      setEmailSmsSettings({ ...emailSmsSettings, sms_error_field: e.target.value });
+                      setHasChanges(true);
+                    }}
+                    margin="normal"
+                    size="small"
+                    helperText="e.g., SMS.net.bd returns HTTP 200 with error: 0 on success and error: 416/417/413 on failure."
+                  />
+                )}
+
+                <Divider sx={{ my: 2.6 }} />
+
+                <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                  Body Field Names (advanced)
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                  The gateway receives the recipient, message, API key and sender ID under these keys in a {emailSmsSettings.sms_gateway_format === "form" ? "form-encoded" : "JSON"} body. Change these only if your provider expects different names.
+                </Typography>
+                <TextField
+                  fullWidth
+                  label="Recipient field"
+                  value={emailSmsSettings.sms_to_field}
+                  onChange={(e) => {
+                    setEmailSmsSettings({ ...emailSmsSettings, sms_to_field: e.target.value });
+                    setHasChanges(true);
+                  }}
+                  margin="normal"
+                  size="small"
+                />
+                <TextField
+                  fullWidth
+                  label="Message field"
+                  value={emailSmsSettings.sms_message_field}
+                  onChange={(e) => {
+                    setEmailSmsSettings({ ...emailSmsSettings, sms_message_field: e.target.value });
+                    setHasChanges(true);
+                  }}
+                  margin="normal"
+                  size="small"
+                />
+                <TextField
+                  fullWidth
+                  label="API key field"
+                  value={emailSmsSettings.sms_api_key_field}
+                  onChange={(e) => {
+                    setEmailSmsSettings({ ...emailSmsSettings, sms_api_key_field: e.target.value });
+                    setHasChanges(true);
+                  }}
+                  margin="normal"
+                  size="small"
+                />
+                <TextField
+                  fullWidth
+                  label="Sender ID field"
+                  value={emailSmsSettings.sms_sender_field}
+                  onChange={(e) => {
+                    setEmailSmsSettings({ ...emailSmsSettings, sms_sender_field: e.target.value });
+                    setHasChanges(true);
+                  }}
+                  margin="normal"
+                  size="small"
+                />
+                <TextField
+                  fullWidth
+                  label="Extra JSON fields"
+                  value={emailSmsSettings.sms_gateway_extra}
+                  onChange={(e) => {
+                    setEmailSmsSettings({ ...emailSmsSettings, sms_gateway_extra: e.target.value });
+                    setHasChanges(true);
+                  }}
+                  margin="normal"
+                  size="small"
+                  placeholder='{"country": "BD"}'
+                  helperText="Optional static key/value pairs merged into every request body."
+                />
+
+                <Divider sx={{ my: 2.6 }} />
+
+                <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                  Test SMS
+                </Typography>
+                <TextField
+                  fullWidth
+                  label="Test Recipient Number"
+                  value={testSms.recipient}
+                  onChange={(e) => setTestSms({ ...testSms, recipient: e.target.value })}
+                  margin="normal"
+                  size="small"
+                  placeholder="e.g., 017xxxxxxxx"
+                />
+                <TextField
+                  fullWidth
+                  label="Test Message"
+                  value={testSms.message}
+                  onChange={(e) => setTestSms({ ...testSms, message: e.target.value })}
+                  margin="normal"
+                  size="small"
+                  multiline
+                  minRows={2}
+                />
+                <Button
+                  variant="outlined"
+                  onClick={sendTestSms}
+                  disabled={testingSms}
+                  sx={{ mt: 1 }}
+                >
+                  {testingSms ? "Sending..." : "Send Test SMS"}
+                </Button>
               </CardContent>
             </Card>
           </Grid>
 
           {/* Notification Preferences */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -1604,7 +1775,7 @@ export default function SettingsPage() {
       <TabPanel value={currentTab} index={6}>
         <Grid container spacing={4.2}>
           {/* Backup Configuration */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
@@ -1675,7 +1846,7 @@ export default function SettingsPage() {
           </Grid>
 
           {/* Security Settings */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent sx={{ p: 4.2 }}>
                 <Typography variant="h6" fontWeight={700} gutterBottom>

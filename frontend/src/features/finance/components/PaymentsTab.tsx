@@ -35,10 +35,11 @@ type Props = {
   openCollect: boolean;
   onCloseCollect: () => void;
   onOpenCollect?: () => void;
+  prefillStudentId?: string | null;
 };
 
 export function PaymentsTab(props: Props) {
-  const { openCollect, onCloseCollect, onOpenCollect } = props;
+  const { openCollect, onCloseCollect, onOpenCollect, prefillStudentId } = props;
 
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
@@ -253,6 +254,7 @@ export function PaymentsTab(props: Props) {
         onCollected={() => {
           void load();
         }}
+        prefillStudentId={prefillStudentId}
       />
     </Box>
   );

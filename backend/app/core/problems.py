@@ -31,3 +31,7 @@ def not_found(detail: str = "Not found") -> HTTPException:
 
 def not_implemented(detail: str = "Not implemented") -> HTTPException:
     return problem(status_code=status.HTTP_501_NOT_IMPLEMENTED, title="Not Implemented", detail=detail)
+
+
+def bad_request(detail: str = "Bad request") -> HTTPException:
+    return problem(status_code=status.HTTP_400_BAD_REQUEST, title="Bad Request", detail=detail)

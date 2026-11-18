@@ -31,8 +31,11 @@ import {
   getMaintenanceTickets,
   createMaintenanceTicket,
   updateMaintenanceTicket,
+  getAssets,
 } from "../../../../api/logistics";
+import { getUsers, type User } from "../../../../api/people";
 import type {
+  Asset,
   MaintenanceTicket,
   TicketPriority,
   TicketStatus,
@@ -55,9 +58,9 @@ export default function MaintenanceTab() {
   );
 
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
-  const [ticketToClose, setTicketToClose] = useState<MaintenanceTicket | null>(
-    null,
-  );
+  const [ticketToClose, setTicketToClose] = useState<MaintenanceTicket | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [assetsList, setAssetsList] = useState<Asset[]>([]);
 
   const [form, setForm] = useState({
     asset_id: "",
@@ -93,6 +96,11 @@ export default function MaintenanceTab() {
   useEffect(() => {
     loadTickets();
   }, [loadTickets]);
+
+  useEffect(() => {
+    getUsers(1, 500).then((res) => setUsers(res.items)).catch(() => {});
+    getAssets({ limit: 500, offset: 0 }).then((res) => setAssetsList(res.items)).catch(() => {});
+  }, []);
 
   const handleCreate = async () => {
     try {
@@ -419,24 +427,38 @@ export default function MaintenanceTab() {
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                label="Asset ID"
-                value={form.asset_id}
-                onChange={(e) => setForm({ ...form, asset_id: e.target.value })}
-                placeholder="Optional"
-              />
+              <FormControl fullWidth>
+                <InputLabel>Asset</InputLabel>
+                <Select
+                  value={form.asset_id}
+                  label="Asset"
+                  onChange={(e) => setForm({ ...form, asset_id: e.target.value })}
+                >
+                  <MenuItem value="">None</MenuItem>
+                  {assetsList.map((a) => (
+                    <MenuItem key={a.id} value={a.id}>
+                      {a.tag} – {a.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                label="Assigned To (User ID)"
-                value={form.assigned_to_user_id}
-                onChange={(e) =>
-                  setForm({ ...form, assigned_to_user_id: e.target.value })
-                }
-                placeholder="Optional"
-              />
+              <FormControl fullWidth>
+                <InputLabel>Assigned To</InputLabel>
+                <Select
+                  value={form.assigned_to_user_id}
+                  label="Assigned To"
+                  onChange={(e) => setForm({ ...form, assigned_to_user_id: e.target.value })}
+                >
+                  <MenuItem value="">None</MenuItem>
+                  {users.map((u) => (
+                    <MenuItem key={u.id} value={u.id}>
+                      {u.full_name || u.email}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid size={{ xs: 12 }}>
               <TextField

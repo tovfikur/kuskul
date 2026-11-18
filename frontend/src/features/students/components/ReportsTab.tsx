@@ -40,10 +40,8 @@ import IndividualReportTab from "./IndividualReportTab";
 import {
   getClasses,
   getSections,
-  getCurrentAcademicYear,
   type SchoolClass,
   type Section,
-  type AcademicYear,
 } from "../../../api/academic";
 import { showToast } from "../../../app/toast";
 
@@ -52,7 +50,6 @@ export default function ReportsTab() {
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
-  const [currentYear, setCurrentYear] = useState<AcademicYear | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [selectedClass, setSelectedClass] = useState("");
@@ -76,12 +73,8 @@ export default function ReportsTab() {
 
   async function loadInitialData() {
     try {
-      const [classesData, yearData] = await Promise.all([
-        getClasses(),
-        getCurrentAcademicYear(),
-      ]);
+      const [classesData] = await Promise.all([getClasses()]);
       setClasses(classesData.filter((c) => c.is_active));
-      setCurrentYear(yearData);
     } catch (err) {
       console.error(err);
     }
@@ -305,7 +298,7 @@ export default function ReportsTab() {
         </Stack>
 
         <Grid container spacing={3}>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <FormControl fullWidth variant="outlined">
               <InputLabel>Class</InputLabel>
               <Select
@@ -331,7 +324,7 @@ export default function ReportsTab() {
             </FormControl>
           </Grid>
 
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <FormControl fullWidth disabled={!selectedClass}>
               <InputLabel>Section</InputLabel>
               <Select
@@ -357,7 +350,7 @@ export default function ReportsTab() {
             </FormControl>
           </Grid>
 
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <FormControl fullWidth>
               <InputLabel>Status</InputLabel>
               <Select
@@ -380,7 +373,7 @@ export default function ReportsTab() {
             </FormControl>
           </Grid>
 
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <FormControl fullWidth>
               <InputLabel>Gender</InputLabel>
               <Select
@@ -444,7 +437,7 @@ export default function ReportsTab() {
         <Box>
           {/* Stats Cards - Golden Ratio Grid */}
           <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid container item xs={12} sm={6} md={3}>
+            <Grid container size={{ xs: 12, sm: 6, md: 3 }}>
               <Card
                 elevation={0}
                 sx={{
@@ -473,7 +466,7 @@ export default function ReportsTab() {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid container item xs={12} sm={6} md={3}>
+            <Grid container size={{ xs: 12, sm: 6, md: 3 }}>
               <Card
                 elevation={0}
                 sx={{
@@ -507,7 +500,7 @@ export default function ReportsTab() {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid container item xs={12} sm={6} md={3}>
+            <Grid container size={{ xs: 12, sm: 6, md: 3 }}>
               <Card
                 elevation={0}
                 sx={{
@@ -537,7 +530,7 @@ export default function ReportsTab() {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid container item xs={12} sm={6} md={3}>
+            <Grid container size={{ xs: 12, sm: 6, md: 3 }}>
               <Card
                 elevation={0}
                 sx={{
@@ -575,7 +568,7 @@ export default function ReportsTab() {
 
           {/* Distribution Charts */}
           <Grid container spacing={3}>
-            <Grid container item xs={12} md={6}>
+            <Grid container size={{ xs: 12, md: 6 }}>
               <Paper
                 elevation={0}
                 sx={{
@@ -638,7 +631,7 @@ export default function ReportsTab() {
               </Paper>
             </Grid>
 
-            <Grid container item xs={12} md={6}>
+            <Grid container size={{ xs: 12, md: 6 }}>
               <Paper
                 elevation={0}
                 sx={{
@@ -782,7 +775,7 @@ export default function ReportsTab() {
       {activeReportTab === 2 && (
         <Box>
           <Grid container spacing={3}>
-            <Grid container item xs={12}>
+            <Grid container size={{ xs: 12 }}>
               <Paper
                 elevation={0}
                 sx={{
@@ -805,7 +798,7 @@ export default function ReportsTab() {
                 </Typography>
                 <Grid container spacing={3}>
                   {genderDistribution.map((item) => (
-                    <Grid container item xs={12} sm={4} key={item.label}>
+                    <Grid container size={{ xs: 12, sm: 4 }} key={item.label}>
                       <Card
                         elevation={0}
                         sx={{

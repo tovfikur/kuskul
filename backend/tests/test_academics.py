@@ -86,3 +86,55 @@ def test_classes_sections_subjects_and_assignment(client):
 
     remove = client.delete(f"/api/v1/subjects/{subject_id}/remove-from-class/{class_id}", headers=headers)
     assert remove.status_code == 200
+
+
+def test_create_curriculum_chapter_with_chapter_name(client):
+    token, school_id = _bootstrap_admin_and_school(client)
+    headers = {"Authorization": f"Bearer {token}", "X-School-Id": school_id}
+
+    year = client.post(
+        "/api/v1/academic-years",
+        headers=headers,
+        json={
+            "name": "2026-2027",
+            "start_date": "2026-01-01",
+            "end_date": "2026-12-31",
+            "is_current": True,
+        },
+    )
+    assert year.status_code == 200, year.text
+
+    subject = client.post(
+        "/api/v1/subjects",
+        headers=headers,
+        json={"name": "Demo Mathematics", "code": "DMATH"},
+    )
+    assert subject.status_code == 200, subject.text
+
+    created = client.post(
+        "/api/v1/curriculum",
+        headers=headers,
+        json={
+            "academic_year_id": year.json()["id"],
+            "subject_id": subject.json()["id"],
+            "title": "Numbers and Operations",
+            "chapter_name": "Chapter 1",
+            "description": "Demo curriculum chapter",
+            "order_index": 1,
+        },
+    )
+    assert created.status_code == 200, created.text
+    body = created.json()
+    assert body["title"] == "Numbers and Operations"
+    assert body["chapter_name"] == "Chapter 1"
+
+    listed = client.get(
+        "/api/v1/curriculum",
+        headers=headers,
+        params={
+            "academic_year_id": year.json()["id"],
+            "subject_id": subject.json()["id"],
+        },
+    )
+    assert listed.status_code == 200, listed.text
+    assert any(item["chapter_name"] == "Chapter 1" for item in listed.json())

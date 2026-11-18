@@ -24,11 +24,38 @@ services:
       REFRESH_TOKEN_COOKIE_SECURE: "true"
       REFRESH_TOKEN_COOKIE_SAMESITE: lax
       RATE_LIMIT_ENABLED: "true"
+      AI_MODEL_PATH: /app/models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+      AI_WRITER_URL: http://ai-writer:8010
+      AI_WRITER_TIMEOUT_SECONDS: "60"
+    volumes:
+      - ./app/models:/app/models
     depends_on:
       db:
         condition: service_healthy
     command: >
       sh -c "python -m alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  ai-writer:
+    image: kuskul-main-api:latest
+    container_name: kuskul-ai-writer
+    environment:
+      AI_MODEL_PATH: /app/models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+      AI_WRITER_CHAT_FORMAT: chatml
+      AI_WRITER_N_CTX: "1024"
+      AI_WRITER_N_THREADS: "1"
+      AI_WRITER_N_BATCH: "64"
+    volumes:
+      - ./backend/app:/app/app
+      - ./app/models:/app/models
+    command: uvicorn app.ai_writer_server:app --host 0.0.0.0 --port 8010 --workers 1
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          memory: 256M
+
 
   web:
     build:

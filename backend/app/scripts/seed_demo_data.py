@@ -47,7 +47,7 @@ def seed_demo_data():
             db.refresh(sg)
         print(f"Created subject group: {sg.id}")
 
-        admin_email = "admin@kuskul.com"
+        admin_email = "admin@school.com"
         admin_password = "password123"
         admin_user = db.query(user.User).filter_by(email=admin_email).first()
         if not admin_user:
@@ -378,6 +378,7 @@ def seed_demo_data():
                         academic_year_id=year_objs[-1].id,
                         subject_id=subj.id,
                         title=unit_name,
+                        chapter_name=f"Chapter {i}",
                         description=f"Description for {unit_name}",
                         order_index=i,
                         created_at=datetime.utcnow(),

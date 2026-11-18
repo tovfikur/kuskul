@@ -345,15 +345,21 @@ def verify_two_factor() -> None:
 @router.get("/me", response_model=MeResponse)
 def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> MeResponse:
     results = db.execute(
-        select(Membership, School)
+        select(Membership, School, Role)
         .join(School, Membership.school_id == School.id)
-        .where(Membership.user_id == user.id, Membership.is_active.is_(True))
+        .outerjoin(Role, Membership.role_id == Role.id)
+        .where(
+            Membership.user_id == user.id,
+            Membership.is_active.is_(True),
+            School.is_active.is_(True)
+        )
     ).all()
     items: list[dict] = []
-    for m, s in results:
+    for m, s, r in results:
         items.append({
             "school_id": str(m.school_id),
             "role_id": str(m.role_id),
+            "role_name": r.name if r else None,
             "school_name": s.name
         })
     is_platform_admin = db.execute(

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -19,8 +19,9 @@ import {
   Stack,
   Divider,
   Avatar,
-  Alert,
-  Paper, // Added missing Paper import
+	  Alert,
+	  Link,
+	  Paper, // Added missing Paper import
 } from "@mui/material";
 import {
   Close,
@@ -38,6 +39,7 @@ import {
   createStudent,
   createGuardian,
   createEnrollment,
+  getNextEnrollmentRollNumber,
   uploadStudentPhoto,
   uploadStudentDocument,
   uploadGuardianPhoto,
@@ -64,10 +66,11 @@ export default function AdmissionFormDialog({
   onSuccess,
 }: AdmissionFormDialogProps) {
   const [activeTab, setActiveTab] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [classes, setClasses] = useState<SchoolClass[]>([]);
-  const [sections, setSections] = useState<Section[]>([]);
-  const [currentYear, setCurrentYear] = useState<AcademicYear | null>(null);
+	  const [saving, setSaving] = useState(false);
+	  const [classes, setClasses] = useState<SchoolClass[]>([]);
+	  const [sections, setSections] = useState<Section[]>([]);
+	  const [sectionsLoading, setSectionsLoading] = useState(false);
+	  const [currentYear, setCurrentYear] = useState<AcademicYear | null>(null);
 
   // Student Form
   const [firstName, setFirstName] = useState("");
@@ -90,6 +93,8 @@ export default function AdmissionFormDialog({
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
   const [rollNumber, setRollNumber] = useState("");
+  const [rollNumberLoading, setRollNumberLoading] = useState(false);
+  const rollNumberManualRef = useRef(false);
   const [admissionDate, setAdmissionDate] = useState(
     new Date().toISOString().split("T")[0],
   );
@@ -97,6 +102,7 @@ export default function AdmissionFormDialog({
   const [shift, setShift] = useState("Morning");
   const [previousSchool, setPreviousSchool] = useState("");
   const [transferCertificate, setTransferCertificate] = useState<File | null>(null);
+  const [birthCertificate, setBirthCertificate] = useState<File | null>(null);
 
   // Father Form
   const [fatherName, setFatherName] = useState("");
@@ -111,8 +117,20 @@ export default function AdmissionFormDialog({
   const [motherPhone, setMotherPhone] = useState("");
   const [motherEmail, setMotherEmail] = useState("");
   const [motherOccupation, setMotherOccupation] = useState("");
-  const [motherNID, setMotherNID] = useState("");
+		  const [motherNID, setMotherNID] = useState("");
   const [motherPhoto, setMotherPhoto] = useState<File | null>(null);
+
+  function openSelectedFile(file: File | null) {
+    if (!file) return;
+    const url = window.URL.createObjectURL(file);
+    const opened = window.open(url, "_blank", "noopener,noreferrer");
+    if (!opened) {
+      showToast({ severity: "error", message: "Please allow popups to view this file" });
+      window.URL.revokeObjectURL(url);
+      return;
+    }
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+  }
 
   useEffect(() => {
     if (open) {
@@ -120,14 +138,84 @@ export default function AdmissionFormDialog({
     }
   }, [open]);
 
+	  useEffect(() => {
+	    let cancelled = false;
+
+	    setSectionId("");
+	    setRollNumber("");
+	    setSections([]);
+
+	    if (!classId) {
+	      setSectionsLoading(false);
+	      return;
+	    }
+
+	    async function loadClassSections() {
+	      setSectionsLoading(true);
+	      try {
+	        const data = await getSections(classId);
+	        if (!cancelled) {
+	          setSections(data.filter((s) => s.is_active));
+	        }
+	      } catch (err) {
+	        console.error(err);
+	        if (!cancelled) {
+	          showToast({
+	            severity: "error",
+	            message: "Failed to load sections for selected class",
+	          });
+	        }
+	      } finally {
+	        if (!cancelled) {
+	          setSectionsLoading(false);
+	        }
+	      }
+	    }
+
+	    loadClassSections();
+
+	    return () => {
+	      cancelled = true;
+	    };
+	  }, [classId]);
+
   useEffect(() => {
-    if (classId) {
-      loadSections(classId);
-    } else {
-      setSections([]);
-      setSectionId("");
+    let cancelled = false;
+
+    async function loadNextRollNumber() {
+      if (!currentYear?.id || !classId || !sectionId) {
+        return;
+      }
+      if (rollNumberManualRef.current) {
+        setRollNumberLoading(false);
+        return;
+      }
+
+      setRollNumberLoading(true);
+      try {
+        const nextRollNumber = await getNextEnrollmentRollNumber({
+          academic_year_id: currentYear.id,
+          class_id: classId,
+          section_id: sectionId,
+        });
+        if (!cancelled && !rollNumberManualRef.current) {
+          setRollNumber(nextRollNumber);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (!cancelled) {
+          setRollNumberLoading(false);
+        }
+      }
     }
-  }, [classId]);
+
+    loadNextRollNumber();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [classId, sectionId, currentYear?.id]);
 
   async function loadInitialData() {
     try {
@@ -143,16 +231,7 @@ export default function AdmissionFormDialog({
     }
   }
 
-  async function loadSections(classId: string) {
-    try {
-      const data = await getSections(classId);
-      setSections(data.filter((s) => s.is_active));
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
-  function handlePhotoChange(
+	  function handlePhotoChange(
     e: React.ChangeEvent<HTMLInputElement>,
     type: "student" | "father" | "mother",
   ) {
@@ -193,11 +272,13 @@ export default function AdmissionFormDialog({
     setClassId("");
     setSectionId("");
     setRollNumber("");
+    rollNumberManualRef.current = false;
     setAdmissionDate(new Date().toISOString().split("T")[0]);
     setMedium("English");
     setShift("Morning");
     setPreviousSchool("");
     setTransferCertificate(null);
+    setBirthCertificate(null);
     setFatherName("");
     setFatherPhone("");
     setFatherEmail("");
@@ -218,8 +299,23 @@ export default function AdmissionFormDialog({
       setActiveTab(0);
       return;
     }
+    if (!bloodGroup) {
+      showToast({ severity: "error", message: "Blood group is required" });
+      setActiveTab(0);
+      return;
+    }
+    if (!postalCode.trim()) {
+      showToast({ severity: "error", message: "Postal code is required" });
+      setActiveTab(0);
+      return;
+    }
     if (!classId) {
       showToast({ severity: "error", message: "Class is required" });
+      setActiveTab(1);
+      return;
+    }
+    if (!sectionId) {
+      showToast({ severity: "error", message: "Section is required" });
       setActiveTab(1);
       return;
     }
@@ -227,11 +323,57 @@ export default function AdmissionFormDialog({
       showToast({ severity: "error", message: "Academic year not set" });
       return;
     }
+    if (!rollNumber.trim()) {
+      showToast({ severity: "error", message: "Roll number is required" });
+      setActiveTab(1);
+      return;
+    }
+    if (!fatherName.trim()) {
+      showToast({ severity: "error", message: "Father's name is required" });
+      setActiveTab(2);
+      return;
+    }
+    if (!fatherPhone.trim()) {
+      showToast({ severity: "error", message: "Father's phone number is required" });
+      setActiveTab(2);
+      return;
+    }
+    if (!fatherOccupation.trim()) {
+      showToast({ severity: "error", message: "Father's occupation is required" });
+      setActiveTab(2);
+      return;
+    }
+    if (!fatherNID.trim()) {
+      showToast({ severity: "error", message: "Father's NID number is required" });
+      setActiveTab(2);
+      return;
+    }
+    if (!motherName.trim()) {
+      showToast({ severity: "error", message: "Mother's name is required" });
+      setActiveTab(2);
+      return;
+    }
+    if (!motherPhone.trim()) {
+      showToast({ severity: "error", message: "Mother's phone number is required" });
+      setActiveTab(2);
+      return;
+    }
+    if (!motherOccupation.trim()) {
+      showToast({ severity: "error", message: "Mother's occupation is required" });
+      setActiveTab(2);
+      return;
+    }
+    if (!motherNID.trim()) {
+      showToast({ severity: "error", message: "Mother's NID number is required" });
+      setActiveTab(2);
+      return;
+    }
 
-    setSaving(true);
-    try {
-      const student = await createStudent({
-        first_name: firstName.trim(),
+	    setSaving(true);
+	    try {
+	      const silentSuccessToast = { suppressSuccessToast: true };
+	      const student = await createStudent({
+	        first_name: firstName.trim(),
         last_name: lastName.trim() || null,
         admission_no: admissionNo.trim() || null,
         gender: gender || null,
@@ -247,70 +389,86 @@ export default function AdmissionFormDialog({
         present_address: presentAddress.trim() || null,
         city: city.trim() || null,
         postal_code: postalCode.trim() || null,
-        emergency_contact_phone: emergencyContactPhone.trim() || null,
-        status: "inactive",
-      });
-
-      if (studentPhoto) {
-        await uploadStudentPhoto(student.id, studentPhoto);
-      }
+        emergency_contact_name: emergencyContactName.trim() || null,
+	        emergency_contact_phone: emergencyContactPhone.trim() || null,
+	        status: "inactive",
+	      }, silentSuccessToast);
+	
+	      if (studentPhoto) {
+	        await uploadStudentPhoto(student.id, studentPhoto, silentSuccessToast);
+	      }
 
       if (transferCertificate) {
-        await uploadStudentDocument(student.id, transferCertificate);
-      }
+	        await uploadStudentDocument(
+	          student.id,
+	          transferCertificate,
+	          "transfer_certificate",
+	          silentSuccessToast,
+	        );
+	      }
+
+      if (birthCertificate) {
+	        await uploadStudentDocument(
+	          student.id,
+	          birthCertificate,
+	          "birth_certificate",
+	          silentSuccessToast,
+	        );
+	      }
 
       if (fatherName.trim()) {
-        const father = await createGuardian({
-          full_name: fatherName.trim(),
-          phone: fatherPhone.trim() || null,
-          email: fatherEmail.trim() || null,
-          occupation: fatherOccupation.trim() || null,
-          id_number: fatherNID.trim() || null,
-        });
-
-        if (fatherPhoto) {
-          await uploadGuardianPhoto(father.id, fatherPhoto);
-        }
-
-        await linkGuardianToStudent(student.id, {
-          guardian_id: father.id,
-          relation: "father",
-          is_primary: true,
-        });
-      }
-
-      if (motherName.trim()) {
-        const mother = await createGuardian({
-          full_name: motherName.trim(),
-          phone: motherPhone.trim() || null,
-          email: motherEmail.trim() || null,
-          occupation: motherOccupation.trim() || null,
-          id_number: motherNID.trim() || null,
-        });
-
-        if (motherPhoto) {
-          await uploadGuardianPhoto(mother.id, motherPhoto);
-        }
-
-        await linkGuardianToStudent(student.id, {
-          guardian_id: mother.id,
-          relation: "mother",
-          is_primary: false,
-        });
-      }
-
-      await createEnrollment({
-        student_id: student.id,
-        academic_year_id: currentYear.id,
-        class_id: classId,
-        section_id: sectionId || null,
-        roll_number: rollNumber ? parseInt(rollNumber) : null,
-      });
-
-      showToast({
-        severity: "success",
-        message: "Admission created successfully!",
-      });
+	        const father = await createGuardian({
+	          full_name: fatherName.trim(),
+	          phone: fatherPhone.trim() || null,
+	          email: fatherEmail.trim() || null,
+	          occupation: fatherOccupation.trim() || null,
+	          id_number: fatherNID.trim() || null,
+	        }, silentSuccessToast);
+	
+	        if (fatherPhoto) {
+	          await uploadGuardianPhoto(father.id, fatherPhoto, silentSuccessToast);
+	        }
+	
+	        await linkGuardianToStudent(student.id, {
+	          guardian_id: father.id,
+	          relation: "father",
+	          is_primary: true,
+	        }, silentSuccessToast);
+	      }
+	
+	      if (motherName.trim()) {
+	        const mother = await createGuardian({
+	          full_name: motherName.trim(),
+	          phone: motherPhone.trim() || null,
+	          email: motherEmail.trim() || null,
+	          occupation: motherOccupation.trim() || null,
+	          id_number: motherNID.trim() || null,
+	        }, silentSuccessToast);
+	
+	        if (motherPhoto) {
+	          await uploadGuardianPhoto(mother.id, motherPhoto, silentSuccessToast);
+	        }
+	
+	        await linkGuardianToStudent(student.id, {
+	          guardian_id: mother.id,
+	          relation: "mother",
+	          is_primary: false,
+	        }, silentSuccessToast);
+	      }
+	
+	      await createEnrollment({
+	        student_id: student.id,
+	        academic_year_id: currentYear.id,
+	        class_id: classId,
+	        section_id: sectionId || null,
+	        roll_number: rollNumber.trim() || null,
+	      }, silentSuccessToast);
+	
+	      showToast({
+	        severity: "success",
+	        message: "Action completed successfully",
+	        autoHideDuration: 3000,
+	      });
       resetForm();
       onSuccess();
       onClose();
@@ -437,10 +595,22 @@ export default function AdmissionFormDialog({
                       <PhotoCamera sx={{ fontSize: 48 }} />
                     </Avatar>
                   </label>
-                  <Typography variant="caption" color="text.secondary" display="block">
-                    Click to upload • Max 2MB
-                  </Typography>
-                </Paper>
+	                  <Typography variant="caption" color="text.secondary" display="block">
+	                    Click to upload • Max 2MB
+	                  </Typography>
+	                  {studentPhoto && (
+	                    <Link
+	                      component="button"
+	                      type="button"
+	                      variant="body2"
+	                      underline="hover"
+	                      sx={{ mt: 1, display: "inline-block", maxWidth: "100%", overflowWrap: "anywhere" }}
+	                      onClick={() => openSelectedFile(studentPhoto)}
+	                    >
+	                      {studentPhoto.name}
+	                    </Link>
+	                  )}
+	                </Paper>
 
                 <Alert severity="info" sx={{ width: "100%", borderRadius: 2 }}>
                   Admission No will be auto-generated if left blank.
@@ -481,7 +651,7 @@ export default function AdmissionFormDialog({
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <FormControl fullWidth required>
+                  <FormControl fullWidth>
                     <InputLabel>Gender</InputLabel>
                     <Select
                       value={gender}
@@ -489,6 +659,7 @@ export default function AdmissionFormDialog({
                       onChange={(e) => setGender(e.target.value)}
                       sx={{ borderRadius: 2 }}
                     >
+                      <MenuItem value="">Unspecified</MenuItem>
                       <MenuItem value="male">Male</MenuItem>
                       <MenuItem value="female">Female</MenuItem>
                       <MenuItem value="other">Other</MenuItem>
@@ -516,7 +687,7 @@ export default function AdmissionFormDialog({
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <FormControl fullWidth>
+                  <FormControl fullWidth required>
                     <InputLabel>Blood Group</InputLabel>
                     <Select
                       value={bloodGroup}
@@ -572,6 +743,7 @@ export default function AdmissionFormDialog({
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
                     label="Postal Code"
+                    required
                     value={postalCode}
                     onChange={(e) => setPostalCode(e.target.value)}
                     fullWidth
@@ -643,30 +815,47 @@ export default function AdmissionFormDialog({
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
-              <FormControl fullWidth disabled={!classId}>
-                <InputLabel>Section</InputLabel>
-                <Select
-                  value={sectionId}
-                  label="Section"
-                  onChange={(e) => setSectionId(e.target.value)}
-                  sx={{ borderRadius: 2 }}
-                >
-                  <MenuItem value="">Any</MenuItem>
-                  {sections.map((s) => (
-                    <MenuItem key={s.id} value={s.id}>
-                      {s.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+	              <FormControl fullWidth required disabled={!classId}>
+	                <InputLabel>Section</InputLabel>
+	                <Select
+	                  value={sectionId}
+	                  label="Section"
+	                  onChange={(e) => setSectionId(e.target.value)}
+	                  sx={{ borderRadius: 2 }}
+	                >
+	                  {sectionsLoading ? (
+	                    <MenuItem value="" disabled>
+	                      Loading sections...
+	                    </MenuItem>
+	                  ) : sections.length === 0 ? (
+	                    <MenuItem value="" disabled>
+	                      No active sections found
+	                    </MenuItem>
+	                  ) : (
+	                    sections.map((s) => (
+	                      <MenuItem key={s.id} value={s.id}>
+	                        {s.name}
+	                      </MenuItem>
+	                    ))
+	                  )}
+	                </Select>
+	              </FormControl>
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
-                label="Roll Number"
+                label="Admission Roll Number"
                 value={rollNumber}
-                onChange={(e) => setRollNumber(e.target.value)}
+                onChange={(e) => {
+                  rollNumberManualRef.current = true;
+                  setRollNumber(e.target.value);
+                }}
                 fullWidth
-                type="number"
+                required
+                inputProps={{ maxLength: 32 }}
+                placeholder={
+                  rollNumberLoading ? "Suggesting next roll..." : "Enter roll number"
+                }
+                helperText="You can type a custom roll number. A suggestion is filled only if this field is left unchanged."
                 sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
               />
             </Grid>
@@ -725,7 +914,7 @@ export default function AdmissionFormDialog({
             <Grid size={{ xs: 12 }}>
               <Divider sx={{ my: 2 }} />
               <Typography variant="h6" fontWeight={700} gutterBottom>
-                Previous History
+                Extra Information
               </Typography>
             </Grid>
 
@@ -738,7 +927,7 @@ export default function AdmissionFormDialog({
                 sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
               />
             </Grid>
-            <Grid size={{ xs: 12 }}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Paper
                 variant="outlined"
                 sx={{
@@ -762,13 +951,70 @@ export default function AdmissionFormDialog({
                     onChange={(e) => setTransferCertificate(e.target.files?.[0] || null)}
                   />
                 </Button>
-                {transferCertificate ? (
-                  <Typography variant="body2" color="success.main" fontWeight={500}>
-                    File selected: {transferCertificate.name}
-                  </Typography>
-                ) : (
+	                {transferCertificate ? (
+	                  <Typography variant="body2" color="success.main" fontWeight={500}>
+	                    File selected:{" "}
+	                    <Link
+	                      component="button"
+	                      type="button"
+	                      color="success.main"
+	                      underline="hover"
+	                      fontWeight={500}
+	                      sx={{ maxWidth: "100%", overflowWrap: "anywhere", textAlign: "center" }}
+	                      onClick={() => openSelectedFile(transferCertificate)}
+	                    >
+	                      {transferCertificate.name}
+	                    </Link>
+	                  </Typography>
+	                ) : (
                   <Typography variant="body2" color="text.secondary">
                     Supported formats: PDF, JPG, PNG
+                  </Typography>
+                )}
+              </Paper>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 3,
+                  borderRadius: 2,
+                  borderStyle: "dashed",
+                  textAlign: "center",
+                  bgcolor: "grey.50"
+                }}
+              >
+                <Button
+                  component="label"
+                  startIcon={<Description />}
+                  sx={{ mb: 1 }}
+                >
+                  Upload Birth Certificate
+                  <input
+                    type="file"
+                    hidden
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => setBirthCertificate(e.target.files?.[0] || null)}
+                  />
+                </Button>
+	                {birthCertificate ? (
+	                  <Typography variant="body2" color="success.main" fontWeight={500}>
+	                    File selected:{" "}
+	                    <Link
+	                      component="button"
+	                      type="button"
+	                      color="success.main"
+	                      underline="hover"
+	                      fontWeight={500}
+	                      sx={{ maxWidth: "100%", overflowWrap: "anywhere", textAlign: "center" }}
+	                      onClick={() => openSelectedFile(birthCertificate)}
+	                    >
+	                      {birthCertificate.name}
+	                    </Link>
+	                  </Typography>
+	                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Optional • Supported formats: PDF, JPG, PNG
                   </Typography>
                 )}
               </Paper>
@@ -789,6 +1035,7 @@ export default function AdmissionFormDialog({
                   <Grid size={{ xs: 12 }}>
                     <TextField
                       label="Full Name"
+                      required
                       value={fatherName}
                       onChange={(e) => setFatherName(e.target.value)}
                       fullWidth
@@ -799,6 +1046,7 @@ export default function AdmissionFormDialog({
                   <Grid size={{ xs: 12 }}>
                     <TextField
                       label="Phone Number"
+                      required
                       value={fatherPhone}
                       onChange={(e) => setFatherPhone(e.target.value)}
                       fullWidth
@@ -819,6 +1067,7 @@ export default function AdmissionFormDialog({
                   <Grid size={{ xs: 12 }}>
                     <TextField
                       label="Occupation"
+                      required
                       value={fatherOccupation}
                       onChange={(e) => setFatherOccupation(e.target.value)}
                       fullWidth
@@ -829,6 +1078,7 @@ export default function AdmissionFormDialog({
                   <Grid size={{ xs: 12 }}>
                     <TextField
                       label="NID Number"
+                      required
                       value={fatherNID}
                       onChange={(e) => setFatherNID(e.target.value)}
                       fullWidth
@@ -851,9 +1101,21 @@ export default function AdmissionFormDialog({
                         hidden
                         accept="image/*"
                         onChange={(e) => handlePhotoChange(e, "father")}
-                      />
-                    </Button>
-                  </Grid>
+	                      />
+	                    </Button>
+	                    {fatherPhoto && (
+	                      <Link
+	                        component="button"
+	                        type="button"
+	                        variant="body2"
+	                        underline="hover"
+	                        sx={{ mt: 1, display: "inline-block", maxWidth: "100%", overflowWrap: "anywhere" }}
+	                        onClick={() => openSelectedFile(fatherPhoto)}
+	                      >
+	                        {fatherPhoto.name}
+	                      </Link>
+	                    )}
+	                  </Grid>
                 </Grid>
               </Paper>
             </Grid>
@@ -869,6 +1131,7 @@ export default function AdmissionFormDialog({
                   <Grid size={{ xs: 12 }}>
                     <TextField
                       label="Full Name"
+                      required
                       value={motherName}
                       onChange={(e) => setMotherName(e.target.value)}
                       fullWidth
@@ -879,6 +1142,7 @@ export default function AdmissionFormDialog({
                   <Grid size={{ xs: 12 }}>
                     <TextField
                       label="Phone Number"
+                      required
                       value={motherPhone}
                       onChange={(e) => setMotherPhone(e.target.value)}
                       fullWidth
@@ -899,6 +1163,7 @@ export default function AdmissionFormDialog({
                   <Grid size={{ xs: 12 }}>
                     <TextField
                       label="Occupation"
+                      required
                       value={motherOccupation}
                       onChange={(e) => setMotherOccupation(e.target.value)}
                       fullWidth
@@ -909,6 +1174,7 @@ export default function AdmissionFormDialog({
                   <Grid size={{ xs: 12 }}>
                     <TextField
                       label="NID Number"
+                      required
                       value={motherNID}
                       onChange={(e) => setMotherNID(e.target.value)}
                       fullWidth
@@ -931,9 +1197,21 @@ export default function AdmissionFormDialog({
                         hidden
                         accept="image/*"
                         onChange={(e) => handlePhotoChange(e, "mother")}
-                      />
-                    </Button>
-                  </Grid>
+	                      />
+	                    </Button>
+	                    {motherPhoto && (
+	                      <Link
+	                        component="button"
+	                        type="button"
+	                        variant="body2"
+	                        underline="hover"
+	                        sx={{ mt: 1, display: "inline-block", maxWidth: "100%", overflowWrap: "anywhere" }}
+	                        onClick={() => openSelectedFile(motherPhoto)}
+	                      >
+	                        {motherPhoto.name}
+	                      </Link>
+	                    )}
+	                  </Grid>
                 </Grid>
               </Paper>
             </Grid>
@@ -947,10 +1225,10 @@ export default function AdmissionFormDialog({
         <Button onClick={onClose} variant="outlined" sx={{ borderRadius: 2, px: 3 }}>
           Cancel
         </Button>
-        <Button
-          onClick={handleSubmit}
-          variant="contained"
-          disabled={saving}
+          <Button
+            onClick={handleSubmit}
+            variant="contained"
+            disabled={saving}
           startIcon={<CheckCircle />}
           sx={{ borderRadius: 2, px: 4, py: 1, fontWeight: 700 }}
         >

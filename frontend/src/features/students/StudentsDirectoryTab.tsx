@@ -19,6 +19,7 @@ import {
   IconButton,
   InputAdornment,
   InputLabel,
+  Link,
   Menu,
   MenuItem,
   Paper,
@@ -39,6 +40,7 @@ import {
 import {
   Add,
   Download,
+  FileDownload,
   MoreVert,
   Refresh,
   Search,
@@ -59,11 +61,14 @@ import {
   createStudent,
   deleteStudent,
   downloadStudentIdCard,
+  downloadStudentImportTemplate,
   exportStudentsCsv,
   getEnrollmentsByStudents,
+  getNextEnrollmentRollNumber,
   getStudent,
   getStudentAttendance,
   getStudentAttendanceSummary,
+  getStudentDocuments,
   getStudentFeeDues,
   getStudentFeePayments,
   getStudentTimetable,
@@ -79,19 +84,30 @@ import {
   type FeePayment,
   type Student,
   type StudentAttendanceRecord,
+  type StudentDocument,
   type StudentTimetableEntry,
   getStudentGuardians,
   getGuardians,
   type Guardian,
+  type GuardianWithRelation,
   updateGuardian,
 } from "../../api/people";
+import { api } from "../../api/client";
+import { downloadDocument } from "../../api/documents";
 import { showToast } from "../../app/toast";
 
 const getFileUrl = (path?: string | null) => {
   if (!path) return undefined;
   if (path.startsWith("http")) return path;
-  return `http://localhost:8000${path}`;
+  if (path.startsWith("/")) return path;
+  if (path.startsWith("static/")) return `/${path}`;
+  return `/static/${path}`;
 };
+
+function getFileNameFromUrl(url?: string | null) {
+  if (!url) return "";
+  return url.split("/").filter(Boolean).pop() || url;
+}
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -102,6 +118,26 @@ function downloadBlob(blob: Blob, filename: string) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+function openUrlInNewTab(url?: string | null) {
+  if (!url) return;
+  const opened = window.open(url, "_blank", "noopener,noreferrer");
+  if (!opened) {
+    showToast({ severity: "error", message: "Please allow popups to view this file" });
+  }
+}
+
+function openSelectedFile(file: File | null) {
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const opened = window.open(url, "_blank", "noopener,noreferrer");
+  if (!opened) {
+    URL.revokeObjectURL(url);
+    showToast({ severity: "error", message: "Please allow popups to view this file" });
+    return;
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 function isoDate(d: Date) {
@@ -123,9 +159,33 @@ function statusChipColor(status: string) {
 
 const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+type StudentDialogSettings = {
+  medium_configuration: string[];
+  shift_configuration: string[];
+};
+
+const defaultStudentDialogSettings: StudentDialogSettings = {
+  medium_configuration: ["Bangla", "English"],
+  shift_configuration: ["Morning", "Day"],
+};
+
 function nullIfBlank(v: string) {
   const t = v.trim();
   return t ? t : null;
+}
+
+function defaultStudentPortalUsername(admissionNo: string) {
+  return admissionNo.trim();
+}
+
+function defaultParentPortalUsername(admissionNo: string) {
+  const base = admissionNo.trim();
+  return base ? `${base}parent` : "";
+}
+
+function defaultParentPortalEmail(admissionNo: string) {
+  const base = defaultParentPortalUsername(admissionNo);
+  return base ? `${base}@guardian.example.com` : "";
 }
 
 const emptyStudentForm = {
@@ -172,6 +232,7 @@ const emptyStudentForm = {
   rfid_nfc_no: "",
   hostel_status: "",
   library_card_no: "",
+  photo_url: "",
   status: "active",
 };
 
@@ -184,6 +245,7 @@ const emptyFatherForm = {
   phone: "",
   email: "",
   id_number: "",
+  photo_url: "",
 };
 
 const emptyMotherForm = {
@@ -193,6 +255,7 @@ const emptyMotherForm = {
   phone: "",
   email: "",
   id_number: "",
+  photo_url: "",
 };
 
 const emptyGuardianForm = {
@@ -204,6 +267,7 @@ const emptyGuardianForm = {
   occupation: "",
   id_number: "",
   address: "",
+  photo_url: "",
 };
 
 export default function StudentsPage() {
@@ -211,6 +275,9 @@ export default function StudentsPage() {
   const sectionsByClassIdRef = useRef<Record<string, Section[]>>({});
 
   const [students, setStudents] = useState<Student[]>([]);
+  const [enrollmentByStudentId, setEnrollmentByStudentId] = useState<
+    Record<string, Enrollment>
+  >({});
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -222,6 +289,8 @@ export default function StudentsPage() {
   const [gender, setGender] = useState("");
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
+  const [studentDialogSettings, setStudentDialogSettings] =
+    useState<StudentDialogSettings>(defaultStudentDialogSettings);
 
   const [currentAcademicYear, setCurrentAcademicYear] =
     useState<AcademicYear | null>(null);
@@ -285,6 +354,7 @@ export default function StudentsPage() {
     rfid_nfc_no: string;
     hostel_status: string;
     library_card_no: string;
+    photo_url: string;
     status: string;
   }>({ ...emptyStudentForm });
   const [enrollmentForm, setEnrollmentForm] = useState<{
@@ -292,9 +362,22 @@ export default function StudentsPage() {
     section_id: string;
     roll_number: string;
   }>({ ...emptyEnrollmentForm });
+  const [initialEnrollmentForm, setInitialEnrollmentForm] = useState<{
+    class_id: string;
+    section_id: string;
+    roll_number: string;
+  } | null>(null);
+  const [rollNumberLoading, setRollNumberLoading] = useState(false);
+  const rollNumberManualRef = useRef(false);
 
   const [studentPhotoFile, setStudentPhotoFile] = useState<File | null>(null);
+  const [studentPhotoPreviewUrl, setStudentPhotoPreviewUrl] = useState("");
   const [previousTcFile, setPreviousTcFile] = useState<File | null>(null);
+  const [birthCertificateFile, setBirthCertificateFile] = useState<File | null>(null);
+  const [savedTransferCertificate, setSavedTransferCertificate] =
+    useState<StudentDocument | null>(null);
+  const [savedBirthCertificate, setSavedBirthCertificate] =
+    useState<StudentDocument | null>(null);
 
   const [fatherForm, setFatherForm] = useState<{
     id?: string;
@@ -303,6 +386,7 @@ export default function StudentsPage() {
     phone: string;
     email: string;
     id_number: string;
+    photo_url: string;
   }>({ ...emptyFatherForm });
   const [motherForm, setMotherForm] = useState<{
     id?: string;
@@ -311,6 +395,7 @@ export default function StudentsPage() {
     phone: string;
     email: string;
     id_number: string;
+    photo_url: string;
   }>({ ...emptyMotherForm });
   const [guardianForm, setGuardianForm] = useState<{
     id?: string;
@@ -321,29 +406,41 @@ export default function StudentsPage() {
     occupation: string;
     id_number: string;
     address: string;
+    photo_url: string;
   }>({ ...emptyGuardianForm });
   const [fatherPhotoFile, setFatherPhotoFile] = useState<File | null>(null);
+  const [fatherPhotoPreviewUrl, setFatherPhotoPreviewUrl] = useState("");
   const [motherPhotoFile, setMotherPhotoFile] = useState<File | null>(null);
+  const [motherPhotoPreviewUrl, setMotherPhotoPreviewUrl] = useState("");
   const [guardianPhotoFile, setGuardianPhotoFile] = useState<File | null>(null);
-  
+  const [guardianPhotoPreviewUrl, setGuardianPhotoPreviewUrl] = useState("");
+
   const [guardianSearchOpen, setGuardianSearchOpen] = useState(false);
   const [guardianOptions, setGuardianOptions] = useState<Guardian[]>([]);
   const [guardianSearchInput, setGuardianSearchInput] = useState("");
   const guardianLoading = guardianSearchOpen && guardianOptions.length === 0;
+  const autoPortalUsernameRef = useRef<string>("");
+  const autoParentEmailRef = useRef<string>("");
+
+  const [deleteConfirmStudent, setDeleteConfirmStudent] = useState<Student | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
     if (!guardianSearchOpen) return undefined;
 
     const timer = setTimeout(() => {
-        (async () => {
+      (async () => {
         try {
-            const { items } = await getGuardians({ limit: 50, search: guardianSearchInput || undefined });
-            if (active) setGuardianOptions(items);
+          const { items } = await getGuardians({
+            limit: 50,
+            search: guardianSearchInput || undefined,
+          });
+          if (active) setGuardianOptions(items);
         } catch (e) {
-            console.error(e);
+          console.error(e);
         }
-        })();
+      })();
     }, 300);
 
     return () => {
@@ -352,10 +449,70 @@ export default function StudentsPage() {
     };
   }, [guardianSearchOpen, guardianSearchInput]);
 
+  useEffect(() => {
+    if (!form.portal_access_parent) return;
+    const nextAutoEmail = defaultParentPortalEmail(form.admission_no);
+    if (
+      nextAutoEmail &&
+      (!guardianForm.email || guardianForm.email === autoParentEmailRef.current)
+    ) {
+      setGuardianForm((p) => ({ ...p, email: nextAutoEmail }));
+    }
+    autoParentEmailRef.current = nextAutoEmail;
+  }, [form.admission_no, form.portal_access_parent, guardianForm.email]);
+
+  useEffect(() => {
+    if (!studentPhotoFile) {
+      setStudentPhotoPreviewUrl("");
+      return;
+    }
+
+    const url = URL.createObjectURL(studentPhotoFile);
+    setStudentPhotoPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [studentPhotoFile]);
+
+  useEffect(() => {
+    if (!fatherPhotoFile) {
+      setFatherPhotoPreviewUrl("");
+      return;
+    }
+
+    const url = URL.createObjectURL(fatherPhotoFile);
+    setFatherPhotoPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [fatherPhotoFile]);
+
+  useEffect(() => {
+    if (!motherPhotoFile) {
+      setMotherPhotoPreviewUrl("");
+      return;
+    }
+
+    const url = URL.createObjectURL(motherPhotoFile);
+    setMotherPhotoPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [motherPhotoFile]);
+
+  useEffect(() => {
+    if (!guardianPhotoFile) {
+      setGuardianPhotoPreviewUrl("");
+      return;
+    }
+
+    const url = URL.createObjectURL(guardianPhotoFile);
+    setGuardianPhotoPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [guardianPhotoFile]);
+
   const [drawerStudentId, setDrawerStudentId] = useState<string | null>(null);
   const [drawerTab, setDrawerTab] = useState(0);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerStudent, setDrawerStudent] = useState<Student | null>(null);
+  const [drawerEnrollment, setDrawerEnrollment] = useState<Enrollment | null>(
+    null,
+  );
+  const [portalAccessSaving, setPortalAccessSaving] = useState(false);
   const [attendanceSummary, setAttendanceSummary] = useState<Record<
     string,
     number
@@ -385,6 +542,23 @@ export default function StudentsPage() {
     ).length;
     return { active, inactive };
   }, [students]);
+
+  const classNameById = useMemo(() => {
+    return classes.reduce<Record<string, string>>((acc, item) => {
+      acc[item.id] = item.name;
+      return acc;
+    }, {});
+  }, [classes]);
+
+  const sectionNameById = useMemo(() => {
+    const acc: Record<string, string> = {};
+    for (const sectionList of Object.values(sectionsByClassId)) {
+      for (const item of sectionList) {
+        acc[item.id] = item.name;
+      }
+    }
+    return acc;
+  }, [sectionsByClassId]);
 
   const enrollmentSectionOptions = useMemo(() => {
     if (!enrollmentForm.class_id) return [];
@@ -451,12 +625,79 @@ export default function StudentsPage() {
   }, []);
 
   useEffect(() => {
+    async function loadStudentSettings() {
+      try {
+        const response = await api.get("/settings/students.settings");
+        const value = response.data?.value;
+        if (typeof value !== "string" || !value.trim()) return;
+
+        const loaded = JSON.parse(value);
+        setStudentDialogSettings({
+          medium_configuration: Array.isArray(loaded.medium_configuration)
+            ? loaded.medium_configuration
+            : defaultStudentDialogSettings.medium_configuration,
+          shift_configuration: Array.isArray(loaded.shift_configuration)
+            ? loaded.shift_configuration
+            : defaultStudentDialogSettings.shift_configuration,
+        });
+      } catch (e) {
+        console.error("Failed to load student dialog settings", e);
+      }
+    }
+
+    loadStudentSettings();
+  }, []);
+
+  useEffect(() => {
     setPage(0);
   }, [search, status, gender, classId, sectionId]);
 
   useEffect(() => {
     loadStudents();
   }, [loadStudents]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadEnrollments() {
+      if (students.length === 0) {
+        setEnrollmentByStudentId({});
+        return;
+      }
+
+      const yearId = currentAcademicYear?.id;
+      const enrollments = await getEnrollmentsByStudents(
+        students.map((s) => s.id),
+        yearId,
+      ).catch(() => []);
+
+      if (cancelled) return;
+
+      setEnrollmentByStudentId(
+        enrollments.reduce<Record<string, Enrollment>>((acc, enrollment) => {
+          acc[enrollment.student_id] = enrollment;
+          return acc;
+        }, {}),
+      );
+    }
+
+    loadEnrollments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentAcademicYear?.id, students]);
+
+  useEffect(() => {
+    const classIds = [
+      ...new Set(
+        Object.values(enrollmentByStudentId)
+          .map((e) => e.class_id)
+          .filter(Boolean),
+      ),
+    ];
+    classIds.forEach((cid) => ensureSectionsForClass(cid));
+  }, [enrollmentByStudentId, ensureSectionsForClass]);
 
   useEffect(() => {
     async function load() {
@@ -499,10 +740,91 @@ export default function StudentsPage() {
     ensureSectionsForClass,
   ]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function generateRollNumber() {
+      if (!dialogOpen) return;
+
+      if (
+        !currentAcademicYear?.id ||
+        !enrollmentForm.class_id ||
+        !enrollmentForm.section_id
+      ) {
+        setRollNumberLoading(false);
+        return;
+      }
+
+      const hasUnchangedEditEnrollment =
+        dialogMode === "edit" &&
+        initialEnrollmentForm &&
+        initialEnrollmentForm.class_id === enrollmentForm.class_id &&
+        initialEnrollmentForm.section_id === enrollmentForm.section_id &&
+        initialEnrollmentForm.roll_number;
+
+      if (hasUnchangedEditEnrollment || rollNumberManualRef.current) {
+        setRollNumberLoading(false);
+        if (hasUnchangedEditEnrollment) {
+          setEnrollmentForm((p) =>
+            p.roll_number === initialEnrollmentForm.roll_number
+              ? p
+              : { ...p, roll_number: initialEnrollmentForm.roll_number },
+          );
+        }
+        return;
+      }
+
+      const classIdForRequest = enrollmentForm.class_id;
+      const sectionIdForRequest = enrollmentForm.section_id;
+      setRollNumberLoading(true);
+      try {
+        const nextRollNumber = await getNextEnrollmentRollNumber({
+          academic_year_id: currentAcademicYear.id,
+          class_id: classIdForRequest,
+          section_id: sectionIdForRequest,
+          roll_type: "student",
+        });
+
+        if (cancelled || rollNumberManualRef.current) return;
+
+        setEnrollmentForm((p) => {
+          if (
+            p.class_id !== classIdForRequest ||
+            p.section_id !== sectionIdForRequest ||
+            rollNumberManualRef.current
+          ) {
+            return p;
+          }
+          return { ...p, roll_number: nextRollNumber };
+        });
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!cancelled) {
+          setRollNumberLoading(false);
+        }
+      }
+    }
+
+    generateRollNumber();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currentAcademicYear?.id,
+    dialogMode,
+    dialogOpen,
+    enrollmentForm.class_id,
+    enrollmentForm.section_id,
+    initialEnrollmentForm,
+  ]);
+
   async function openDrawer(studentId: string) {
     setDrawerStudentId(studentId);
     setDrawerTab(0);
     setDrawerStudent(null);
+    setDrawerEnrollment(null);
     setAttendanceSummary(null);
     setAttendanceRecords(null);
     setFeeDues(null);
@@ -510,8 +832,14 @@ export default function StudentsPage() {
     setTimetable(null);
     setDrawerLoading(true);
     try {
-      const s = await getStudent(studentId);
+      const [s, enrollments] = await Promise.all([
+        getStudent(studentId),
+        getEnrollmentsByStudents([studentId], currentAcademicYear?.id).catch(
+          () => [],
+        ),
+      ]);
       setDrawerStudent(s);
+      setDrawerEnrollment(enrollments[0] ?? null);
     } catch (e) {
       console.error(e);
     } finally {
@@ -579,6 +907,7 @@ export default function StudentsPage() {
     setDialogTab(0);
     setDialogLoading(false);
     setForm({ ...emptyStudentForm });
+    setInitialEnrollmentForm(null);
     const defaultClassId = classId || classes[0]?.id || "";
     setEnrollmentForm({
       ...emptyEnrollmentForm,
@@ -593,12 +922,18 @@ export default function StudentsPage() {
     }
     setStudentPhotoFile(null);
     setPreviousTcFile(null);
+    setBirthCertificateFile(null);
+    setSavedTransferCertificate(null);
+    setSavedBirthCertificate(null);
     setFatherForm({ ...emptyFatherForm });
     setMotherForm({ ...emptyMotherForm });
     setGuardianForm({ ...emptyGuardianForm });
     setFatherPhotoFile(null);
     setMotherPhotoFile(null);
     setGuardianPhotoFile(null);
+    autoPortalUsernameRef.current = "";
+    autoParentEmailRef.current = "";
+    rollNumberManualRef.current = false;
     setDialogOpen(true);
   }
 
@@ -610,6 +945,9 @@ export default function StudentsPage() {
     setDialogLoading(true);
     setStudentPhotoFile(null);
     setPreviousTcFile(null);
+    setBirthCertificateFile(null);
+    setSavedTransferCertificate(null);
+    setSavedBirthCertificate(null);
     setFatherForm({ ...emptyFatherForm });
     setMotherForm({ ...emptyMotherForm });
     setGuardianForm({ ...emptyGuardianForm });
@@ -618,10 +956,15 @@ export default function StudentsPage() {
     setGuardianPhotoFile(null);
     try {
       const full = await getStudent(s.id);
+      const admissionNo = full.admission_no ?? "";
+      const portalUsername =
+        full.portal_username ?? defaultStudentPortalUsername(admissionNo);
+      autoPortalUsernameRef.current = defaultStudentPortalUsername(admissionNo);
+      autoParentEmailRef.current = defaultParentPortalEmail(admissionNo);
       setForm({
         first_name: full.first_name ?? "",
         last_name: full.last_name ?? "",
-        admission_no: full.admission_no ?? "",
+        admission_no: admissionNo,
         gender: full.gender ?? "",
         date_of_birth: full.date_of_birth ?? "",
         full_name_bc: full.full_name_bc ?? "",
@@ -655,13 +998,14 @@ export default function StudentsPage() {
         passport_no: full.passport_no ?? "",
         fee_category: full.fee_category ?? "",
         scholarship_type: full.scholarship_type ?? "",
-        portal_username: full.portal_username ?? "",
+        portal_username: portalUsername,
         portal_access_student: full.portal_access_student ?? false,
         portal_access_parent: full.portal_access_parent ?? false,
         remarks: full.remarks ?? "",
         rfid_nfc_no: full.rfid_nfc_no ?? "",
         hostel_status: full.hostel_status ?? "",
         library_card_no: full.library_card_no ?? "",
+        photo_url: full.photo_url ?? "",
         status: full.status ?? "active",
       });
 
@@ -672,16 +1016,33 @@ export default function StudentsPage() {
       ).catch(() => []);
       const e = enrollments[0];
       const targetClassId = e?.class_id ?? "";
-      setEnrollmentForm({
+      const nextEnrollmentForm = {
         class_id: targetClassId,
         section_id: e?.section_id ?? "",
         roll_number: e?.roll_number != null ? String(e.roll_number) : "",
-      });
+      };
+      setEnrollmentForm(nextEnrollmentForm);
+      setInitialEnrollmentForm(nextEnrollmentForm);
+      rollNumberManualRef.current = Boolean(nextEnrollmentForm.roll_number);
       if (targetClassId) ensureSectionsForClass(targetClassId);
+
+      const documents = await getStudentDocuments(s.id).catch(() => []);
+      setSavedTransferCertificate(
+        documents.find((doc) => doc.entity_type === "student:transfer_certificate") ??
+          null,
+      );
+      setSavedBirthCertificate(
+        documents.find((doc) => doc.entity_type === "student:birth_certificate") ??
+          null,
+      );
 
       try {
         const guardians = await getStudentGuardians(s.id);
-        const father = guardians.find((g) => g.relation?.trim().toLowerCase() === "father");
+        const relationOf = (guardian: GuardianWithRelation) =>
+          guardian.relation?.trim().toLowerCase() ?? "";
+        const father = guardians.find(
+          (g) => relationOf(g) === "father",
+        );
         if (father) {
           setFatherForm({
             id: father.id,
@@ -690,9 +1051,12 @@ export default function StudentsPage() {
             phone: father.phone || "",
             email: father.email || "",
             id_number: father.id_number || "",
+            photo_url: father.photo_url || "",
           });
         }
-        const mother = guardians.find((g) => g.relation?.trim().toLowerCase() === "mother");
+        const mother = guardians.find(
+          (g) => relationOf(g) === "mother",
+        );
         if (mother) {
           setMotherForm({
             id: mother.id,
@@ -701,12 +1065,11 @@ export default function StudentsPage() {
             phone: mother.phone || "",
             email: mother.email || "",
             id_number: mother.id_number || "",
+            photo_url: mother.photo_url || "",
           });
         }
         const other = guardians.find(
-          (g) =>
-            g.relation?.trim().toLowerCase() !== "father" &&
-            g.relation?.trim().toLowerCase() !== "mother"
+          (g) => !["father", "mother"].includes(relationOf(g)),
         );
         if (other) {
           setGuardianForm({
@@ -718,6 +1081,7 @@ export default function StudentsPage() {
             occupation: other.occupation || "",
             id_number: other.id_number || "",
             address: other.address || "",
+            photo_url: other.photo_url || "",
           });
         }
       } catch (e) {
@@ -731,13 +1095,150 @@ export default function StudentsPage() {
     }
   }
 
+  async function saveGuardianForStudent(
+    studentId: string,
+    guardian: {
+      id?: string;
+      relation: string;
+      is_primary: boolean;
+      payload: Parameters<typeof createGuardian>[0];
+      photoFile: File | null;
+    },
+  ) {
+    if (!guardian.payload.full_name?.trim()) return;
+
+    const guardianId = guardian.id
+      ? (
+          await updateGuardian(guardian.id, guardian.payload)
+        ).id
+      : (
+          await createGuardian(guardian.payload)
+        ).id;
+
+    if (guardian.photoFile) {
+      await uploadGuardianPhoto(guardianId, guardian.photoFile);
+    }
+
+    await linkGuardianToStudent(studentId, {
+      guardian_id: guardianId,
+      relation: guardian.relation,
+      is_primary: guardian.is_primary,
+    });
+  }
+
+  async function openSavedDocument(document: StudentDocument | null) {
+    if (!document) return;
+    try {
+      const blob = await downloadDocument(document.id);
+      const url = URL.createObjectURL(blob);
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      if (!opened) {
+        URL.revokeObjectURL(url);
+        showToast({ severity: "error", message: "Please allow popups to view this file" });
+        return;
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      console.error(e);
+      showToast({ severity: "error", message: "Failed to open file" });
+    }
+  }
+
+  function renderPersonPhotoPreview(
+    file: File | null,
+    previewUrl: string,
+    savedUrl: string,
+    label: string,
+  ) {
+    if (file) {
+      return (
+        <Box
+          sx={{
+            mt: 1,
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+          }}
+        >
+          <Box
+            component="img"
+            src={previewUrl}
+            alt={`Selected ${label}`}
+            onClick={() => openSelectedFile(file)}
+            sx={{
+              width: 88,
+              height: 88,
+              borderRadius: 2,
+              objectFit: "cover",
+              cursor: "pointer",
+              border: "1px solid",
+              borderColor: "divider",
+            }}
+          />
+          <Link
+            component="button"
+            variant="body2"
+            onClick={() => openSelectedFile(file)}
+          >
+            {file.name}
+          </Link>
+        </Box>
+      );
+    }
+
+    const resolvedUrl = getFileUrl(savedUrl);
+    if (!resolvedUrl) return null;
+
+    return (
+      <Box
+        sx={{
+          mt: 1,
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+        }}
+      >
+        <Box
+          component="img"
+          src={resolvedUrl}
+          alt={`Saved ${label}`}
+          onClick={() => openUrlInNewTab(resolvedUrl)}
+          sx={{
+            width: 88,
+            height: 88,
+            borderRadius: 2,
+            objectFit: "cover",
+            cursor: "pointer",
+            border: "1px solid",
+            borderColor: "divider",
+          }}
+        />
+        <Link
+          component="button"
+          variant="body2"
+          onClick={() => openUrlInNewTab(resolvedUrl)}
+        >
+          {getFileNameFromUrl(savedUrl) || `${label} Photo`}
+        </Link>
+      </Box>
+    );
+  }
+
   async function handleSaveStudent() {
     if (!form.first_name.trim()) {
       showToast({ severity: "error", message: "First name is required" });
       return;
     }
+    if (!form.admission_status) {
+      showToast({ severity: "error", message: "Admission status is required" });
+      return;
+    }
     if (!enrollmentForm.class_id) {
       showToast({ severity: "error", message: "Class is required" });
+      return;
+    }
+    if (!enrollmentForm.roll_number.trim()) {
+      showToast({ severity: "error", message: "Roll number is required" });
       return;
     }
     if (dialogMode === "create" && !currentAcademicYear?.id) {
@@ -747,6 +1248,30 @@ export default function StudentsPage() {
       });
       return;
     }
+
+    if (form.portal_username) {
+      const usernameRegex = /^[a-zA-Z0-9_.-]+$/;
+      if (!usernameRegex.test(form.portal_username)) {
+        showToast({
+          severity: "error",
+          message: "Portal username can only contain letters, numbers, dots, dashes, and underscores.",
+        });
+        return;
+      }
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    for (const [name, address] of [
+      ["Father", fatherForm.email],
+      ["Mother", motherForm.email],
+      ["Guardian", guardianForm.email],
+    ]) {
+      if (address && !emailRegex.test(address)) {
+        showToast({ severity: "error", message: `Invalid email format for ${name}` });
+        return;
+      }
+    }
+
     setDialogSaving(true);
     try {
       const payload = {
@@ -795,29 +1320,40 @@ export default function StudentsPage() {
         library_card_no: nullIfBlank(form.library_card_no),
         status: form.status || "active",
       };
-      const rollNumberRaw = enrollmentForm.roll_number.trim();
-      const rollNumber = rollNumberRaw ? Number(rollNumberRaw) : null;
-      const roll = Number.isFinite(rollNumber) ? rollNumber : null;
+      const roll = enrollmentForm.roll_number.trim() || null;
 
       if (dialogMode === "create") {
         const created = await createStudent(payload);
 
-        await Promise.all([
-          studentPhotoFile
-            ? uploadStudentPhoto(created.id, studentPhotoFile)
-            : Promise.resolve(),
-          previousTcFile
-            ? uploadStudentDocument(created.id, previousTcFile)
-            : Promise.resolve(),
-        ]);
+        if (studentPhotoFile) {
+          await uploadStudentPhoto(created.id, studentPhotoFile);
+        }
+        if (previousTcFile) {
+          const doc = await uploadStudentDocument(
+            created.id,
+            previousTcFile,
+            "transfer_certificate",
+          );
+          setSavedTransferCertificate(doc);
+        }
+        if (birthCertificateFile) {
+          const doc = await uploadStudentDocument(
+            created.id,
+            birthCertificateFile,
+            "birth_certificate",
+          );
+          setSavedBirthCertificate(doc);
+        }
 
         const guardiansToCreate: Array<{
+          id?: string;
           relation: string;
           is_primary: boolean;
           payload: Parameters<typeof createGuardian>[0];
           photoFile: File | null;
         }> = [
           {
+            id: fatherForm.id,
             relation: "father",
             is_primary: true,
             payload: {
@@ -830,6 +1366,7 @@ export default function StudentsPage() {
             photoFile: fatherPhotoFile,
           },
           {
+            id: motherForm.id,
             relation: "mother",
             is_primary: false,
             payload: {
@@ -842,8 +1379,9 @@ export default function StudentsPage() {
             photoFile: motherPhotoFile,
           },
           {
+            id: guardianForm.id,
             relation: guardianForm.relation || "guardian",
-            is_primary: false,
+            is_primary: form.portal_access_parent,
             payload: {
               full_name: guardianForm.full_name.trim(),
               occupation: nullIfBlank(guardianForm.occupation),
@@ -855,20 +1393,33 @@ export default function StudentsPage() {
             photoFile: guardianPhotoFile,
           },
         ];
+        if (form.portal_access_parent) {
+          const hasPrimaryGuardian = guardiansToCreate.some(
+            (g) => g.is_primary && g.payload.full_name,
+          );
+          if (!hasPrimaryGuardian) {
+            const studentName = [form.first_name, form.last_name]
+              .filter(Boolean)
+              .join(" ")
+              .trim();
+            guardiansToCreate.push({
+              relation: "guardian",
+              is_primary: true,
+              payload: {
+                full_name: studentName ? `${studentName} Parent` : "Parent",
+                occupation: null,
+                phone: null,
+                email: nullIfBlank(guardianForm.email),
+                id_number: null,
+                address: null,
+              },
+              photoFile: null,
+            });
+          }
+        }
 
         for (const g of guardiansToCreate) {
-          if (!g.payload.full_name) continue;
-          const createdGuardian = await createGuardian(g.payload);
-          await Promise.all([
-            g.photoFile
-              ? uploadGuardianPhoto(createdGuardian.id, g.photoFile)
-              : Promise.resolve(),
-            linkGuardianToStudent(created.id, {
-              guardian_id: createdGuardian.id,
-              relation: g.relation,
-              is_primary: g.is_primary,
-            }),
-          ]);
+          await saveGuardianForStudent(created.id, g);
         }
 
         await createEnrollment({
@@ -881,14 +1432,32 @@ export default function StudentsPage() {
         showToast({ severity: "success", message: "Student created" });
       } else if (editingStudentId) {
         await updateStudent(editingStudentId, payload);
-        await Promise.all([
-          studentPhotoFile
-            ? uploadStudentPhoto(editingStudentId, studentPhotoFile)
-            : Promise.resolve(),
-          previousTcFile
-            ? uploadStudentDocument(editingStudentId, previousTcFile)
-            : Promise.resolve(),
-        ]);
+        if (studentPhotoFile) {
+          await uploadStudentPhoto(editingStudentId, studentPhotoFile);
+          const refreshed = await getStudent(editingStudentId).catch(() => null);
+          if (refreshed) {
+            setForm((p) => ({ ...p, photo_url: refreshed.photo_url ?? "" }));
+          }
+          setStudentPhotoFile(null);
+        }
+        if (previousTcFile) {
+          const doc = await uploadStudentDocument(
+            editingStudentId,
+            previousTcFile,
+            "transfer_certificate",
+          );
+          setSavedTransferCertificate(doc);
+          setPreviousTcFile(null);
+        }
+        if (birthCertificateFile) {
+          const doc = await uploadStudentDocument(
+            editingStudentId,
+            birthCertificateFile,
+            "birth_certificate",
+          );
+          setSavedBirthCertificate(doc);
+          setBirthCertificateFile(null);
+        }
 
         const guardiansToProcess = [
           {
@@ -920,7 +1489,7 @@ export default function StudentsPage() {
           {
             id: guardianForm.id,
             relation: guardianForm.relation || "guardian",
-            is_primary: false,
+            is_primary: form.portal_access_parent,
             payload: {
               full_name: guardianForm.full_name.trim(),
               occupation: nullIfBlank(guardianForm.occupation),
@@ -932,26 +1501,34 @@ export default function StudentsPage() {
             photoFile: guardianPhotoFile,
           },
         ];
-
-        for (const g of guardiansToProcess) {
-          if (!g.payload.full_name) continue;
-
-          let gid = g.id;
-          if (gid) {
-            await updateGuardian(gid, g.payload);
-          } else {
-            const created = await createGuardian(g.payload);
-            gid = created.id;
-            await linkGuardianToStudent(editingStudentId, {
-              guardian_id: gid,
-              relation: g.relation,
-              is_primary: g.is_primary,
+        if (form.portal_access_parent) {
+          const hasPrimaryGuardian = guardiansToProcess.some(
+            (g) => g.is_primary && g.payload.full_name,
+          );
+          if (!hasPrimaryGuardian) {
+            const studentName = [form.first_name, form.last_name]
+              .filter(Boolean)
+              .join(" ")
+              .trim();
+            guardiansToProcess.push({
+              id: undefined,
+              relation: "guardian",
+              is_primary: true,
+              payload: {
+                full_name: studentName ? `${studentName} Parent` : "Parent",
+                occupation: null,
+                phone: null,
+                email: nullIfBlank(guardianForm.email),
+                id_number: null,
+                address: null,
+              },
+              photoFile: null,
             });
           }
+        }
 
-          if (g.photoFile && gid) {
-             await uploadGuardianPhoto(gid, g.photoFile);
-          }
+        for (const g of guardiansToProcess) {
+          await saveGuardianForStudent(editingStudentId, g);
         }
 
         const yearId = currentAcademicYear?.id;
@@ -1000,40 +1577,134 @@ export default function StudentsPage() {
     }
   }
 
-  async function handleDeleteStudent(s: Student) {
-    const ok = window.confirm(`Delete ${formatStudentName(s)}?`);
-    if (!ok) return;
+  async function handleEnableStudentPortalAccess(s: Student) {
+    if (s.portal_access_student) {
+      showToast({ severity: "info", message: "Student portal access is already enabled" });
+      return;
+    }
+    const portalUsername =
+      s.portal_username ||
+      defaultStudentPortalUsername(s.admission_no || "") ||
+      `stu${s.id.slice(0, 6)}`;
+
+    setPortalAccessSaving(true);
     try {
-      await deleteStudent(s.id);
+      const updated = await updateStudent(s.id, {
+        portal_username: portalUsername,
+        portal_access_student: true,
+      });
       if (drawerStudentId === s.id) {
+        setDrawerStudent(updated);
+      }
+      loadStudents();
+      showToast({
+        severity: "success",
+        message: "Student portal access enabled",
+      });
+    } catch (e) {
+      console.error(e);
+      showToast({
+        severity: "error",
+        message: "Failed to enable student portal access",
+      });
+    } finally {
+      setPortalAccessSaving(false);
+    }
+  }
+
+  function handleDeleteStudent(s: Student) {
+    setDeleteConfirmStudent(s);
+  }
+
+  async function confirmDeleteStudent() {
+    if (!deleteConfirmStudent) return;
+    setDeleteLoading(true);
+    try {
+      await deleteStudent(deleteConfirmStudent.id);
+      setDeleteConfirmStudent(null);
+      if (drawerStudentId === deleteConfirmStudent.id) {
         setDrawerStudentId(null);
       }
+      showToast({ severity: "success", message: `${formatStudentName(deleteConfirmStudent)} deleted successfully` });
       loadStudents();
     } catch (e) {
       console.error(e);
+      showToast({ severity: "error", message: "Failed to delete student. Please try again." });
+    } finally {
+      setDeleteLoading(false);
     }
   }
 
   async function handleExportCsv() {
     try {
       const blob = await exportStudentsCsv();
-      downloadBlob(blob, "students.csv");
+      if (blob.type && blob.type.includes("application/json")) {
+        showToast({
+          severity: "error",
+          message: "Student export failed. Please try again.",
+        });
+        return;
+      }
+      downloadBlob(blob, "students.xlsx");
     } catch (e) {
       console.error(e);
+      showToast({
+        severity: "error",
+        message: "Student export failed. Please try again.",
+      });
+    }
+  }
+
+  async function handleDownloadImportTemplate() {
+    try {
+      const blob = await downloadStudentImportTemplate();
+      if (blob.type && blob.type.includes("application/json")) {
+        showToast({
+          severity: "error",
+          message: "Import template download failed. Please try again.",
+        });
+        return;
+      }
+      downloadBlob(blob, "student_import_template.xlsx");
+    } catch (e) {
+      console.error(e);
+      showToast({
+        severity: "error",
+        message: "Import template download failed. Please try again.",
+      });
     }
   }
 
   async function handleImportCsv(file: File) {
     try {
       const res = await bulkImportStudentsCsv(file);
+      const skipped = res.skipped ?? 0;
+      const firstError = res.errors?.[0];
+      if (res.created === 0) {
+        showToast({
+          severity: "error",
+          message: firstError
+            ? `Import failed. Row ${firstError.row}: ${firstError.reason}`
+            : "No students were imported. Check the template columns and try again.",
+        });
+        return;
+      }
       showToast({
-        severity: "success",
-        message: `Imported ${res.created} students`,
+        severity: skipped ? "warning" : "success",
+        message: skipped
+          ? `Imported ${res.created} students. Skipped ${skipped}${
+              firstError ? `. First error: Row ${firstError.row}: ${firstError.reason}` : ""
+            }`
+          : `Imported ${res.created} students`,
       });
       setPage(0);
       loadStudents();
     } catch (e) {
       console.error(e);
+      showToast({
+        severity: "error",
+        message: "Student import failed. Upload the Excel template (.xlsx) and try again.",
+      });
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
@@ -1068,7 +1739,10 @@ export default function StudentsPage() {
             }}
           >
             <Box>
-              <Typography variant="overline" sx={{ opacity: 0.8, letterSpacing: 1 }}>
+              <Typography
+                variant="overline"
+                sx={{ opacity: 0.8, letterSpacing: 1 }}
+              >
                 Total Students
               </Typography>
               <Typography variant="h3" fontWeight={800} sx={{ mt: 1 }}>
@@ -1103,7 +1777,11 @@ export default function StudentsPage() {
                 mb: 2,
               }}
             >
-              <Typography variant="subtitle1" fontWeight={700} color="text.secondary">
+              <Typography
+                variant="subtitle1"
+                fontWeight={700}
+                color="text.secondary"
+              >
                 Active Status
               </Typography>
               <Chip
@@ -1124,7 +1802,11 @@ export default function StudentsPage() {
               </Box>
               <Divider orientation="vertical" flexItem />
               <Box>
-                <Typography variant="h4" fontWeight={700} color="text.secondary">
+                <Typography
+                  variant="h4"
+                  fontWeight={700}
+                  color="text.secondary"
+                >
                   {filteredCounts.inactive}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -1151,7 +1833,10 @@ export default function StudentsPage() {
             }}
           >
             <Box>
-              <Typography variant="overline" sx={{ opacity: 0.8, letterSpacing: 1 }}>
+              <Typography
+                variant="overline"
+                sx={{ opacity: 0.8, letterSpacing: 1 }}
+              >
                 Academics
               </Typography>
               <Typography variant="h3" fontWeight={800} sx={{ mt: 1 }}>
@@ -1212,7 +1897,7 @@ export default function StudentsPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               style={{ display: "none" }}
               onChange={(e) => {
                 const f = e.target.files?.[0];
@@ -1220,6 +1905,15 @@ export default function StudentsPage() {
               }}
             />
 
+            <Tooltip title="Download import template">
+              <IconButton
+                size="small"
+                onClick={handleDownloadImportTemplate}
+                sx={{ bgcolor: "white", border: "1px solid #E0E0E0" }}
+              >
+                <FileDownload fontSize="small" />
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Bulk Import">
               <IconButton
                 size="small"
@@ -1229,7 +1923,7 @@ export default function StudentsPage() {
                 <UploadFile fontSize="small" />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Export CSV">
+            <Tooltip title="Export Excel">
               <IconButton
                 size="small"
                 onClick={handleExportCsv}
@@ -1252,7 +1946,12 @@ export default function StudentsPage() {
               variant="contained"
               startIcon={<Add />}
               onClick={openCreateDialog}
-              sx={{ borderRadius: 2, px: 3, fontWeight: 700, textTransform: "none" }}
+              sx={{
+                borderRadius: 2,
+                px: 3,
+                fontWeight: 700,
+                textTransform: "none",
+              }}
             >
               Add Student
             </Button>
@@ -1350,10 +2049,13 @@ export default function StudentsPage() {
                       Student Name
                     </TableCell>
                     <TableCell sx={{ fontWeight: 700, bgcolor: "#F8F9FA" }}>
-                      Gender
+                      Admission Roll Number
                     </TableCell>
                     <TableCell sx={{ fontWeight: 700, bgcolor: "#F8F9FA" }}>
-                      Date of Birth
+                      Class
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700, bgcolor: "#F8F9FA" }}>
+                      Section
                     </TableCell>
                     <TableCell sx={{ fontWeight: 700, bgcolor: "#F8F9FA" }}>
                       Status
@@ -1392,17 +2094,19 @@ export default function StudentsPage() {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 2 }}
+                        >
                           {/* Avatar Placeholder */}
                           <Avatar
                             src={getFileUrl(row.photo_url)}
                             sx={{
-                                width: 32,
-                                height: 32,
-                                bgcolor: "primary.light",
-                                color: "primary.main",
-                                fontWeight: 700,
-                                fontSize: "0.8rem",
+                              width: 32,
+                              height: 32,
+                              bgcolor: "primary.light",
+                              color: "primary.main",
+                              fontWeight: 700,
+                              fontSize: "0.8rem",
                             }}
                           >
                             {row.first_name?.[0]}
@@ -1413,10 +2117,18 @@ export default function StudentsPage() {
                           </Typography>
                         </Box>
                       </TableCell>
-                      <TableCell sx={{ textTransform: "capitalize" }}>
-                        {row.gender || "-"}
+                      <TableCell>
+                        {enrollmentByStudentId[row.id]?.roll_number || "-"}
                       </TableCell>
-                      <TableCell>{row.date_of_birth || "-"}</TableCell>
+                      <TableCell>
+                        {classNameById[enrollmentByStudentId[row.id]?.class_id || ""] ||
+                          "-"}
+                      </TableCell>
+                      <TableCell>
+                        {sectionNameById[
+                          enrollmentByStudentId[row.id]?.section_id || ""
+                        ] || "-"}
+                      </TableCell>
                       <TableCell>
                         <Chip
                           label={(row.status || "-").toUpperCase()}
@@ -1441,7 +2153,10 @@ export default function StudentsPage() {
                   ))}
                   {students.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} sx={{ py: 8, textAlign: "center" }}>
+                      <TableCell
+                        colSpan={7}
+                        sx={{ py: 8, textAlign: "center" }}
+                      >
                         <Box
                           sx={{
                             display: "flex",
@@ -1452,7 +2167,9 @@ export default function StudentsPage() {
                           }}
                         >
                           <Search sx={{ fontSize: 48 }} />
-                          <Typography variant="h6">No students found</Typography>
+                          <Typography variant="h6">
+                            No students found
+                          </Typography>
                           <Typography variant="body2">
                             Try adjusting your filters or search terms.
                           </Typography>
@@ -1535,6 +2252,43 @@ export default function StudentsPage() {
         </MenuItem>
       </Menu>
 
+      {/* Delete confirmation dialog */}
+      <Dialog
+        open={Boolean(deleteConfirmStudent)}
+        onClose={() => !deleteLoading && setDeleteConfirmStudent(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete Student</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete{" "}
+            <strong>{deleteConfirmStudent ? formatStudentName(deleteConfirmStudent) : ""}</strong>?
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            This will permanently remove the student along with all their
+            attendance records, enrollments, marks, documents, and other
+            related data. This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setDeleteConfirmStudent(null)}
+            disabled={deleteLoading}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={confirmDeleteStudent}
+            disabled={deleteLoading}
+          >
+            {deleteLoading ? "Deleting…" : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
@@ -1598,8 +2352,24 @@ export default function StudentsPage() {
                       fullWidth
                       margin="normal"
                       value={form.admission_no}
+                      InputProps={{ readOnly: true }}
                       onChange={(e) =>
-                        setForm((p) => ({ ...p, admission_no: e.target.value }))
+                        setForm((p) => {
+                          const nextAdmission = e.target.value;
+                          const nextAuto =
+                            defaultStudentPortalUsername(nextAdmission);
+                          const shouldUpdatePortal =
+                            !p.portal_username ||
+                            p.portal_username === autoPortalUsernameRef.current;
+                          autoPortalUsernameRef.current = nextAuto;
+                          return {
+                            ...p,
+                            admission_no: nextAdmission,
+                            portal_username: shouldUpdatePortal
+                              ? nextAuto
+                              : p.portal_username,
+                          };
+                        })
                       }
                     />
                   </Grid>
@@ -1681,16 +2451,24 @@ export default function StudentsPage() {
                   <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       label="Roll Number"
-                      type="number"
                       fullWidth
                       margin="normal"
                       value={enrollmentForm.roll_number}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        rollNumberManualRef.current = true;
                         setEnrollmentForm((p) => ({
                           ...p,
                           roll_number: e.target.value,
-                        }))
+                        }));
+                      }}
+                      inputProps={{ maxLength: 32 }}
+                      placeholder={
+                        rollNumberLoading
+                          ? "Suggesting next roll..."
+                          : "Enter roll number"
                       }
+                      helperText="You can type a custom roll number (for example the Hik-Connect ID). A suggestion is filled only if this field is left unchanged."
+                      required
                     />
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
@@ -1764,7 +2542,7 @@ export default function StudentsPage() {
                     />
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <FormControl fullWidth margin="normal">
+                    <FormControl fullWidth margin="normal" required>
                       <InputLabel>Admission Status</InputLabel>
                       <Select
                         value={form.admission_status}
@@ -1776,34 +2554,50 @@ export default function StudentsPage() {
                           }))
                         }
                       >
-                        <MenuItem value="pending">Pending</MenuItem>
                         <MenuItem value="approved">Approved</MenuItem>
+                        <MenuItem value="pending">Pending</MenuItem>
                         <MenuItem value="rejected">Rejected</MenuItem>
                         <MenuItem value="withdrawn">Withdrawn</MenuItem>
                       </Select>
                     </FormControl>
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <TextField
-                      label="Medium"
-                      fullWidth
-                      margin="normal"
-                      value={form.medium}
-                      onChange={(e) =>
-                        setForm((p) => ({ ...p, medium: e.target.value }))
-                      }
-                    />
+                    <FormControl fullWidth margin="normal">
+                      <InputLabel>Medium</InputLabel>
+                      <Select
+                        value={form.medium}
+                        label="Medium"
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, medium: e.target.value }))
+                        }
+                      >
+                        <MenuItem value="">Select medium</MenuItem>
+                        {studentDialogSettings.medium_configuration.map((medium) => (
+                          <MenuItem key={medium} value={medium}>
+                            {medium}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <TextField
-                      label="Shift"
-                      fullWidth
-                      margin="normal"
-                      value={form.shift}
-                      onChange={(e) =>
-                        setForm((p) => ({ ...p, shift: e.target.value }))
-                      }
-                    />
+                    <FormControl fullWidth margin="normal">
+                      <InputLabel>Shift</InputLabel>
+                      <Select
+                        value={form.shift}
+                        label="Shift"
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, shift: e.target.value }))
+                        }
+                      >
+                        <MenuItem value="">Select shift</MenuItem>
+                        {studentDialogSettings.shift_configuration.map((shift) => (
+                          <MenuItem key={shift} value={shift}>
+                            {shift}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
@@ -2228,10 +3022,24 @@ export default function StudentsPage() {
                         <Checkbox
                           checked={form.portal_access_student}
                           onChange={(e) =>
-                            setForm((p) => ({
-                              ...p,
-                              portal_access_student: e.target.checked,
-                            }))
+                            setForm((p) => {
+                              const nextChecked = e.target.checked;
+                              const nextAuto = defaultStudentPortalUsername(
+                                p.admission_no,
+                              );
+                              autoPortalUsernameRef.current = nextAuto;
+                              return {
+                                ...p,
+                                portal_access_student: nextChecked,
+                                portal_username:
+                                  nextChecked &&
+                                  (!p.portal_username ||
+                                    p.portal_username ===
+                                      autoPortalUsernameRef.current)
+                                    ? nextAuto
+                                    : p.portal_username,
+                              };
+                            })
                           }
                         />
                       }
@@ -2251,6 +3059,67 @@ export default function StudentsPage() {
                       }
                       label="Portal access (parent)"
                     />
+                    {form.portal_access_parent && (
+                      <Box sx={{ mt: 1.5 }}>
+                        <Autocomplete
+                          size="small"
+                          options={guardianOptions}
+                          getOptionLabel={(option) =>
+                            typeof option === "string"
+                              ? option
+                              : `${option.full_name} (${option.phone || "-"})`
+                          }
+                          loading={guardianLoading}
+                          onOpen={() => setGuardianSearchOpen(true)}
+                          onClose={() => setGuardianSearchOpen(false)}
+                          onInputChange={(_, val) =>
+                            setGuardianSearchInput(val)
+                          }
+                          onChange={(_, value) => {
+                            if (value && typeof value !== "string") {
+                              setGuardianForm({
+                                id: value.id,
+                                full_name: value.full_name,
+                                relation: "guardian",
+                                phone: value.phone || "",
+                                email: value.email || "",
+                                occupation: value.occupation || "",
+                                id_number: value.id_number || "",
+                                address: value.address || "",
+                                photo_url: value.photo_url || "",
+                              });
+                            }
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Search Existing Parent/Guardian"
+                              InputProps={{
+                                ...params.InputProps,
+                                endAdornment: (
+                                  <>
+                                    {guardianLoading ? (
+                                      <CircularProgress
+                                        color="inherit"
+                                        size={20}
+                                      />
+                                    ) : null}
+                                    {params.InputProps.endAdornment}
+                                  </>
+                                ),
+                              }}
+                            />
+                          )}
+                        />
+                        <TextField
+                          label="Parent Portal Username"
+                          fullWidth
+                          margin="normal"
+                          value={defaultParentPortalUsername(form.admission_no)}
+                          InputProps={{ readOnly: true }}
+                        />
+                      </Box>
+                    )}
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
                     <Box
@@ -2277,18 +3146,68 @@ export default function StudentsPage() {
                         />
                       </Button>
                       {studentPhotoFile ? (
-                        <Typography variant="body2" color="text.secondary">
-                          {studentPhotoFile.name}
-                        </Typography>
+                        <Box
+                          sx={{
+                            mt: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 2,
+                          }}
+                        >
+                          <Box
+                            component="img"
+                            src={studentPhotoPreviewUrl}
+                            alt="Selected student"
+                            onClick={() => openSelectedFile(studentPhotoFile)}
+                            sx={{
+                              width: 88,
+                              height: 88,
+                              borderRadius: 2,
+                              objectFit: "cover",
+                              cursor: "pointer",
+                              border: "1px solid",
+                              borderColor: "divider",
+                            }}
+                          />
+                          <Link
+                            component="button"
+                            variant="body2"
+                            onClick={() => openSelectedFile(studentPhotoFile)}
+                          >
+                            {studentPhotoFile.name}
+                          </Link>
+                        </Box>
                       ) : form.photo_url ? (
-                        <Box sx={{ mt: 1, display: "flex", alignItems: "center", gap: 2 }}>
-                            <Avatar
-                              src={getFileUrl(form.photo_url)}
-                              sx={{ width: 56, height: 56 }}
-                            />
-                            <Typography variant="body2" color="text.secondary">
-                                Current Photo
-                            </Typography>
+                        <Box
+                          sx={{
+                            mt: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 2,
+                          }}
+                        >
+                          <Box
+                            component="img"
+                            src={getFileUrl(form.photo_url)}
+                            alt="Saved student"
+                            onClick={() => openUrlInNewTab(getFileUrl(form.photo_url))}
+                            sx={{
+                              width: 88,
+                              height: 88,
+                              borderRadius: 2,
+                              objectFit: "cover",
+                              cursor: "pointer",
+                              border: "1px solid",
+                              borderColor: "divider",
+                            }}
+                          />
+                          <Link
+                            component="button"
+                            variant="body2"
+                            onClick={() => openUrlInNewTab(getFileUrl(form.photo_url))}
+                          >
+                            {getFileNameFromUrl(form.photo_url) || "Current Photo"}
+                          </Link>
                         </Box>
                       ) : null}
 
@@ -2307,9 +3226,57 @@ export default function StudentsPage() {
                         />
                       </Button>
                       {previousTcFile ? (
-                        <Typography variant="body2" color="text.secondary">
+                        <Link
+                          component="button"
+                          variant="body2"
+                          onClick={() => openSelectedFile(previousTcFile)}
+                          sx={{ alignSelf: "flex-start" }}
+                        >
                           {previousTcFile.name}
-                        </Typography>
+                        </Link>
+                      ) : savedTransferCertificate ? (
+                        <Link
+                          component="button"
+                          variant="body2"
+                          onClick={() => openSavedDocument(savedTransferCertificate)}
+                          sx={{ alignSelf: "flex-start" }}
+                        >
+                          {savedTransferCertificate.filename}
+                        </Link>
+                      ) : null}
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        startIcon={<UploadFile />}
+                      >
+                        Upload Birth Certificate
+                        <input
+                          type="file"
+                          hidden
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          onChange={(e) =>
+                            setBirthCertificateFile(e.target.files?.[0] ?? null)
+                          }
+                        />
+                      </Button>
+                      {birthCertificateFile ? (
+                        <Link
+                          component="button"
+                          variant="body2"
+                          onClick={() => openSelectedFile(birthCertificateFile)}
+                          sx={{ alignSelf: "flex-start" }}
+                        >
+                          {birthCertificateFile.name}
+                        </Link>
+                      ) : savedBirthCertificate ? (
+                        <Link
+                          component="button"
+                          variant="body2"
+                          onClick={() => openSavedDocument(savedBirthCertificate)}
+                          sx={{ alignSelf: "flex-start" }}
+                        >
+                          {savedBirthCertificate.filename}
+                        </Link>
                       ) : null}
                     </Box>
                   </Grid>
@@ -2319,48 +3286,63 @@ export default function StudentsPage() {
               {dialogTab === 6 && (
                 <Grid container spacing={2} sx={{ mt: 0.5 }}>
                   <Grid size={{ xs: 12 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
-                        <Typography variant="subtitle2">
-                          Father
-                        </Typography>
-                         <Autocomplete
-                            size="small"
-                            sx={{ width: 300 }}
-                            freeSolo
-                            options={guardianOptions}
-                            getOptionLabel={(option) => typeof option === "string" ? option : `${option.full_name} (${option.phone || "-"})`}
-                            loading={guardianLoading}
-                            onOpen={() => setGuardianSearchOpen(true)}
-                            onClose={() => setGuardianSearchOpen(false)}
-                            onInputChange={(e, val) => setGuardianSearchInput(val)}
-                            onChange={(e, value) => {
-                                if (value && typeof value !== "string") {
-                                    setFatherForm({
-                                        id: value.id,
-                                        full_name: value.full_name,
-                                        occupation: value.occupation || "",
-                                        phone: value.phone || "",
-                                        email: value.email || "",
-                                        id_number: value.id_number || "",
-                                    });
-                                }
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        mt: 1,
+                      }}
+                    >
+                      <Typography variant="subtitle2">Father</Typography>
+                      <Autocomplete
+                        size="small"
+                        sx={{ width: 300 }}
+                        freeSolo
+                        options={guardianOptions}
+                        getOptionLabel={(option) =>
+                          typeof option === "string"
+                            ? option
+                            : `${option.full_name} (${option.phone || "-"})`
+                        }
+                        loading={guardianLoading}
+                        onOpen={() => setGuardianSearchOpen(true)}
+                        onClose={() => setGuardianSearchOpen(false)}
+                        onInputChange={(_event, val) => setGuardianSearchInput(val)}
+                        onChange={(_event, value) => {
+                          if (value && typeof value !== "string") {
+                            setFatherForm({
+                              id: value.id,
+                              full_name: value.full_name,
+                              occupation: value.occupation || "",
+                              phone: value.phone || "",
+                              email: value.email || "",
+                              id_number: value.id_number || "",
+                              photo_url: value.photo_url || "",
+                            });
+                          }
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Search Existing Father"
+                            InputProps={{
+                              ...params.InputProps,
+                              endAdornment: (
+                                <>
+                                  {guardianLoading ? (
+                                    <CircularProgress
+                                      color="inherit"
+                                      size={20}
+                                    />
+                                  ) : null}
+                                  {params.InputProps.endAdornment}
+                                </>
+                              ),
                             }}
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params}
-                                    label="Search Existing Father"
-                                    InputProps={{
-                                        ...params.InputProps,
-                                        endAdornment: (
-                                            <>
-                                                {guardianLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                                                {params.InputProps.endAdornment}
-                                            </>
-                                        ),
-                                    }}
-                                />
-                            )}
-                        />
+                          />
+                        )}
+                      />
                     </Box>
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
@@ -2443,60 +3425,72 @@ export default function StudentsPage() {
                         }
                       />
                     </Button>
-                    {fatherPhotoFile ? (
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ mt: 0.5 }}
-                      >
-                        {fatherPhotoFile.name}
-                      </Typography>
-                    ) : null}
+                    {renderPersonPhotoPreview(
+                      fatherPhotoFile,
+                      fatherPhotoPreviewUrl,
+                      fatherForm.photo_url,
+                      "Father",
+                    )}
                   </Grid>
 
                   <Grid size={{ xs: 12 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
-                        <Typography variant="subtitle2">
-                           Mother
-                        </Typography>
-                         <Autocomplete
-                            size="small"
-                            sx={{ width: 300 }}
-                            freeSolo
-                            options={guardianOptions}
-                            getOptionLabel={(option) => typeof option === "string" ? option : `${option.full_name} (${option.phone || "-"})`}
-                            loading={guardianLoading}
-                            onOpen={() => setGuardianSearchOpen(true)}
-                            onClose={() => setGuardianSearchOpen(false)}
-                            onInputChange={(e, val) => setGuardianSearchInput(val)}
-                            onChange={(e, value) => {
-                                if (value && typeof value !== "string") {
-                                    setMotherForm({
-                                        id: value.id,
-                                        full_name: value.full_name,
-                                        occupation: value.occupation || "",
-                                        phone: value.phone || "",
-                                        email: value.email || "",
-                                        id_number: value.id_number || "",
-                                    });
-                                }
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        mt: 2,
+                      }}
+                    >
+                      <Typography variant="subtitle2">Mother</Typography>
+                      <Autocomplete
+                        size="small"
+                        sx={{ width: 300 }}
+                        freeSolo
+                        options={guardianOptions}
+                        getOptionLabel={(option) =>
+                          typeof option === "string"
+                            ? option
+                            : `${option.full_name} (${option.phone || "-"})`
+                        }
+                        loading={guardianLoading}
+                        onOpen={() => setGuardianSearchOpen(true)}
+                        onClose={() => setGuardianSearchOpen(false)}
+                        onInputChange={(_event, val) => setGuardianSearchInput(val)}
+                        onChange={(_event, value) => {
+                          if (value && typeof value !== "string") {
+                            setMotherForm({
+                              id: value.id,
+                              full_name: value.full_name,
+                              occupation: value.occupation || "",
+                              phone: value.phone || "",
+                              email: value.email || "",
+                              id_number: value.id_number || "",
+                              photo_url: value.photo_url || "",
+                            });
+                          }
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Search Existing Mother"
+                            InputProps={{
+                              ...params.InputProps,
+                              endAdornment: (
+                                <>
+                                  {guardianLoading ? (
+                                    <CircularProgress
+                                      color="inherit"
+                                      size={20}
+                                    />
+                                  ) : null}
+                                  {params.InputProps.endAdornment}
+                                </>
+                              ),
                             }}
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params}
-                                    label="Search Existing Mother"
-                                    InputProps={{
-                                        ...params.InputProps,
-                                        endAdornment: (
-                                            <>
-                                                {guardianLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                                                {params.InputProps.endAdornment}
-                                            </>
-                                        ),
-                                    }}
-                                />
-                            )}
-                        />
+                          />
+                        )}
+                      />
                     </Box>
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
@@ -2579,62 +3573,74 @@ export default function StudentsPage() {
                         }
                       />
                     </Button>
-                    {motherPhotoFile ? (
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ mt: 0.5 }}
-                      >
-                        {motherPhotoFile.name}
-                      </Typography>
-                    ) : null}
+                    {renderPersonPhotoPreview(
+                      motherPhotoFile,
+                      motherPhotoPreviewUrl,
+                      motherForm.photo_url,
+                      "Mother",
+                    )}
                   </Grid>
 
                   <Grid size={{ xs: 12 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 2 }}>
-                        <Typography variant="subtitle2">
-                           Guardian
-                        </Typography>
-                         <Autocomplete
-                            size="small"
-                            sx={{ width: 300 }}
-                            freeSolo
-                            options={guardianOptions}
-                            getOptionLabel={(option) => typeof option === "string" ? option : `${option.full_name} (${option.phone || "-"})`}
-                            loading={guardianLoading}
-                            onOpen={() => setGuardianSearchOpen(true)}
-                            onClose={() => setGuardianSearchOpen(false)}
-                            onInputChange={(e, val) => setGuardianSearchInput(val)}
-                            onChange={(e, value) => {
-                                if (value && typeof value !== "string") {
-                                    setGuardianForm({
-                                        id: value.id,
-                                        full_name: value.full_name,
-                                        relation: "guardian",
-                                        phone: value.phone || "",
-                                        email: value.email || "",
-                                        occupation: value.occupation || "",
-                                        id_number: value.id_number || "",
-                                        address: value.address || "",
-                                    });
-                                }
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        mt: 2,
+                      }}
+                    >
+                      <Typography variant="subtitle2">Guardian</Typography>
+                      <Autocomplete
+                        size="small"
+                        sx={{ width: 300 }}
+                        freeSolo
+                        options={guardianOptions}
+                        getOptionLabel={(option) =>
+                          typeof option === "string"
+                            ? option
+                            : `${option.full_name} (${option.phone || "-"})`
+                        }
+                        loading={guardianLoading}
+                        onOpen={() => setGuardianSearchOpen(true)}
+                        onClose={() => setGuardianSearchOpen(false)}
+                        onInputChange={(_event, val) => setGuardianSearchInput(val)}
+                        onChange={(_event, value) => {
+                          if (value && typeof value !== "string") {
+                            setGuardianForm({
+                              id: value.id,
+                              full_name: value.full_name,
+                              relation: "guardian",
+                              phone: value.phone || "",
+                              email: value.email || "",
+                              occupation: value.occupation || "",
+                              id_number: value.id_number || "",
+                              address: value.address || "",
+                              photo_url: value.photo_url || "",
+                            });
+                          }
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Search Existing Guardian"
+                            InputProps={{
+                              ...params.InputProps,
+                              endAdornment: (
+                                <>
+                                  {guardianLoading ? (
+                                    <CircularProgress
+                                      color="inherit"
+                                      size={20}
+                                    />
+                                  ) : null}
+                                  {params.InputProps.endAdornment}
+                                </>
+                              ),
                             }}
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params}
-                                    label="Search Existing Guardian"
-                                    InputProps={{
-                                        ...params.InputProps,
-                                        endAdornment: (
-                                            <>
-                                                {guardianLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                                                {params.InputProps.endAdornment}
-                                            </>
-                                        ),
-                                    }}
-                                />
-                            )}
-                        />
+                          />
+                        )}
+                      />
                     </Box>
                   </Grid>
                   <Grid size={{ xs: 12, md: 4 }}>
@@ -2753,15 +3759,12 @@ export default function StudentsPage() {
                         }
                       />
                     </Button>
-                    {guardianPhotoFile ? (
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ mt: 0.5 }}
-                      >
-                        {guardianPhotoFile.name}
-                      </Typography>
-                    ) : null}
+                    {renderPersonPhotoPreview(
+                      guardianPhotoFile,
+                      guardianPhotoPreviewUrl,
+                      guardianForm.photo_url,
+                      "Guardian",
+                    )}
                   </Grid>
                 </Grid>
               )}
@@ -2787,27 +3790,31 @@ export default function StudentsPage() {
         PaperProps={{ sx: { width: { xs: "100%", md: 520 } } }}
       >
         <Box sx={{ p: 2 }}>
-
-            <Box
-              sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}
-            >
-              <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-                <Avatar
-                  src={getFileUrl(drawerStudent?.photo_url)}
-                  sx={{ width: 64, height: 64, bgcolor: "primary.main", fontSize: "1.5rem" }}
-                >
-                  {drawerStudent?.first_name?.[0]}
-                </Avatar>
-                <Box>
-                  <Typography variant="h6" fontWeight={800}>
-                    {drawerStudent ? formatStudentName(drawerStudent) : "Student"}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Admission: {drawerStudent?.admission_no || "-"} • ID:{" "}
-                    {drawerStudentId}
-                  </Typography>
-                </Box>
+          <Box
+            sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}
+          >
+            <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+              <Avatar
+                src={getFileUrl(drawerStudent?.photo_url)}
+                sx={{
+                  width: 64,
+                  height: 64,
+                  bgcolor: "primary.main",
+                  fontSize: "1.5rem",
+                }}
+              >
+                {drawerStudent?.first_name?.[0]}
+              </Avatar>
+              <Box>
+                <Typography variant="h6" fontWeight={800}>
+                  {drawerStudent ? formatStudentName(drawerStudent) : "Student"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Admission: {drawerStudent?.admission_no || "-"} • ID:{" "}
+                  {drawerStudentId}
+                </Typography>
               </Box>
+            </Box>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               {drawerStudent ? (
                 <Chip
@@ -2890,6 +3897,14 @@ export default function StudentsPage() {
                       {drawerStudent?.date_of_birth || "-"}
                     </Typography>
                   </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <Typography variant="overline" color="text.secondary">
+                      Admission Roll Number
+                    </Typography>
+                    <Typography fontWeight={700}>
+                      {drawerEnrollment?.roll_number || "-"}
+                    </Typography>
+                  </Grid>
                   <Grid size={{ xs: 12 }}>
                     <Divider sx={{ my: 1.5 }} />
                     <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
@@ -2916,6 +3931,26 @@ export default function StudentsPage() {
                         }
                       >
                         Deactivate
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          if (drawerStudent)
+                            handleEnableStudentPortalAccess(drawerStudent);
+                        }}
+                        disabled={
+                          portalAccessSaving ||
+                          Boolean(drawerStudent?.portal_access_student)
+                        }
+                      >
+                        {portalAccessSaving ? (
+                          <CircularProgress size={16} />
+                        ) : drawerStudent?.portal_access_student ? (
+                          "Portal Enabled"
+                        ) : (
+                          "Portal Access"
+                        )}
                       </Button>
                     </Box>
                   </Grid>

@@ -738,3 +738,200 @@ def decide_appointment(
         response_note=row.response_note,
         updated_at=row.updated_at,
     )
+
+
+# ─── Student self-service (for users with student role) ────────────────────────
+
+def _get_self_student(db: Session, user_id: uuid.UUID, school_id: uuid.UUID) -> Student:
+    """Get the student record linked to the logged-in user."""
+    s = db.scalar(select(Student).where(Student.user_id == user_id, Student.school_id == school_id))
+    if not s:
+        raise not_found("No student record linked to this account")
+    return s
+
+
+@router.get("/student-self/profile")
+def student_self_profile(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    school_id=Depends(get_active_school_id),
+) -> dict:
+    s = _get_self_student(db, user.id, school_id)
+    return {
+        "id": str(s.id),
+        "first_name": s.first_name,
+        "last_name": s.last_name,
+        "admission_no": s.admission_no,
+        "gender": s.gender,
+        "date_of_birth": s.date_of_birth.isoformat() if s.date_of_birth else None,
+        "blood_group": s.blood_group,
+        "present_address": s.present_address,
+        "status": s.status,
+        "photo_url": s.photo_url,
+        "nationality": s.nationality,
+        "religion": s.religion,
+        "emergency_contact_name": s.emergency_contact_name,
+        "emergency_contact_phone": s.emergency_contact_phone,
+    }
+
+
+@router.get("/student-self/attendance")
+def student_self_attendance(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    school_id=Depends(get_active_school_id),
+) -> list[dict]:
+    s = _get_self_student(db, user.id, school_id)
+    rows = db.execute(
+        select(StudentAttendance)
+        .where(StudentAttendance.student_id == s.id)
+        .order_by(StudentAttendance.attendance_date.desc())
+        .limit(90)
+    ).scalars().all()
+    return [{"id": str(r.id), "attendance_date": r.attendance_date.date().isoformat(), "status": r.status} for r in rows]
+
+
+@router.get("/student-self/attendance/summary")
+def student_self_attendance_summary(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    school_id=Depends(get_active_school_id),
+) -> dict:
+    s = _get_self_student(db, user.id, school_id)
+    rows = db.execute(
+        select(StudentAttendance).where(StudentAttendance.student_id == s.id)
+    ).scalars().all()
+    counts: dict[str, int] = {}
+    for r in rows:
+        counts[r.status] = counts.get(r.status, 0) + 1
+    counts["total"] = len(rows)
+    return counts
+
+
+@router.get("/student-self/timetable")
+def student_self_timetable(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    school_id=Depends(get_active_school_id),
+) -> list[dict]:
+    s = _get_self_student(db, user.id, school_id)
+    year = db.scalar(select(AcademicYear).where(AcademicYear.school_id == school_id, AcademicYear.is_current.is_(True)))
+    if not year:
+        return []
+    enrollment = db.scalar(select(Enrollment).where(Enrollment.student_id == s.id, Enrollment.academic_year_id == year.id))
+    if not enrollment or not enrollment.section_id:
+        return []
+    rows = db.execute(
+        select(TimetableEntry)
+        .where(TimetableEntry.section_id == enrollment.section_id)
+        .order_by(TimetableEntry.day_of_week.asc(), TimetableEntry.created_at.asc())
+    ).scalars().all()
+    return [
+        {
+            "id": str(r.id),
+            "day_of_week": r.day_of_week,
+            "subject_id": str(r.subject_id) if r.subject_id else None,
+            "staff_id": str(r.staff_id) if r.staff_id else None,
+            "room": r.room,
+            "start_time": None,
+            "end_time": None,
+            "time_slot_id": str(r.time_slot_id) if r.time_slot_id else None,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/student-self/fee-dues")
+def student_self_fee_dues(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    school_id=Depends(get_active_school_id),
+) -> list[dict]:
+    s = _get_self_student(db, user.id, school_id)
+    rows = db.execute(
+        select(FeeDue).where(FeeDue.student_id == s.id).order_by(FeeDue.updated_at.desc())
+    ).scalars().all()
+    return [
+        {
+            "id": str(r.id),
+            "student_id": str(r.student_id),
+            "academic_year_id": str(r.academic_year_id),
+            "total_fee": r.total_fee,
+            "discount_amount": r.discount_amount,
+            "paid_amount": r.paid_amount,
+            "due_amount": r.due_amount,
+            "status": r.status,
+            "last_calculated_date": r.last_calculated_date.isoformat() if r.last_calculated_date else None,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/student-self/fee-payments")
+def student_self_fee_payments(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    school_id=Depends(get_active_school_id),
+) -> list[dict]:
+    s = _get_self_student(db, user.id, school_id)
+    rows = db.execute(
+        select(FeePayment).where(FeePayment.student_id == s.id).order_by(FeePayment.payment_date.desc())
+    ).scalars().all()
+    return [
+        {
+            "id": str(r.id),
+            "student_id": str(r.student_id),
+            "academic_year_id": str(r.academic_year_id),
+            "payment_date": r.payment_date.isoformat(),
+            "amount": r.amount,
+            "payment_method": r.payment_method,
+            "reference": r.reference,
+            "is_refund": r.is_refund,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/student-self/guardians")
+def student_self_guardians(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    school_id=Depends(get_active_school_id),
+) -> list[dict]:
+    s = _get_self_student(db, user.id, school_id)
+    rows = db.execute(
+        select(Guardian, StudentGuardian)
+        .join(StudentGuardian, StudentGuardian.guardian_id == Guardian.id)
+        .where(StudentGuardian.student_id == s.id, Guardian.school_id == school_id)
+    ).all()
+    return [
+        {
+            "id": str(g.id),
+            "full_name": g.full_name,
+            "phone": g.phone,
+            "email": g.email,
+            "relation": sg.relation,
+            "is_primary": sg.is_primary,
+        }
+        for g, sg in rows
+    ]
+
+
+@router.get("/student-self/notices")
+def student_self_notices(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    school_id=Depends(get_active_school_id),
+) -> list[dict]:
+    rows = db.execute(
+        select(Notice).where(Notice.school_id == school_id, Notice.is_published.is_(True)).order_by(Notice.published_at.desc()).limit(20)
+    ).scalars().all()
+    return [
+        {
+            "id": str(n.id),
+            "title": n.title,
+            "content": n.content,
+            "published_at": n.published_at.isoformat() if n.published_at else None,
+        }
+        for n in rows
+    ]

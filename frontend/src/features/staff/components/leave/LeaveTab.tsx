@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Box,
   Paper,
@@ -37,8 +37,11 @@ import {
   approveLeaveRequest,
   rejectLeaveRequest,
   getLeaveBalanceSummary,
+  getStaffLeaveBalances,
+  getStaffLeaveRequests,
   type Staff,
   type LeaveType,
+  type LeaveBalance,
   type StaffLeaveRequest
 } from "../../../../api/staffManagement";
 
@@ -47,7 +50,12 @@ export default function LeaveTab() {
   const [requests, setRequests] = useState<StaffLeaveRequest[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
-  const [balanceSummary, setBalanceSummary] = useState<any>(null);
+  const [balanceSummary, setBalanceSummary] = useState<{
+    total_pending?: number;
+    total_used?: number;
+    total_approved?: number;
+    total_rejected?: number;
+  } | null>(null);
   
   // Maps for quick lookup
   const [staffMap, setStaffMap] = useState<Record<string, Staff>>({});
@@ -75,57 +83,67 @@ export default function LeaveTab() {
     reason: "",
   });
   const [error, setError] = useState<string | null>(null);
+  const [selectedStaffBalances, setSelectedStaffBalances] = useState<LeaveBalance[]>([]);
+  const [selectedStaffRequests, setSelectedStaffRequests] = useState<StaffLeaveRequest[]>([]);
+  const [selectedStaffBalancesLoading, setSelectedStaffBalancesLoading] = useState(false);
 
-  // Initial Load
-  useEffect(() => {
-    loadMetadata();
-    loadRequests();
-    loadStats();
-  }, []);
+  const extractItems = <T,>(data: unknown): T[] => {
+    if (data && typeof data === "object" && "items" in data) {
+      const items = (data as { items?: unknown }).items;
+      if (Array.isArray(items)) return items as T[];
+    }
+    return [];
+  };
 
-  // Effect to handle pagination or filter changes
-  useEffect(() => {
-    loadRequests();
-  }, [page, rowsPerPage, statusFilter, typeFilter]);
-
-  const loadMetadata = async () => {
+  const loadMetadata = useCallback(async () => {
     try {
-      // Staff
       const sRes = await listStaff({ limit: 1000, status: "active" });
-      if ((sRes as any).data?.items) {
-        const list = (sRes as any).data.items;
+      if (sRes.ok && sRes.data) {
+        const list = extractItems<Staff>(sRes.data);
         setStaffList(list);
-        const map: any = {};
-        list.forEach((s: Staff) => map[s.id] = s);
+        const map: Record<string, Staff> = {};
+        list.forEach((s) => {
+          map[s.id] = s;
+        });
         setStaffMap(map);
       }
 
-      // Leave Types
-      const tRes = await listLeaveTypes({ });
-      // listLeaveTypes returns list directly in data? or in items? Check staff_leave.py response_model.
-      // staff_leave.py: response_model=list[LeaveTypeOut]. So data IS the list.
-      const tData = (tRes as any).data;
-      if (Array.isArray(tData)) {
+      const tRes = await listLeaveTypes({});
+      if (tRes.ok && tRes.data) {
+        const tData = Array.isArray(tRes.data)
+          ? (tRes.data as LeaveType[])
+          : extractItems<LeaveType>(tRes.data);
         setLeaveTypes(tData);
-        const map: any = {};
-        tData.forEach((t: LeaveType) => map[t.id] = t);
+        const map: Record<string, LeaveType> = {};
+        tData.forEach((t) => {
+          map[t.id] = t;
+        });
         setTypeMap(map);
       }
     } catch (e) {
       console.error("Failed to load metadata", e);
     }
-  };
+  }, []);
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
-        const res = await getLeaveBalanceSummary(new Date().getFullYear());
-        if ((res as any).data) setBalanceSummary((res as any).data);
+      const res = await getLeaveBalanceSummary(new Date().getFullYear());
+      if (res.ok && res.data && typeof res.data === "object") {
+        setBalanceSummary(
+          res.data as {
+            total_pending?: number;
+            total_used?: number;
+            total_approved?: number;
+            total_rejected?: number;
+          },
+        );
+      }
     } catch (e) {
-        console.error(e);
+      console.error(e);
     }
-  };
+  }, []);
 
-  const loadRequests = async () => {
+  const loadRequests = useCallback(async () => {
     setLoading(true);
     try {
       const res = await listLeaveRequests({
@@ -135,10 +153,10 @@ export default function LeaveTab() {
         leave_type_id: typeFilter || undefined,
       });
       
-      const data = (res as any).data;
-      if (data && data.items) {
-        setRequests(data.items);
-        setTotal(data.total);
+      if (res.ok && res.data && typeof res.data === "object") {
+        const data = res.data as { items?: StaffLeaveRequest[]; total?: number };
+        if (Array.isArray(data.items)) setRequests(data.items);
+        if (typeof data.total === "number") setTotal(data.total);
       }
     } catch (e) {
       console.error("Failed to load requests", e);
@@ -146,7 +164,106 @@ export default function LeaveTab() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, rowsPerPage, statusFilter, typeFilter]);
+
+  useEffect(() => {
+    loadMetadata();
+    loadRequests();
+    loadStats();
+  }, [loadMetadata, loadRequests, loadStats]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!formData.staff_id) {
+      setSelectedStaffBalances([]);
+      setSelectedStaffRequests([]);
+      return undefined;
+    }
+
+    setSelectedStaffBalancesLoading(true);
+    (async () => {
+      try {
+        const year = new Date(formData.start_date).getFullYear();
+        const [balancesRes, requestsRes] = await Promise.all([
+          getStaffLeaveBalances(formData.staff_id, year),
+          getStaffLeaveRequests(formData.staff_id, year),
+        ]);
+        if (!active) return;
+
+        if (balancesRes.ok && Array.isArray(balancesRes.data)) {
+          setSelectedStaffBalances(balancesRes.data as LeaveBalance[]);
+        } else {
+          setSelectedStaffBalances([]);
+        }
+
+        if (requestsRes.ok && Array.isArray(requestsRes.data)) {
+          setSelectedStaffRequests(requestsRes.data);
+        } else {
+          setSelectedStaffRequests([]);
+        }
+      } catch (e) {
+        console.error("Failed to load staff leave counts", e);
+        if (active) {
+          setSelectedStaffBalances([]);
+          setSelectedStaffRequests([]);
+        }
+      } finally {
+        if (active) setSelectedStaffBalancesLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [formData.staff_id, formData.start_date]);
+
+  const selectedStaffBalanceCards = useMemo(() => {
+    const targets = [
+      {
+        label: "Casual Leave",
+        gradient: "linear-gradient(135deg, #2563eb 0%, #06b6d4 100%)",
+      },
+      {
+        label: "Sick Leave",
+        gradient: "linear-gradient(135deg, #16a34a 0%, #84cc16 100%)",
+      },
+      {
+        label: "Pregnancy Leave",
+        gradient: "linear-gradient(135deg, #db2777 0%, #f97316 100%)",
+      },
+    ];
+
+    return targets.map((target) => {
+      const type = leaveTypes.find((leaveType) =>
+        leaveType.name.toLowerCase().includes(target.label.toLowerCase().replace(" leave", "")),
+      );
+      const balance = type
+        ? selectedStaffBalances.find((item) => item.leave_type_id === type.id)
+        : undefined;
+      const matchingRequests = type
+        ? selectedStaffRequests.filter((request) => request.leave_type_id === type.id)
+        : [];
+      const used = matchingRequests
+        .filter((request) => request.status === "approved")
+        .reduce((sum, request) => sum + request.total_days, 0);
+      const pending = matchingRequests
+        .filter((request) => request.status === "pending")
+        .reduce((sum, request) => sum + request.total_days, 0);
+      const total = balance
+        ? balance.total_days + balance.carried_forward
+        : type?.days_per_year ?? 0;
+      const available = Math.max(total - used - pending, 0);
+
+      return {
+        ...target,
+        total,
+        available,
+        used,
+        pending,
+      };
+    });
+  }, [leaveTypes, selectedStaffBalances, selectedStaffRequests]);
 
   const handleCreate = async () => {
     setError(null);
@@ -169,8 +286,23 @@ export default function LeaveTab() {
         end_date: new Date().toISOString().split("T")[0],
         reason: "",
       });
-    } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to create request");
+    } catch (err) {
+      if (err && typeof err === "object" && "response" in err) {
+        const response = (err as { response?: { data?: unknown } }).response;
+        const data = response?.data;
+        if (data && typeof data === "object" && "detail" in data) {
+          const detail = (data as { detail?: unknown }).detail;
+          if (typeof detail === "string") {
+            setError(detail);
+          } else {
+            setError("Failed to create request");
+          }
+        } else {
+          setError("Failed to create request");
+        }
+      } else {
+        setError("Failed to create request");
+      }
     } finally {
       setActionLoading(false);
     }
@@ -190,8 +322,23 @@ export default function LeaveTab() {
         else await rejectLeaveRequest(id, reason);
         loadRequests();
         loadStats();
-    } catch (err: any) {
-        alert(err.response?.data?.detail || "Action failed");
+    } catch (err) {
+      if (err && typeof err === "object" && "response" in err) {
+        const response = (err as { response?: { data?: unknown } }).response;
+        const data = response?.data;
+        if (data && typeof data === "object" && "detail" in data) {
+          const detail = (data as { detail?: unknown }).detail;
+          if (typeof detail === "string") {
+            alert(detail);
+          } else {
+            alert("Action failed");
+          }
+        } else {
+          alert("Action failed");
+        }
+      } else {
+        alert("Action failed");
+      }
     }
   };
 
@@ -423,42 +570,74 @@ export default function LeaveTab() {
 
       {/* Create Dialog - Golden Ratio Split */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}>
-          <DialogContent sx={{ p: 0, display: "flex", height: 500, overflow: "hidden" }}>
+          <DialogContent sx={{ p: 0, display: "flex", height: 560, overflow: "hidden" }}>
               
-              {/* Left Panel: Reason Input (38.2%) */}
+              {/* Left Panel: Selected Staff Balance */}
               <Box sx={{ 
                   width: "38.2%", 
-                  bgcolor: "#f8f9fa",
-                  p: 4,
+                  bgcolor: "#f8fafc",
+                  p: 3,
                   display: "flex",
                   flexDirection: "column",
-                  borderRight: "1px solid #e0e0e0"
+                  borderRight: "1px solid #e0e0e0",
+                  overflowY: "auto"
               }}>
                    <Typography variant="subtitle2" fontWeight={700} color="text.secondary" gutterBottom>
-                      REASON FOR LEAVE
+                      LEAVE BALANCE
                    </Typography>
-                   <TextField 
-                      multiline 
-                      fullWidth 
-                      placeholder="Please calculate and describe the reason for your leave request in detail..."
-                      value={formData.reason}
-                      onChange={(e) => setFormData({...formData, reason: e.target.value})}
-                      variant="standard"
-                      InputProps={{ disableUnderline: true }}
-                      sx={{ 
-                          flex: 1, 
-                          "& .MuiInputBase-root": { 
-                              height: "100%", 
-                              alignItems: "flex-start",
-                              fontSize: "0.95rem",
-                              lineHeight: 1.6
-                          } 
-                    }}
-                   />
+                   <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                      {formData.staff_id
+                        ? "Remaining leave count for the selected employee."
+                        : "Select a staff member to view remaining leave count."}
+                   </Typography>
+
+                   {selectedStaffBalancesLoading ? (
+                      <Box sx={{ py: 4, display: "flex", justifyContent: "center" }}>
+                        <CircularProgress size={28} />
+                      </Box>
+                   ) : (
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        {selectedStaffBalanceCards.map((card) => (
+                          <Box
+                            key={card.label}
+                            sx={{
+                              p: 2,
+                              borderRadius: 3,
+                              color: "white",
+                              background: card.gradient,
+                              boxShadow: "0 10px 24px rgba(15,23,42,0.16)",
+                            }}
+                          >
+                            <Typography variant="caption" sx={{ opacity: 0.85, fontWeight: 700 }}>
+                              {card.label.toUpperCase()}
+                            </Typography>
+                            <Box sx={{ mt: 1, display: "flex", alignItems: "flex-end", gap: 1 }}>
+                              <Typography variant="h4" fontWeight={800}>
+                                {card.available}
+                              </Typography>
+                              <Typography variant="body2" sx={{ pb: 0.5, opacity: 0.85 }}>
+                                left
+                              </Typography>
+                            </Box>
+                            <Box sx={{ mt: 1.5, display: "flex", justifyContent: "space-between" }}>
+                              <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                                Used {card.used}
+                              </Typography>
+                              <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                                Pending {card.pending}
+                              </Typography>
+                              <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                                Total {card.total}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        ))}
+                      </Box>
+                   )}
               </Box>
 
               {/* Right Panel: Structured Data (61.8%) */}
-              <Box sx={{ width: "61.8%", p: 4, bgcolor: "#fff", display: "flex", flexDirection: "column", position: "relative" }}>
+              <Box sx={{ width: "61.8%", p: 4, bgcolor: "#fff", display: "flex", flexDirection: "column", position: "relative", overflowY: "auto" }}>
                   <IconButton onClick={() => setDialogOpen(false)} sx={{ position: "absolute", top: 8, right: 8, color: "text.secondary" }}>
                       <Close />
                   </IconButton>
@@ -501,6 +680,17 @@ export default function LeaveTab() {
                               </MenuItem>
                           ))}
                       </TextField>
+
+                      <TextField
+                          multiline
+                          fullWidth
+                          minRows={4}
+                          label="Reason for Leave"
+                          placeholder="Please describe the reason for your leave request in detail..."
+                          value={formData.reason}
+                          onChange={(e) => setFormData({...formData, reason: e.target.value})}
+                          size="small"
+                      />
 
                       <Box sx={{ display: "flex", gap: 2 }}>
                           <TextField 

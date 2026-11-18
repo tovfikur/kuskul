@@ -15,15 +15,40 @@ function studentLabel(s: Student): string {
   return name;
 }
 
-type Props = {
+type CommonProps = {
   label: string;
-  value: StudentOption | null;
-  onChange: (next: StudentOption | null) => void;
   disabled?: boolean;
+  classId?: string;
+  sectionId?: string;
+  loadWithoutSearch?: boolean;
+  limit?: number;
 };
 
+type SingleProps = CommonProps & {
+  multiple?: false;
+  value: StudentOption | null;
+  onChange: (next: StudentOption | null) => void;
+};
+
+type MultipleProps = CommonProps & {
+  multiple: true;
+  value: StudentOption[];
+  onChange: (next: StudentOption[]) => void;
+};
+
+type Props = SingleProps | MultipleProps;
+
 export function StudentPicker(props: Props) {
-  const { label, value, onChange, disabled } = props;
+  const {
+    label,
+    value,
+    disabled,
+    classId,
+    sectionId,
+    multiple = false,
+    loadWithoutSearch = false,
+    limit = 20,
+  } = props;
 
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,13 +58,23 @@ export function StudentPicker(props: Props) {
 
   useEffect(() => {
     let alive = true;
-    if (!query) {
+    if (disabled) {
+      setOptions([]);
+      return;
+    }
+    const shouldLoad = Boolean(query || loadWithoutSearch || classId || sectionId);
+    if (!shouldLoad) {
       setOptions([]);
       return;
     }
     setLoading(true);
     const t = setTimeout(() => {
-      void getStudents({ search: query, limit: 20 })
+      void getStudents({
+        search: query || undefined,
+        class_id: classId || undefined,
+        section_id: sectionId || undefined,
+        limit,
+      })
         .then((resp) => {
           if (!alive) return;
           setOptions(
@@ -59,13 +94,20 @@ export function StudentPicker(props: Props) {
       alive = false;
       clearTimeout(t);
     };
-  }, [query]);
+  }, [classId, disabled, limit, loadWithoutSearch, query, sectionId]);
 
   return (
     <Autocomplete
+      multiple={multiple}
       options={options}
       value={value}
-      onChange={(_, v) => onChange(v)}
+      onChange={(_, v) => {
+        if (props.multiple) {
+          props.onChange(Array.isArray(v) ? v : []);
+          return;
+        }
+        props.onChange(Array.isArray(v) ? null : v);
+      }}
       inputValue={inputValue}
       onInputChange={(_, v) => setInputValue(v)}
       getOptionLabel={(o) => o.label}

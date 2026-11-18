@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends
 
-from app.api.v1.endpoints import academic_calendar_settings, academic_years, analytics, attendance_staff, attendance_students, audit_logs, auth, backup, batch, certificates, classes, communication_logs, curriculum, discounts, documents, enrollments, events, exam_schedules, exams, online_exams, fee_dues, fee_payments, fee_structures, grades, guardians, health, holidays, import_export, leaves, library_books, library_issues, logistics, marks, messages, notices, notifications, parent_portal, payroll, platform_tenants, reports, results, roles, schools, sections, settings, staff, staff_extended, staff_leave, streams, students, subject_groups, subjects, teacher_assignments, terms, time_slots, timetable, transport_assignments, transport_route_stops, transport_routes, transport_vehicles, users
+from app.api.v1.endpoints import academic_calendar_settings, academic_years, admissions, analytics, attendance_staff, attendance_students, audit_logs, auth, backup, batch, certificates, classes, communication_logs, curriculum, discounts, documents, enrollments, events, exam_schedules, exams, hikvision_attendance, online_exams, fee_dues, fee_payments, fee_structures, grades, guardians, health, holidays, import_export, leaves, library_books, library_issues, logistics, marks, messages, notices, notifications, parent_portal, payroll, platform_tenants, public_admissions, reports, results, roles, schools, sections, settings, staff, staff_extended, staff_leave, streams, students, subject_groups, subjects, teacher_assignments, terms, time_slots, timetable, transport_assignments, transport_route_stops, transport_routes, transport_vehicles, users, public_notices
 from app.api.deps import require_tenant
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(public_notices.router, prefix="/public", tags=["public"])  # Public notices - no auth
+api_router.include_router(public_admissions.router, prefix="/public/admissions", tags=["public-admissions"])
 api_router.include_router(platform_tenants.router, prefix="/platform/tenants", tags=["platform-tenants"])
 
 tenant_router = APIRouter(dependencies=[Depends(require_tenant())])
@@ -22,6 +24,7 @@ tenant_router.include_router(subjects.router, prefix="/subjects", tags=["subject
 tenant_router.include_router(curriculum.router, prefix="/curriculum", tags=["curriculum"])
 tenant_router.include_router(academic_calendar_settings.router, prefix="/academic-calendar", tags=["academic-calendar"])
 tenant_router.include_router(students.router, prefix="/students", tags=["students"])
+tenant_router.include_router(admissions.router, prefix="/admissions", tags=["admissions"])
 tenant_router.include_router(enrollments.router, prefix="/enrollments", tags=["enrollments"])
 tenant_router.include_router(guardians.router, prefix="/guardians", tags=["guardians"])
 tenant_router.include_router(staff_extended.router, prefix="/staff", tags=["staff-extended"])
@@ -31,6 +34,7 @@ tenant_router.include_router(staff.router, prefix="/staff", tags=["staff"])
 tenant_router.include_router(teacher_assignments.router, prefix="/teacher-assignments", tags=["teacher-assignments"])
 tenant_router.include_router(attendance_students.router, prefix="/attendance/students", tags=["attendance-students"])
 tenant_router.include_router(attendance_staff.router, prefix="/attendance/staff", tags=["attendance-staff"])
+tenant_router.include_router(hikvision_attendance.router, prefix="/attendance/hikvision", tags=["hikvision-attendance"])
 tenant_router.include_router(leaves.router, prefix="/leaves", tags=["leaves"])
 tenant_router.include_router(timetable.router, prefix="/timetable", tags=["timetable"])
 tenant_router.include_router(time_slots.router, prefix="/time-slots", tags=["time-slots"])

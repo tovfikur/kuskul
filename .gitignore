@@ -54,3 +54,7 @@ build/
 # Ignore Playwright and Vitest outputs
 playwright-report/
 test-results/
+*.gguf
+
+# Attendance cron process lock
+backend/.attendance-worker.lock

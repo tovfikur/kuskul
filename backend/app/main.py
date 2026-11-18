@@ -129,14 +129,9 @@ def create_app() -> FastAPI:
         ensure_default_admin(db)
         ensure_platform_admin(db)
         
-        # Fix invalid emails ending in .local
-        from sqlalchemy import text
-        db.execute(text("UPDATE users SET email = REPLACE(email, '.local', '.kuskul.com') WHERE email LIKE '%.local'"))
-        
         # Schema patch: Add user_id to staff if missing
         try:
             db.execute(text("ALTER TABLE staff ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)"))
-            # Note: Index creation syntax might vary, keeping it simple or skipping as valid migration is better
         except Exception:
             pass
             
@@ -150,8 +145,8 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_allow_origins,
-        allow_origin_regex=r"http://.*\.(localhost|lvh\.me):\d+" if settings.environment == "development" else None,
+        allow_origins=["*"],
+        allow_origin_regex=None,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

@@ -15,6 +15,8 @@ from app.models.membership import Membership
 from app.models.refresh_token import RefreshToken
 from app.models.role import Role
 from app.models.school import School
+from app.models.staff import Staff
+from app.models.student import Student
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.schemas.tenants import (
@@ -46,15 +48,69 @@ def list_tenants(db: Session = Depends(get_db)) -> list[TenantOut]:
         .group_by(School.tenant_id)
     ).subquery()
 
+    school_counts = (
+        select(
+            School.tenant_id.label("tenant_id"),
+            func.count(School.id).label("school_count"),
+        )
+        .group_by(School.tenant_id)
+        .subquery()
+    )
+    student_counts = (
+        select(
+            Student.tenant_id.label("tenant_id"),
+            func.count(Student.id).label("student_count"),
+        )
+        .group_by(Student.tenant_id)
+        .subquery()
+    )
+    staff_counts = (
+        select(
+            Staff.tenant_id.label("tenant_id"),
+            func.count(Staff.id).label("staff_count"),
+        )
+        .group_by(Staff.tenant_id)
+        .subquery()
+    )
+    user_counts = (
+        select(
+            User.tenant_id.label("tenant_id"),
+            func.count(User.id).label("user_count"),
+        )
+        .group_by(User.tenant_id)
+        .subquery()
+    )
+
     rows = db.execute(
-        select(Tenant, admin_emails.c.admin_email)
+        select(
+            Tenant,
+            admin_emails.c.admin_email,
+            school_counts.c.school_count,
+            student_counts.c.student_count,
+            staff_counts.c.staff_count,
+            user_counts.c.user_count,
+        )
         .outerjoin(admin_emails, admin_emails.c.tenant_id == Tenant.id)
+        .outerjoin(school_counts, school_counts.c.tenant_id == Tenant.id)
+        .outerjoin(student_counts, student_counts.c.tenant_id == Tenant.id)
+        .outerjoin(staff_counts, staff_counts.c.tenant_id == Tenant.id)
+        .outerjoin(user_counts, user_counts.c.tenant_id == Tenant.id)
         .order_by(Tenant.created_at.desc())
     ).all()
 
     out: list[TenantOut] = []
-    for tenant, admin_email in rows:
-        out.append(TenantOut.model_validate(tenant).model_copy(update={"admin_email": admin_email}))
+    for tenant, admin_email, school_count, student_count, staff_count, user_count in rows:
+        out.append(
+            TenantOut.model_validate(tenant).model_copy(
+                update={
+                    "admin_email": admin_email,
+                    "school_count": school_count or 0,
+                    "student_count": student_count or 0,
+                    "staff_count": staff_count or 0,
+                    "user_count": user_count or 0,
+                }
+            )
+        )
     return out
 
 

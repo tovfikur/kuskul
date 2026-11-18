@@ -15,6 +15,19 @@ services:
       timeout: 3s
       retries: 20
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   api:
     build:
       context: ./backend
@@ -27,17 +40,66 @@ services:
       REFRESH_TOKEN_COOKIE_SECURE: "false"
       REFRESH_TOKEN_COOKIE_SAMESITE: lax
       RATE_LIMIT_ENABLED: "false"
+      # AI Configuration
+      REDIS_URL: redis://redis:6379/0
+      AI_MODEL_PATH: /app/models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+      AI_MODEL_PATH_CONTENT: /app/models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+      AI_WRITER_URL: http://ai-writer:8010
+      AI_WRITER_TIMEOUT_SECONDS: "60"
+      AI_MODEL_WARM_LOAD: "false"
+      AI_MAX_TOKENS: "2048"
+      AI_TEMPERATURE: "0.7"
+      AI_BUILDER_ROLE: repair
+      AI_BUILDER_TEMPERATURE: "0.0"
+      AI_JSON_GRAMMAR: "true"
+      AI_REPAIR_ENABLED: "true"
+      AI_HEARTBEAT_SECONDS: "30"
+      AI_TIMEOUT_SECONDS: "10"
+      REDIS_CACHE_TTL: "604800"
+      RATE_LIMIT_AI_GENERATION: "10"
+      PUBLIC_DOMAIN: localhost
     ports:
       - "8000:8000"
     volumes:
       - ./backend/app:/app/app
       - ./backend/alembic:/app/alembic
       - ./backend/alembic.ini:/app/alembic.ini
+      - ./app/models:/app/models  # Mount local models directory
     command: >
       sh -c "python -m alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  ai-writer:
+    image: kuskul-main-api:latest
+    container_name: kuskul-ai-writer
+    environment:
+      AI_MODEL_PATH: /app/models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+      AI_WRITER_CHAT_FORMAT: chatml
+      AI_WRITER_N_CTX: "1024"
+      AI_WRITER_N_THREADS: "1"
+      AI_WRITER_N_BATCH: "64"
+    volumes:
+      - ./backend/app:/app/app
+      - ./app/models:/app/models
+    command: uvicorn app.ai_writer_server:app --host 0.0.0.0 --port 8010 --workers 1
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          memory: 256M
+
 
   web:
     image: node:20
@@ -57,3 +119,5 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
+  ai_models:

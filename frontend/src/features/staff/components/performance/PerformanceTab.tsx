@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Box,
   Paper,
@@ -13,7 +12,7 @@ import {
   Chip,
   Rating,
 } from "@mui/material";
-import { Add, Star } from "@mui/icons-material";
+import { Add } from "@mui/icons-material";
 
 const mockReviews = [
   {

@@ -21,12 +21,21 @@ class TenantMiddleware(BaseHTTPMiddleware):
         request.state.tenant_id = None
         request.state.is_saas_admin = False
 
+        if settings.platform_domain and host == settings.platform_domain.strip():
+            request.state.is_saas_admin = True
+            
+        print(f"DEBUG: host={host} platform_domain={settings.platform_domain} is_saas_admin={request.state.is_saas_admin}")
+
+
+
         subdomain = None
-        if "localhost" in host:
-            if parts[0] != "localhost":
-                subdomain = parts[0]
-        else:
+        # Generic subdomain extraction from host header
+        # Ignore IP addresses and localhost without subdomains
+        if host != "localhost" and not host.replace(".", "").isdigit():
             if len(parts) > 2:
+                subdomain = parts[0]
+            # Special case for localhost subdomains (sub.localhost)
+            elif host.endswith("localhost") and len(parts) >= 2 and parts[0] != "localhost":
                 subdomain = parts[0]
             
         if subdomain:
@@ -86,26 +95,26 @@ class TenantMiddleware(BaseHTTPMiddleware):
              origin = request.headers.get("origin")
              if origin:
                  origin_host = origin.split("://")[-1].split(":")[0]
-                 origin_parts = origin_host.split(".")
-                 origin_subdomain = None
                  
-                 if "localhost" in origin_host:
-                    if origin_parts[0] != "localhost":
-                        origin_subdomain = origin_parts[0]
-                 elif len(origin_parts) > 2:
-                    origin_subdomain = origin_parts[0]
-
-                 if origin_subdomain and origin_subdomain != "admin":
-                     db = SessionLocal()
-                     try:
-                         tenant = db.query(Tenant).filter(Tenant.subdomain == origin_subdomain).first()
-                         if tenant:
-                             if tenant.status != "active":
-                                 return JSONResponse(status_code=403, content={"detail": "Tenant inactive"})
-                             request.state.tenant = tenant
-                             request.state.tenant_id = tenant.id
-                     finally:
-                         db.close()
+                 # Generic subdomain extraction
+                 # If it looks like IP address or localhost (no dots), skip
+                 if origin_host != "localhost" and not origin_host.replace(".", "").isdigit():
+                     parts = origin_host.split(".")
+                     # For valid subdomains, we expect at least 3 parts (sub.domain.tld)
+                     # or explicit localhost handling if needed, but we rely on generic
+                     if len(parts) > 2:
+                         origin_subdomain = parts[0]
+                         if origin_subdomain and origin_subdomain != "admin":
+                             db = SessionLocal()
+                             try:
+                                 tenant = db.query(Tenant).filter(Tenant.subdomain == origin_subdomain).first()
+                                 if tenant:
+                                     if tenant.status != "active":
+                                         return JSONResponse(status_code=403, content={"detail": "Tenant inactive"})
+                                     request.state.tenant = tenant
+                                     request.state.tenant_id = tenant.id
+                             finally:
+                                 db.close()
 
         if not request.state.tenant_id and settings.environment == "development":
             qp = request.query_params.get("tenant")

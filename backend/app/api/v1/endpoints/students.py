@@ -3,13 +3,16 @@ import csv
 import io
 import html
 import json
+import re
+import zipfile
+import xml.etree.ElementTree as ET
 import segno
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select, delete
+from sqlalchemy import func, select, delete, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_active_school_id, get_current_user, require_permission, get_current_tenant_id
@@ -29,6 +32,7 @@ from app.models.teacher_assignment import StudentAttendance
 from app.models.timetable_entry import TimetableEntry
 from app.models.time_slot import TimeSlot
 from app.models.result import Result
+from app.models.mark import Mark
 from app.models.exam import Exam
 from app.models.grade import Grade
 from app.models.discipline_record import DisciplineRecord
@@ -39,16 +43,374 @@ from app.core.security import hash_password
 from app.core.seed import ensure_default_roles
 from app.schemas.batch import BatchPromoteStudentsRequest
 from app.schemas.documents import DocumentOut
-from app.schemas.guardians import LinkGuardianRequest, GuardianOut, StudentGuardianResponse
+from app.schemas.guardians import LinkGuardianRequest, StudentGuardianResponse
 from app.schemas.attendance import StudentAttendanceOut
 from app.schemas.students import StudentCreate, StudentOut, StudentUpdate
 from app.schemas.students_batch import StudentsBatchRequest
 
 router = APIRouter(dependencies=[Depends(require_permission("students:read"))])
 
+STUDENT_IMPORT_COLUMNS = [
+    "first_name",
+    "full_name_bc",
+    "admission_no",
+    "roll_number",
+    "class_id",
+    "section_id",
+    "admission_date",
+    "admission_status",
+    "status",
+    "guardianForm.full_name",
+    "guardianForm.phone",
+]
+
+_IMPORT_HEADER_ALIASES = {
+    "guardianform.full_name": "guardianForm.full_name",
+    "guardian_full_name": "guardianForm.full_name",
+    "guardianform.phone": "guardianForm.phone",
+    "guardian_phone": "guardianForm.phone",
+}
+_CLASS_WORD_NUMBERS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+}
+
+
+def _xml_local(tag: str) -> str:
+    return tag.split("}", 1)[-1]
+
+
+def _xlsx_column_index(cell_ref: str) -> int:
+    letters = "".join(ch for ch in cell_ref if ch.isalpha())
+    n = 0
+    for ch in letters.upper():
+        n = n * 26 + (ord(ch) - 64)
+    return max(n - 1, 0)
+
+
+def _numeric_cell_text(raw: str) -> str:
+    text = raw.strip()
+    if not text:
+        return ""
+    try:
+        number = float(text)
+    except ValueError:
+        return text
+    if number.is_integer():
+        return str(int(number))
+    return text
+
+
+def _xlsx_shared_strings(archive: zipfile.ZipFile) -> list[str]:
+    if "xl/sharedStrings.xml" not in archive.namelist():
+        return []
+    root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+    values: list[str] = []
+    for si in root:
+        if _xml_local(si.tag) != "si":
+            continue
+        values.append("".join((node.text or "") for node in si.iter() if _xml_local(node.tag) == "t"))
+    return values
+
+
+def _xlsx_cell_text(cell: ET.Element, shared_strings: list[str]) -> str:
+    cell_type = cell.attrib.get("t")
+    value_el = next((child for child in cell if _xml_local(child.tag) == "v"), None)
+    inline = next((child for child in cell if _xml_local(child.tag) == "is"), None)
+    if cell_type == "s" and value_el is not None and (value_el.text or "").strip():
+        idx = int(value_el.text)
+        if 0 <= idx < len(shared_strings):
+            return shared_strings[idx]
+        return ""
+    if cell_type == "inlineStr" and inline is not None:
+        return "".join((node.text or "") for node in inline.iter() if _xml_local(node.tag) == "t")
+    if value_el is None or value_el.text is None:
+        return ""
+    if cell_type == "b":
+        return "true" if value_el.text.strip() in {"1", "true"} else "false"
+    if cell_type in {None, "n"}:
+        return _numeric_cell_text(value_el.text)
+    return value_el.text.strip()
+
+
+def _xlsx_rows(payload: bytes) -> list[dict[str, str]]:
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        shared_strings = _xlsx_shared_strings(archive)
+        sheet_path = "xl/worksheets/sheet1.xml"
+        workbook = ET.fromstring(archive.read("xl/workbook.xml"))
+        first_sheet = next((el for el in workbook.iter() if _xml_local(el.tag) == "sheet"), None)
+        if first_sheet is not None:
+            rel_id = first_sheet.attrib.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
+            rels = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+            for rel in rels:
+                if rel.attrib.get("Id") == rel_id:
+                    target = rel.attrib.get("Target", "worksheets/sheet1.xml").lstrip("/")
+                    sheet_path = target if target.startswith("xl/") else f"xl/{target}"
+                    break
+        sheet = ET.fromstring(archive.read(sheet_path))
+        sheet_data = next((el for el in sheet.iter() if _xml_local(el.tag) == "sheetData"), None)
+        if sheet_data is None:
+            return []
+        grid: list[list[str]] = []
+        for row in sheet_data:
+            if _xml_local(row.tag) != "row":
+                continue
+            cells: dict[int, str] = {}
+            max_idx = -1
+            for cell in row:
+                if _xml_local(cell.tag) != "c":
+                    continue
+                idx = _xlsx_column_index(cell.attrib.get("r", "A1"))
+                cells[idx] = _xlsx_cell_text(cell, shared_strings)
+                max_idx = max(max_idx, idx)
+            grid.append([cells.get(i, "") for i in range(max_idx + 1)] if max_idx >= 0 else [])
+    if not grid:
+        return []
+    headers = [_normalize_import_header(value) for value in grid[0]]
+    rows: list[dict[str, str]] = []
+    for values in grid[1:]:
+        if not any(str(value).strip() for value in values):
+            continue
+        row = {headers[i]: (values[i] if i < len(values) else "") for i in range(len(headers)) if headers[i]}
+        rows.append(row)
+    return rows
+
+
+def _normalize_import_header(value: str) -> str:
+    key = (value or "").strip()
+    return _IMPORT_HEADER_ALIASES.get(key.lower().replace(" ", "_")) or key
+
+
+def _read_import_rows(file: UploadFile) -> list[dict[str, str]]:
+    payload = file.file.read()
+    filename = (file.filename or "").lower()
+    if filename.endswith(".xlsx") or payload.startswith(b"PK"):
+        try:
+            return _xlsx_rows(payload)
+        except Exception as exc:
+            raise problem(
+                status_code=400,
+                title="Bad Request",
+                detail="Could not read the Excel file. Download the import template and try again.",
+            ) from exc
+    try:
+        raw = payload.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise problem(
+            status_code=400,
+            title="Bad Request",
+            detail="Upload the Excel template (.xlsx) or a UTF-8 CSV file.",
+        ) from exc
+    reader = csv.DictReader(io.StringIO(raw))
+    rows: list[dict[str, str]] = []
+    for item in reader:
+        row = {_normalize_import_header(str(key or "")): "" if value is None else str(value) for key, value in item.items()}
+        if any(value.strip() for value in row.values()):
+            rows.append(row)
+    return rows
+
+
+def _row_value(row: dict[str, str], *keys: str) -> str:
+    lowered = {key.lower(): value for key, value in row.items()}
+    for key in keys:
+        value = row.get(key)
+        if value is None:
+            value = lowered.get(key.lower())
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _parse_import_date(value: str) -> Optional[date]:
+    text = (value or "").strip()
+    if not text:
+        return None
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        return date.fromisoformat(text)
+    try:
+        serial = float(text)
+    except ValueError:
+        serial = None
+    if serial is not None and 20000 <= serial <= 80000:
+        return date(1899, 12, 30) + timedelta(days=int(serial))
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _import_phone(value: str) -> Optional[str]:
+    digits = re.sub(r"\D", "", value or "")
+    if not digits:
+        return None
+    if len(digits) == 10 and digits.startswith("1"):
+        digits = f"0{digits}"
+    return digits
+
+
+def _class_match_keys(name: str, numeric_value: Optional[int] = None) -> set[str]:
+    raw = re.sub(r"\s+", " ", (name or "").strip().lower())
+    keys = {raw}
+    stripped = re.sub(r"^(class|grade|std|standard)\s+", "", raw).strip()
+    if stripped:
+        keys.add(stripped)
+    digits = re.findall(r"\d+", raw)
+    if digits:
+        keys.add(digits[0])
+        keys.add(f"class {digits[0]}")
+    word_number = _CLASS_WORD_NUMBERS.get(stripped)
+    if word_number is not None:
+        keys.add(str(word_number))
+        keys.add(f"class {word_number}")
+    if numeric_value is not None:
+        keys.add(str(numeric_value))
+        keys.add(f"class {numeric_value}")
+    return {key for key in keys if key}
+
+
+def _resolve_import_class(classes: list[SchoolClass], value: str) -> Optional[SchoolClass]:
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        class_id = uuid.UUID(text)
+    except ValueError:
+        class_id = None
+    if class_id:
+        return next((item for item in classes if item.id == class_id), None)
+    wanted = _class_match_keys(text)
+    matches = [item for item in classes if wanted & _class_match_keys(item.name, item.numeric_value)]
+    if not matches:
+        return None
+    active = [item for item in matches if item.is_active]
+    return (active or matches)[0]
+
+
+def _resolve_import_section(sections: list[Section], class_id: uuid.UUID, value: str) -> Optional[Section]:
+    text = value.strip()
+    class_sections = [item for item in sections if item.class_id == class_id]
+    if not text:
+        return None
+    try:
+        section_id = uuid.UUID(text)
+    except ValueError:
+        section_id = None
+    if section_id:
+        return next((item for item in class_sections if item.id == section_id), None)
+    wanted = re.sub(r"^(section)\s+", "", re.sub(r"\s+", " ", text.lower())).strip()
+    matches = [
+        item
+        for item in class_sections
+        if re.sub(r"^(section)\s+", "", item.name.strip().lower()) == wanted
+    ]
+    if not matches:
+        return None
+    active = [item for item in matches if item.is_active]
+    return (active or matches)[0]
+
+
+def _roll_number_taken(
+    db: Session,
+    *,
+    school_id: uuid.UUID,
+    academic_year_id: uuid.UUID,
+    class_id: uuid.UUID,
+    section_id: Optional[uuid.UUID],
+    roll_number: str,
+) -> bool:
+    query = (
+        select(Enrollment.id)
+        .join(Student, Student.id == Enrollment.student_id)
+        .where(
+            Student.school_id == school_id,
+            Enrollment.academic_year_id == academic_year_id,
+            Enrollment.class_id == class_id,
+            Enrollment.roll_number == roll_number,
+        )
+    )
+    if section_id is None:
+        query = query.where(Enrollment.section_id.is_(None))
+    else:
+        query = query.where(Enrollment.section_id == section_id)
+    return db.scalar(query) is not None
+
 
 def _out(s: Student) -> StudentOut:
     return StudentOut.model_validate(s)
+
+
+def _xlsx_column_name(index: int) -> str:
+    name = ""
+    n = index + 1
+    while n > 0:
+        n, remainder = divmod(n - 1, 26)
+        name = chr(65 + remainder) + name
+    return name
+
+
+def _xlsx_bytes(rows: list[list[str]], sheet_name: str = "Students") -> bytes:
+    def cell_xml(row_index: int, column_index: int, value: str) -> str:
+        text = html.escape(value, quote=True)
+        return (
+            f'<c r="{_xlsx_column_name(column_index)}{row_index}" t="inlineStr">'
+            f"<is><t>{text}</t></is></c>"
+        )
+
+    sheet_rows = "".join(
+        f'<row r="{row_index}">{"".join(cell_xml(row_index, column_index, str(cell)) for column_index, cell in enumerate(row))}</row>'
+        for row_index, row in enumerate(rows, start=1)
+    )
+    files = {
+        "[Content_Types].xml": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+            '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+            "</Types>"
+        ),
+        "_rels/.rels": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+            "</Relationships>"
+        ),
+        "xl/workbook.xml": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            f'<sheets><sheet name="{html.escape(sheet_name)}" sheetId="1" r:id="rId1"/></sheets></workbook>'
+        ),
+        "xl/_rels/workbook.xml.rels": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+            "</Relationships>"
+        ),
+        "xl/worksheets/sheet1.xml": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            f"<sheetData>{sheet_rows}</sheetData></worksheet>"
+        ),
+    }
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in files.items():
+            archive.writestr(name, content.encode("utf-8"))
+    return buffer.getvalue()
 
 
 def _get_student_settings(db: Session, school_id: uuid.UUID) -> dict:
@@ -65,6 +427,38 @@ def _get_student_settings(db: Session, school_id: uuid.UUID) -> dict:
         return json.loads(setting.value)
     except (json.JSONDecodeError, ValueError):
         return {}
+
+
+def _ensure_user_tenant(user: User, tenant_id: Optional[uuid.UUID]) -> None:
+    if tenant_id is None:
+        return
+    if user.tenant_id is None:
+        user.tenant_id = tenant_id
+        user.updated_at = datetime.now(timezone.utc)
+    elif user.tenant_id != tenant_id:
+        raise problem(status_code=409, title="Conflict", detail="User belongs to another tenant")
+
+
+def _ensure_membership(db: Session, user_id: uuid.UUID, school_id: uuid.UUID, role_id: Optional[uuid.UUID]) -> None:
+    existing = db.scalar(
+        select(Membership).where(
+            Membership.user_id == user_id,
+            Membership.school_id == school_id,
+            Membership.is_active.is_(True),
+        )
+    )
+    if existing:
+        return
+    now = datetime.now(timezone.utc)
+    db.add(
+        Membership(
+            user_id=user_id,
+            school_id=school_id,
+            role_id=role_id,
+            is_active=True,
+            created_at=now,
+        )
+    )
 
 
 def _generate_admission_no(db: Session, school_id: uuid.UUID) -> Optional[str]:
@@ -121,11 +515,30 @@ def list_students(
     if tenant_id:
         base = base.where(Student.tenant_id == tenant_id)
     if search:
-        base = base.where(
-            (Student.first_name.ilike(f"%{search}%"))
-            | (Student.last_name.ilike(f"%{search}%"))
-            | (Student.admission_no.ilike(f"%{search}%"))
+        current_year_id = db.scalar(
+            select(AcademicYear.id)
+            .where(AcademicYear.school_id == school_id, AcademicYear.is_current.is_(True))
+            .limit(1)
         )
+        if current_year_id:
+            base = base.outerjoin(
+                Enrollment,
+                (Enrollment.student_id == Student.id)
+                & (Enrollment.academic_year_id == current_year_id)
+                & (Enrollment.status == "active"),
+            )
+            base = base.where(
+                (Student.first_name.ilike(f"%{search}%"))
+                | (Student.last_name.ilike(f"%{search}%"))
+                | (Student.admission_no.ilike(f"%{search}%"))
+                | (Enrollment.roll_number.ilike(f"%{search}%"))
+            )
+        else:
+            base = base.where(
+                (Student.first_name.ilike(f"%{search}%"))
+                | (Student.last_name.ilike(f"%{search}%"))
+                | (Student.admission_no.ilike(f"%{search}%"))
+            )
     if status:
         base = base.where(Student.status == status)
     if gender:
@@ -150,6 +563,90 @@ def list_students(
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
     rows = db.execute(base.order_by(Student.first_name.asc()).offset(offset).limit(limit)).scalars().all()
     return {"items": [_out(s).model_dump() for s in rows], "total": int(total), "page": page, "limit": limit}
+
+
+@router.get("/export")
+def export_students(
+    db: Session = Depends(get_db),
+    school_id=Depends(get_active_school_id),
+) -> StreamingResponse:
+    students = db.execute(
+        select(Student).where(Student.school_id == school_id).order_by(Student.created_at.asc())
+    ).scalars().all()
+    year_id = db.scalar(
+        select(AcademicYear.id).where(AcademicYear.school_id == school_id, AcademicYear.is_current.is_(True)).limit(1)
+    )
+    enrollment_by_student: dict[uuid.UUID, Enrollment] = {}
+    class_names: dict[uuid.UUID, str] = {}
+    section_names: dict[uuid.UUID, str] = {}
+    if year_id and students:
+        enrollments = db.execute(
+            select(Enrollment).where(
+                Enrollment.academic_year_id == year_id,
+                Enrollment.student_id.in_([student.id for student in students]),
+                Enrollment.status == "active",
+            )
+        ).scalars().all()
+        enrollment_by_student = {enrollment.student_id: enrollment for enrollment in enrollments}
+        class_ids = {enrollment.class_id for enrollment in enrollments if enrollment.class_id}
+        section_ids = {enrollment.section_id for enrollment in enrollments if enrollment.section_id}
+        if class_ids:
+            class_names = {
+                item.id: item.name
+                for item in db.execute(select(SchoolClass).where(SchoolClass.id.in_(class_ids))).scalars().all()
+            }
+        if section_ids:
+            section_names = {
+                item.id: item.name
+                for item in db.execute(select(Section).where(Section.id.in_(section_ids))).scalars().all()
+            }
+
+    table: list[list[str]] = [
+        [
+            "First Name",
+            "Last Name",
+            "Admission No",
+            "Roll Number",
+            "Class",
+            "Section",
+            "Gender",
+            "Date of Birth",
+            "Status",
+        ]
+    ]
+    for student in students:
+        enrollment = enrollment_by_student.get(student.id)
+        table.append(
+            [
+                student.first_name,
+                student.last_name or "",
+                student.admission_no or "",
+                enrollment.roll_number if enrollment and enrollment.roll_number else "",
+                class_names.get(enrollment.class_id, "") if enrollment else "",
+                section_names.get(enrollment.section_id, "") if enrollment and enrollment.section_id else "",
+                student.gender or "",
+                student.date_of_birth.isoformat() if student.date_of_birth else "",
+                student.status,
+            ]
+        )
+    payload = _xlsx_bytes(table)
+    headers = {"Content-Disposition": 'attachment; filename="students.xlsx"'}
+    return StreamingResponse(
+        iter([payload]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
+
+
+@router.get("/import-template")
+def download_student_import_template() -> StreamingResponse:
+    payload = _xlsx_bytes([STUDENT_IMPORT_COLUMNS], sheet_name="Import")
+    headers = {"Content-Disposition": 'attachment; filename="student_import_template.xlsx"'}
+    return StreamingResponse(
+        iter([payload]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
 
 
 @router.get("/{student_id}", response_model=StudentOut)
@@ -282,17 +779,22 @@ def create_student(payload: StudentCreate, db: Session = Depends(get_db), school
     if s.portal_access_student and not s.user_id:
         ensure_default_roles(db)
         student_role = db.scalar(select(Role).where(Role.name == "student"))
+        school = db.get(School, school_id)
+        tenant_id = school.tenant_id if school else None
         
         # Determine username/email
         base_username = s.portal_username or s.admission_no or f"stu{s.id.hex[:6]}"
         # User requires unique email. We'll forge one.
-        email = f"{base_username}@student.kuskul.com"
+        email = f"{base_username}@student.example.com"
         
         existing_user = db.scalar(select(User).where(User.email == email))
         if existing_user:
+            _ensure_user_tenant(existing_user, tenant_id)
+            _ensure_membership(db, existing_user.id, school_id, student_role.id if student_role else None)
             s.user_id = existing_user.id
         else:
             new_user = User(
+                tenant_id=tenant_id,
                 email=email,
                 full_name=f"{s.first_name} {s.last_name or ''}".strip(),
                 password_hash=hash_password("password123"),
@@ -304,8 +806,7 @@ def create_student(payload: StudentCreate, db: Session = Depends(get_db), school
             db.flush()
             s.user_id = new_user.id
             
-            if student_role:
-                db.add(Membership(user_id=new_user.id, school_id=school_id, role_id=student_role.id, is_active=True, created_at=now))
+            _ensure_membership(db, new_user.id, school_id, student_role.id if student_role else None)
         
         db.commit()
         db.refresh(s)
@@ -327,18 +828,23 @@ def update_student(
     if s.portal_access_student and not s.user_id:
         ensure_default_roles(db)
         student_role = db.scalar(select(Role).where(Role.name == "student"))
+        school = db.get(School, school_id)
+        tenant_id = school.tenant_id if school else None
         
         # Determine username/email
         base_username = s.portal_username or s.admission_no or f"stu{s.id.hex[:6]}"
-        email = f"{base_username}@student.kuskul.com"
+        email = f"{base_username}@student.example.com"
         
         existing_user = db.scalar(select(User).where(User.email == email))
         now = datetime.now(timezone.utc)
         
         if existing_user:
+            _ensure_user_tenant(existing_user, tenant_id)
+            _ensure_membership(db, existing_user.id, school_id, student_role.id if student_role else None)
             s.user_id = existing_user.id
         else:
             new_user = User(
+                tenant_id=tenant_id,
                 email=email,
                 full_name=f"{s.first_name} {s.last_name or ''}".strip(),
                 password_hash=hash_password("password123"),
@@ -350,42 +856,55 @@ def update_student(
             db.flush()
             s.user_id = new_user.id
             
-            if student_role:
-                db.add(Membership(user_id=new_user.id, school_id=school_id, role_id=student_role.id, is_active=True, created_at=now))
+            _ensure_membership(db, new_user.id, school_id, student_role.id if student_role else None)
 
     # Auto-create Users for Guardians if parent portal access is enabled
     if s.portal_access_parent:
         ensure_default_roles(db)
         guardian_role = db.scalar(select(Role).where(Role.name == "parent"))
+        school = db.get(School, school_id)
+        tenant_id = school.tenant_id if school else None
         
         # Find all linked guardians
         from app.models.student_guardian import StudentGuardian
         from app.models.guardian import Guardian
         linked_guardians = db.execute(
-            select(Guardian)
+            select(Guardian, StudentGuardian.is_primary)
             .join(StudentGuardian, StudentGuardian.guardian_id == Guardian.id)
             .where(StudentGuardian.student_id == student_id)
-        ).scalars().all()
-        
-        for g in linked_guardians:
+        ).all()
+
+        primary_email_used = False
+        for g, is_primary in linked_guardians:
             if not g.user_id:
                 # Create User for Guardian
                 email = g.email
                 if not email:
-                     if g.phone:
+                     if s.admission_no and is_primary and not primary_email_used:
+                         email = f"{s.admission_no}parent@guardian.example.com"
+                         primary_email_used = True
+                     elif g.phone:
                          import re
                          clean_phone = re.sub(r'[^0-9]', '', g.phone)
-                         email = f"{clean_phone}@guardian.kuskul.com"
+                         email = f"{clean_phone}@guardian.example.com"
                      else:
-                         email = f"guardian{g.id.hex[:6]}@guardian.kuskul.com"
+                         email = f"guardian{g.id.hex[:6]}@guardian.example.com"
                          
                 existing_g_user = db.scalar(select(User).where(User.email == email))
                 now = datetime.now(timezone.utc)
                 
                 if existing_g_user:
+                    _ensure_user_tenant(existing_g_user, tenant_id)
+                    _ensure_membership(
+                        db,
+                        existing_g_user.id,
+                        school_id,
+                        guardian_role.id if guardian_role else None,
+                    )
                     g.user_id = existing_g_user.id
                 else:
                     new_g_user = User(
+                        tenant_id=tenant_id,
                         email=email,
                         full_name=g.full_name,
                         phone=g.phone,
@@ -398,9 +917,22 @@ def update_student(
                     db.add(new_g_user)
                     db.flush()
                     g.user_id = new_g_user.id
-                    
-                    if guardian_role:
-                        db.add(Membership(user_id=new_g_user.id, school_id=school_id, role_id=guardian_role.id, is_active=True, created_at=now))
+                    _ensure_membership(
+                        db,
+                        new_g_user.id,
+                        school_id,
+                        guardian_role.id if guardian_role else None,
+                    )
+            else:
+                g_user = db.get(User, g.user_id)
+                if g_user:
+                    _ensure_user_tenant(g_user, tenant_id)
+                    _ensure_membership(
+                        db,
+                        g_user.id,
+                        school_id,
+                        guardian_role.id if guardian_role else None,
+                    )
         
         db.flush()
 
@@ -425,35 +957,109 @@ def delete_student(student_id: uuid.UUID, db: Session = Depends(get_db), school_
     s = db.get(Student, student_id)
     if not s or s.school_id != school_id:
         raise not_found("Student not found")
-    
-    # Cascade delete related records
-    db.execute(delete(Enrollment).where(Enrollment.student_id == student_id))
-    from app.models.student_guardian import StudentGuardian
-    db.execute(delete(StudentGuardian).where(StudentGuardian.student_id == student_id))
-    from app.models.teacher_assignment import StudentAttendance
+
+    # 1. Attendance records (manual + Hikvision)
+    # Delete Hikvision events first because they can reference student_attendance rows.
+    try:
+        from app.models.hikvision_attendance import HikvisionAttendanceEvent, HikvisionStudentCredential
+        db.execute(delete(HikvisionAttendanceEvent).where(HikvisionAttendanceEvent.student_id == student_id))
+        db.execute(delete(HikvisionStudentCredential).where(HikvisionStudentCredential.student_id == student_id))
+    except (ImportError, Exception):
+        pass
     db.execute(delete(StudentAttendance).where(StudentAttendance.student_id == student_id))
-    from app.models.document import Document
-    db.execute(delete(Document).where(Document.entity_id == str(student_id), Document.entity_type == "student"))
 
-    from app.models.mark import Mark
+    # 2. Attendance excuses
+    try:
+        from app.models.attendance_excuse import AttendanceExcuse
+        db.execute(delete(AttendanceExcuse).where(AttendanceExcuse.student_id == student_id))
+    except (ImportError, Exception):
+        pass
+
+    # 3. Discipline records
+    db.execute(delete(DisciplineRecord).where(DisciplineRecord.student_id == student_id))
+
+    # 4. Marks and results
     db.execute(delete(Mark).where(Mark.student_id == student_id))
-
-    # Try to delete other common relations if they exist
     try:
         from app.models.result import Result
         db.execute(delete(Result).where(Result.student_id == student_id))
-    except ImportError:
+    except (ImportError, Exception):
         pass
 
+    # 5. Online exam attempts and answers
+    try:
+        from app.models.online_exam import OnlineExamAttempt, OnlineExamAnswer, OnlineExamProctorEvent
+        attempt_ids = db.scalars(
+            select(OnlineExamAttempt.id).where(OnlineExamAttempt.student_id == student_id)
+        ).all()
+        if attempt_ids:
+            db.execute(delete(OnlineExamAnswer).where(OnlineExamAnswer.attempt_id.in_(attempt_ids)))
+            db.execute(delete(OnlineExamProctorEvent).where(OnlineExamProctorEvent.attempt_id.in_(attempt_ids)))
+        db.execute(delete(OnlineExamAttempt).where(OnlineExamAttempt.student_id == student_id))
+    except (ImportError, Exception):
+        pass
+
+    # 6. Fee dues and payments
     try:
         from app.models.fee_payment import FeePayment
         from app.models.fee_due import FeeDue
         db.execute(delete(FeePayment).where(FeePayment.student_id == student_id))
         db.execute(delete(FeeDue).where(FeeDue.student_id == student_id))
-    except ImportError:
+    except (ImportError, Exception):
         pass
-    
-    # Finally delete student
+
+    # 7. Student discounts
+    try:
+        from app.models.student_discount import StudentDiscount
+        db.execute(delete(StudentDiscount).where(StudentDiscount.student_id == student_id))
+    except (ImportError, Exception):
+        pass
+
+    # 8. Certificates
+    try:
+        from app.models.certificate import Certificate
+        db.execute(delete(Certificate).where(Certificate.student_id == student_id))
+    except (ImportError, Exception):
+        pass
+
+    # 9. Transport assignments
+    try:
+        from app.models.transport_assignment import StudentTransportAssignment
+        db.execute(delete(StudentTransportAssignment).where(StudentTransportAssignment.student_id == student_id))
+    except (ImportError, Exception):
+        pass
+
+    # 10. Appointment requests
+    try:
+        from app.models.appointment_request import AppointmentRequest
+        db.execute(delete(AppointmentRequest).where(AppointmentRequest.student_id == student_id))
+    except (ImportError, Exception):
+        pass
+
+    # 11. Leave requests linked to student
+    try:
+        from app.models.leave import Leave
+        db.execute(delete(Leave).where(Leave.student_id == student_id))
+    except (ImportError, Exception):
+        pass
+
+    # 12. Documents
+    from app.models.document import Document
+    db.execute(
+        delete(Document).where(
+            Document.entity_id == str(student_id),
+            or_(Document.entity_type == "student", Document.entity_type.like("student:%")),
+        )
+    )
+
+    # 13. Guardian links (not the guardian records themselves)
+    from app.models.student_guardian import StudentGuardian
+    db.execute(delete(StudentGuardian).where(StudentGuardian.student_id == student_id))
+
+    # 14. Enrollments
+    db.execute(delete(Enrollment).where(Enrollment.student_id == student_id))
+
+    # 15. Student record
     db.delete(s)
     db.commit()
     return {"status": "ok"}
@@ -526,6 +1132,7 @@ def get_student_attendance(
             class_id=r.class_id,
             section_id=r.section_id,
             status=r.status,
+            is_late=r.is_late,
         )
         for r in rows
     ]
@@ -697,37 +1304,6 @@ def get_student_fee_status() -> None:
     raise not_implemented("Fee status is not implemented yet")
 
 
-@router.get("/{student_id}/guardians")
-def get_student_guardians(
-    student_id: uuid.UUID, db: Session = Depends(get_db), school_id=Depends(get_active_school_id)
-) -> list[GuardianOut]:
-    s = db.get(Student, student_id)
-    if not s or s.school_id != school_id:
-        raise not_found("Student not found")
-    guardians = db.execute(
-        select(Guardian)
-        .join(StudentGuardian, StudentGuardian.guardian_id == Guardian.id)
-        .where(StudentGuardian.student_id == student_id, Guardian.school_id == school_id)
-        .order_by(Guardian.full_name.asc())
-    ).scalars().all()
-    return [
-        GuardianOut(
-            id=g.id,
-            school_id=g.school_id,
-            full_name=g.full_name,
-            phone=g.phone,
-            email=g.email,
-            occupation=g.occupation,
-            id_number=g.id_number,
-            emergency_contact_name=g.emergency_contact_name,
-            emergency_contact_phone=g.emergency_contact_phone,
-            address=g.address,
-            photo_url=g.photo_url,
-        )
-        for g in guardians
-    ]
-
-
 @router.post("/{student_id}/guardians", dependencies=[Depends(require_permission("students:write"))])
 def add_student_guardian(
     student_id: uuid.UUID,
@@ -744,42 +1320,71 @@ def add_student_guardian(
     link = db.get(StudentGuardian, {"student_id": student_id, "guardian_id": payload.guardian_id})
     if not link:
         db.add(StudentGuardian(student_id=student_id, guardian_id=payload.guardian_id, relation=payload.relation, is_primary=payload.is_primary))
+    else:
+        link.relation = payload.relation
+        link.is_primary = payload.is_primary
     
     # Auto-create user for guardian if student has parent portal enabled
-    if s.portal_access_parent and not g.user_id:
+    if s.portal_access_parent:
         ensure_default_roles(db)
         guardian_role = db.scalar(select(Role).where(Role.name == "parent"))
-        
-        email = g.email
-        if not email:
-             if g.phone:
-                 import re
-                 clean_phone = re.sub(r'[^0-9]', '', g.phone)
-                 email = f"{clean_phone}@guardian.kuskul.com"
-             else:
-                 email = f"guardian{g.id.hex[:6]}@guardian.kuskul.com"
-        
-        now = datetime.now(timezone.utc)
-        existing_user = db.scalar(select(User).where(User.email == email))
-        if existing_user:
-             g.user_id = existing_user.id
+        school = db.get(School, school_id)
+        tenant_id = school.tenant_id if school else None
+
+        if not g.user_id:
+            email = g.email
+            if not email:
+                if s.admission_no and payload.is_primary:
+                    email = f"{s.admission_no}parent@guardian.example.com"
+                elif g.phone:
+                    import re
+                    clean_phone = re.sub(r'[^0-9]', '', g.phone)
+                    email = f"{clean_phone}@guardian.example.com"
+                else:
+                    email = f"guardian{g.id.hex[:6]}@guardian.example.com"
+
+            now = datetime.now(timezone.utc)
+            existing_user = db.scalar(select(User).where(User.email == email))
+            if existing_user:
+                _ensure_user_tenant(existing_user, tenant_id)
+                _ensure_membership(
+                    db,
+                    existing_user.id,
+                    school_id,
+                    guardian_role.id if guardian_role else None,
+                )
+                g.user_id = existing_user.id
+            else:
+                new_user = User(
+                    tenant_id=tenant_id,
+                    email=email,
+                    full_name=g.full_name,
+                    phone=g.phone,
+                    photo_url=g.photo_url,
+                    password_hash=hash_password("password123"),
+                    is_active=True,
+                    created_at=now,
+                    updated_at=now,
+                )
+                db.add(new_user)
+                db.flush()
+                g.user_id = new_user.id
+                _ensure_membership(
+                    db,
+                    new_user.id,
+                    school_id,
+                    guardian_role.id if guardian_role else None,
+                )
         else:
-             new_user = User(
-                email=email,
-                full_name=g.full_name,
-                phone=g.phone,
-                photo_url=g.photo_url,
-                password_hash=hash_password("password123"),
-                is_active=True,
-                created_at=now,
-                updated_at=now
-             )
-             db.add(new_user)
-             db.flush()
-             g.user_id = new_user.id
-             
-             if guardian_role:
-                 db.add(Membership(user_id=new_user.id, school_id=school_id, role_id=guardian_role.id, is_active=True, created_at=now))
+            g_user = db.get(User, g.user_id)
+            if g_user:
+                _ensure_user_tenant(g_user, tenant_id)
+                _ensure_membership(
+                    db,
+                    g_user.id,
+                    school_id,
+                    guardian_role.id if guardian_role else None,
+                )
 
     db.commit()
     return {"status": "ok"}
@@ -797,7 +1402,14 @@ def get_student_documents(
     rows = (
         db.execute(
             select(Document)
-            .where(Document.school_id == school_id, Document.entity_type == "student", Document.entity_id == str(student_id))
+            .where(
+                Document.school_id == school_id,
+                Document.entity_id == str(student_id),
+                or_(
+                    Document.entity_type == "student",
+                    Document.entity_type.like("student:%"),
+                ),
+            )
             .order_by(Document.created_at.desc())
         )
         .scalars()
@@ -811,6 +1423,8 @@ def get_student_documents(
             entity_type=d.entity_type,
             entity_id=d.entity_id,
             filename=d.filename,
+            content_type=d.content_type,
+            created_at=d.created_at,
         )
         for d in rows
     ]
@@ -820,6 +1434,7 @@ def get_student_documents(
 def upload_student_document(
     student_id: uuid.UUID,
     file: UploadFile = File(...),
+    document_type: Optional[str] = Form(default=None),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     school_id=Depends(get_active_school_id),
@@ -830,11 +1445,14 @@ def upload_student_document(
     if not file.filename:
         raise problem(status_code=400, title="Bad Request", detail="Missing filename")
     content = file.file.read()
+    normalized_type = (document_type or "").strip().lower().replace("-", "_")
+    allowed_types = {"transfer_certificate", "birth_certificate"}
+    entity_type = f"student:{normalized_type}" if normalized_type in allowed_types else "student"
     now = datetime.now(timezone.utc)
     d = Document(
         school_id=school_id,
         uploaded_by_user_id=user.id,
-        entity_type="student",
+        entity_type=entity_type,
         entity_id=str(student_id),
         filename=file.filename,
         content_type=file.content_type,
@@ -851,6 +1469,8 @@ def upload_student_document(
         entity_type=d.entity_type,
         entity_id=d.entity_id,
         filename=d.filename,
+        content_type=d.content_type,
+        created_at=d.created_at,
     )
 
 
@@ -897,45 +1517,132 @@ def bulk_import_students(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     school_id=Depends(get_active_school_id),
-) -> dict[str, int]:
-    raw = file.file.read().decode("utf-8-sig")
-    reader = csv.DictReader(io.StringIO(raw))
+) -> dict:
+    rows = _read_import_rows(file)
     now = datetime.now(timezone.utc)
+    year_id = db.scalar(
+        select(AcademicYear.id).where(AcademicYear.school_id == school_id, AcademicYear.is_current.is_(True)).limit(1)
+    )
+    classes = db.execute(select(SchoolClass).where(SchoolClass.school_id == school_id)).scalars().all()
+    class_ids = [item.id for item in classes]
+    sections = (
+        db.execute(select(Section).where(Section.class_id.in_(class_ids))).scalars().all()
+        if class_ids
+        else []
+    )
+
     created = 0
-    for r in reader:
-        first_name = (r.get("first_name") or "").strip()
-        if not first_name:
+    skipped = 0
+    errors: list[dict[str, str]] = []
+    seen_rolls: set[tuple[uuid.UUID, Optional[uuid.UUID], str]] = set()
+
+    for index, row in enumerate(rows, start=2):
+        first_name = _row_value(row, "first_name")
+        roll_number = re.sub(r"[\s-]", "", _row_value(row, "roll_number"))
+        if not first_name or not roll_number:
+            skipped += 1
+            missing = "first_name" if not first_name else "roll_number"
+            errors.append({"row": str(index), "reason": f"{missing} is required"})
             continue
-        s = Student(
+
+        class_value = _row_value(row, "class_id")
+        section_value = _row_value(row, "section_id")
+        school_class = _resolve_import_class(classes, class_value) if class_value else None
+        section = (
+            _resolve_import_section(sections, school_class.id, section_value)
+            if school_class and section_value
+            else None
+        )
+        if class_value and school_class is None:
+            skipped += 1
+            errors.append({"row": str(index), "reason": f"Class not found: {class_value}"})
+            continue
+        if section_value and school_class is not None and section is None:
+            skipped += 1
+            errors.append({"row": str(index), "reason": f"Section not found: {section_value}"})
+            continue
+        if school_class is not None and year_id is None:
+            skipped += 1
+            errors.append({"row": str(index), "reason": "Current academic year is not set"})
+            continue
+        if school_class is not None:
+            section_id = section.id if section else None
+            roll_key = (school_class.id, section_id, roll_number)
+            if roll_key in seen_rolls or _roll_number_taken(
+                db,
+                school_id=school_id,
+                academic_year_id=year_id,
+                class_id=school_class.id,
+                section_id=section_id,
+                roll_number=roll_number,
+            ):
+                skipped += 1
+                errors.append({"row": str(index), "reason": f"Roll number already used: {roll_number}"})
+                continue
+            seen_rolls.add(roll_key)
+
+        student = Student(
             school_id=school_id,
             first_name=first_name,
-            last_name=(r.get("last_name") or "").strip() or None,
-            admission_no=(r.get("admission_no") or "").strip() or None,
-            gender=(r.get("gender") or "").strip() or None,
-            date_of_birth=(date.fromisoformat(r["date_of_birth"]) if (r.get("date_of_birth") or "").strip() else None),
-            status=(r.get("status") or "active").strip(),
-            photo_url=(r.get("photo_url") or "").strip() or None,
+            full_name_bc=_row_value(row, "full_name_bc") or None,
+            admission_no=_row_value(row, "admission_no") or None,
+            admission_date=_parse_import_date(_row_value(row, "admission_date")),
+            admission_status=(_row_value(row, "admission_status") or "approved").strip().lower(),
+            status=(_row_value(row, "status") or "active").strip().lower(),
             created_at=now,
         )
-        db.add(s)
+        db.add(student)
+        db.flush()
+        if not student.admission_no:
+            student.admission_no = _generate_admission_no(db, school_id)
+            db.flush()
+
+        if school_class is not None and year_id is not None:
+            db.add(
+                Enrollment(
+                    student_id=student.id,
+                    academic_year_id=year_id,
+                    class_id=school_class.id,
+                    section_id=section.id if section else None,
+                    roll_number=roll_number,
+                    status="active",
+                    created_at=now,
+                )
+            )
+
+        guardian_name = _row_value(row, "guardianForm.full_name")
+        guardian_phone = _import_phone(_row_value(row, "guardianForm.phone"))
+        if guardian_name:
+            guardian = None
+            if guardian_phone:
+                guardian = db.scalar(
+                    select(Guardian).where(Guardian.school_id == school_id, Guardian.phone == guardian_phone).limit(1)
+                )
+            if guardian is None:
+                guardian = Guardian(
+                    school_id=school_id,
+                    full_name=guardian_name,
+                    phone=guardian_phone,
+                    created_at=now,
+                )
+                db.add(guardian)
+                db.flush()
+            elif guardian.full_name != guardian_name:
+                guardian.full_name = guardian_name
+            link = db.get(StudentGuardian, {"student_id": student.id, "guardian_id": guardian.id})
+            if link is None:
+                db.add(
+                    StudentGuardian(
+                        student_id=student.id,
+                        guardian_id=guardian.id,
+                        relation="guardian",
+                        is_primary=True,
+                    )
+                )
         created += 1
+
     db.commit()
-    return {"created": created}
-
-
-@router.get("/export")
-def export_students(
-    db: Session = Depends(get_db),
-    school_id=Depends(get_active_school_id),
-) -> StreamingResponse:
-    rows = db.execute(select(Student).where(Student.school_id == school_id).order_by(Student.created_at.asc())).scalars().all()
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow(["first_name", "last_name", "admission_no", "gender", "date_of_birth", "status", "photo_url"])
-    for s in rows:
-        w.writerow([s.first_name, s.last_name or "", s.admission_no or "", s.gender or "", s.date_of_birth or "", s.status, s.photo_url or ""])
-    headers = {"Content-Disposition": 'attachment; filename="students.csv"'}
-    return StreamingResponse(iter([buf.getvalue().encode("utf-8")]), media_type="text/csv; charset=utf-8", headers=headers)
+    return {"created": created, "skipped": skipped, "errors": errors[:25]}
 
 
 @router.post("/bulk-promote", dependencies=[Depends(require_permission("students:write"))])

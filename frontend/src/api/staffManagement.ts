@@ -330,7 +330,14 @@ export async function listStaff(params?: {
   search?: string;
   status?: string;
 }) {
-  return safeRequest({ method: "GET", url: "/staff", params });
+  return safeRequest<{ items: Staff[]; total?: number; page?: number; limit?: number }>({ method: "GET", url: "/staff", params });
+}
+
+export async function getNextStaffEmployeeId() {
+  return safeRequest<{ employee_id: string }>({
+    method: "GET",
+    url: "/staff/next-employee-id",
+  });
 }
 
 export async function getStaff(id: string) {
@@ -482,6 +489,14 @@ export async function listLeaveRequests(params?: {
   return safeRequest({ method: "GET", url: "/staff/leave/requests", params });
 }
 
+export async function getStaffLeaveRequests(staffId: string, year?: number) {
+  return safeRequest<StaffLeaveRequest[]>({
+    method: "GET",
+    url: `/staff/leave/requests/staff/${staffId}`,
+    params: { year },
+  });
+}
+
 export async function createLeaveRequest(data: StaffLeaveRequestCreate) {
   return safeRequest({ method: "POST", url: "/staff/leave/requests", data });
 }
@@ -515,7 +530,7 @@ export interface PayrollCycle {
   school_id: string;
   month: number;
   year: number;
-  status: "draft" | "processing" | "completed" | "paid";
+  status: "draft" | "processing" | "approved" | "completed" | "paid";
   total_amount: number;
   processed_by_user_id?: string;
   processed_at?: string;
@@ -736,5 +751,28 @@ export async function updateStaffContract(
     method: "PUT",
     url: `/staff/${staffId}/contracts/${contractId}`,
     data,
+  });
+}
+
+export async function uploadStaffContractDocument(
+  staffId: string,
+  contractId: string,
+  file: File,
+) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return safeRequest({
+    method: "POST",
+    url: `/staff/${staffId}/contracts/${contractId}/document`,
+    data: formData,
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+}
+
+export async function getExpiringContracts(days: number = 30) {
+  return safeRequest({
+    method: "GET",
+    url: "/contracts/expiring",
+    params: { days },
   });
 }

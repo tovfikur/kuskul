@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
@@ -38,8 +39,10 @@ from app.schemas.logistics import (
     MaintenanceTicketOut,
     MaintenanceTicketUpdate,
     PurchaseOrderCreate,
+    PurchaseOrderLineOut,
     PurchaseOrderOut,
     PurchaseRequestCreate,
+    PurchaseRequestLineOut,
     PurchaseRequestOut,
     StockMovementCreate,
     StockMovementOut,
@@ -446,10 +449,14 @@ def submit_purchase_request(
     return PurchaseRequestOut.model_validate(pr, from_attributes=True)
 
 
+class _DecisionBody(BaseModel):
+    decision_note: Optional[str] = None
+
+
 @router.patch("/procurement/purchase-requests/{pr_id}/approve", response_model=PurchaseRequestOut, dependencies=[Depends(require_permission("logistics:write"))])
 def approve_purchase_request(
     pr_id: uuid.UUID,
-    decision_note: Optional[str] = None,
+    body: _DecisionBody,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     school_id=Depends(get_active_school_id),
@@ -461,7 +468,7 @@ def approve_purchase_request(
         raise problem(status_code=400, title="Bad Request", detail="Can only approve submitted purchase requests")
     now = datetime.now(timezone.utc)
     pr.status = "approved"
-    pr.decision_note = decision_note
+    pr.decision_note = body.decision_note
     pr.decided_by_user_id = user.id
     pr.decided_at = now
     pr.updated_at = now
@@ -469,11 +476,10 @@ def approve_purchase_request(
     db.refresh(pr)
     return PurchaseRequestOut.model_validate(pr, from_attributes=True)
 
-
 @router.patch("/procurement/purchase-requests/{pr_id}/reject", response_model=PurchaseRequestOut, dependencies=[Depends(require_permission("logistics:write"))])
 def reject_purchase_request(
     pr_id: uuid.UUID,
-    decision_note: str,
+    body: _DecisionBody,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     school_id=Depends(get_active_school_id),
@@ -485,7 +491,7 @@ def reject_purchase_request(
         raise problem(status_code=400, title="Bad Request", detail="Can only reject submitted purchase requests")
     now = datetime.now(timezone.utc)
     pr.status = "rejected"
-    pr.decision_note = decision_note
+    pr.decision_note = body.decision_note
     pr.decided_by_user_id = user.id
     pr.decided_at = now
     pr.updated_at = now
@@ -573,6 +579,32 @@ def cancel_purchase_order(
     return PurchaseOrderOut.model_validate(po, from_attributes=True)
 
 
+@router.get("/procurement/purchase-orders/{po_id}/lines", response_model=list[PurchaseOrderLineOut])
+def get_purchase_order_lines(
+    po_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    school_id=Depends(get_active_school_id),
+) -> list[PurchaseOrderLineOut]:
+    po = db.get(PurchaseOrder, po_id)
+    if not po or po.school_id != school_id:
+        raise not_found("Purchase order not found")
+    rows = db.execute(select(PurchaseOrderLine).where(PurchaseOrderLine.purchase_order_id == po_id)).scalars().all()
+    return [PurchaseOrderLineOut.model_validate(r, from_attributes=True) for r in rows]
+
+
+@router.get("/procurement/purchase-requests/{pr_id}/lines", response_model=list[PurchaseRequestLineOut])
+def get_purchase_request_lines(
+    pr_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    school_id=Depends(get_active_school_id),
+) -> list[PurchaseRequestLineOut]:
+    pr = db.get(PurchaseRequest, pr_id)
+    if not pr or pr.school_id != school_id:
+        raise not_found("Purchase request not found")
+    rows = db.execute(select(PurchaseRequestLine).where(PurchaseRequestLine.purchase_request_id == pr_id)).scalars().all()
+    return [PurchaseRequestLineOut.model_validate(r, from_attributes=True) for r in rows]
+
+
 @router.get("/procurement/goods-receipts", response_model=dict)
 def list_goods_receipts(
     db: Session = Depends(get_db),
@@ -656,7 +688,7 @@ def create_goods_receipt(
     all_received = all(line.qty_received >= line.qty_ordered for line in po_lines)
     any_received = any(line.qty_received > 0 for line in po_lines)
     if all_received:
-        po.status = "closed"
+        po.status = "received"
     elif any_received:
         po.status = "partial"
     po.updated_at = now

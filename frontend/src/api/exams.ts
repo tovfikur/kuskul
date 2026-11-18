@@ -233,6 +233,7 @@ export type QuestionBankQuestion = {
   question_type: string;
   prompt: string;
   options: Record<string, unknown> | null;
+  correct_answer?: Record<string, unknown> | null;
   points: number;
   difficulty: string | null;
   tags: string | null;

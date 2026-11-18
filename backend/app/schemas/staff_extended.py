@@ -112,7 +112,7 @@ class StaffContractBase(BaseModel):
 
 class StaffContractCreate(StaffContractBase):
     """Schema for creating a StaffContract."""
-    staff_id: UUID
+    staff_id: Optional[UUID] = None
 
 
 class StaffContractUpdate(BaseModel):
@@ -139,6 +139,7 @@ class StaffContractOut(StaffContractBase):
     """Schema for StaffContract output."""
     id: UUID
     staff_id: UUID
+    salary: float  # type: ignore[assignment]
     termination_reason: Optional[str] = None
     terminated_at: Optional[datetime] = None
     created_at: datetime

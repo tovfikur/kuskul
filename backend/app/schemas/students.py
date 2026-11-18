@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class StudentOut(BaseModel):
@@ -64,20 +64,50 @@ class StudentOut(BaseModel):
     photo_url: Optional[str]
 
 
-class StudentCreate(BaseModel):
+class StudentOptionalContactMixin(BaseModel):
+    admission_date: Optional[date] = None
+    date_of_birth: Optional[date] = None
+    gender: Optional[str] = Field(default=None, max_length=16)
+    present_address: Optional[str] = Field(default=None, max_length=500)
+    permanent_address: Optional[str] = Field(default=None, max_length=500)
+    city: Optional[str] = Field(default=None, max_length=100)
+    emergency_contact_name: Optional[str] = Field(default=None, max_length=200)
+    emergency_contact_phone: Optional[str] = Field(default=None, max_length=32)
+
+    @field_validator("admission_date", "date_of_birth", mode="before")
+    @classmethod
+    def empty_optional_date(cls, value: object) -> object:
+        if value == "" or value is None:
+            return None
+        return value
+
+    @field_validator(
+        "gender",
+        "present_address",
+        "permanent_address",
+        "city",
+        "emergency_contact_name",
+        "emergency_contact_phone",
+        mode="before",
+    )
+    @classmethod
+    def empty_optional_text(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+
+class StudentCreate(StudentOptionalContactMixin):
     user_id: Optional[uuid.UUID] = None
     first_name: str = Field(min_length=1, max_length=100)
     last_name: Optional[str] = Field(default=None, max_length=100)
     admission_no: Optional[str] = Field(default=None, max_length=64)
-    gender: Optional[str] = Field(default=None, max_length=16)
-    date_of_birth: Optional[date] = None
     full_name_bc: Optional[str] = Field(default=None, max_length=200)
     place_of_birth: Optional[str] = Field(default=None, max_length=100)
     nationality: Optional[str] = Field(default=None, max_length=64)
     religion: Optional[str] = Field(default=None, max_length=64)
     blood_group: Optional[str] = Field(default=None, max_length=8)
 
-    admission_date: Optional[date] = None
     admission_status: str = Field(default="pending", max_length=32)
     medium: Optional[str] = Field(default=None, max_length=32)
     shift: Optional[str] = Field(default=None, max_length=32)
@@ -85,13 +115,8 @@ class StudentCreate(BaseModel):
     previous_class: Optional[str] = Field(default=None, max_length=64)
     transfer_certificate_no: Optional[str] = Field(default=None, max_length=64)
 
-    present_address: Optional[str] = Field(default=None, max_length=500)
-    permanent_address: Optional[str] = Field(default=None, max_length=500)
-    city: Optional[str] = Field(default=None, max_length=100)
     thana: Optional[str] = Field(default=None, max_length=100)
     postal_code: Optional[str] = Field(default=None, max_length=20)
-    emergency_contact_name: Optional[str] = Field(default=None, max_length=200)
-    emergency_contact_phone: Optional[str] = Field(default=None, max_length=32)
 
     known_allergies: Optional[str] = Field(default=None, max_length=500)
     chronic_illness: Optional[str] = Field(default=None, max_length=500)
@@ -118,20 +143,17 @@ class StudentCreate(BaseModel):
     status: str = Field(default="active", max_length=32)
 
 
-class StudentUpdate(BaseModel):
+class StudentUpdate(StudentOptionalContactMixin):
     user_id: Optional[uuid.UUID] = None
     first_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(default=None, max_length=100)
     admission_no: Optional[str] = Field(default=None, max_length=64)
-    gender: Optional[str] = Field(default=None, max_length=16)
-    date_of_birth: Optional[date] = None
     full_name_bc: Optional[str] = Field(default=None, max_length=200)
     place_of_birth: Optional[str] = Field(default=None, max_length=100)
     nationality: Optional[str] = Field(default=None, max_length=64)
     religion: Optional[str] = Field(default=None, max_length=64)
     blood_group: Optional[str] = Field(default=None, max_length=8)
 
-    admission_date: Optional[date] = None
     admission_status: Optional[str] = Field(default=None, max_length=32)
     medium: Optional[str] = Field(default=None, max_length=32)
     shift: Optional[str] = Field(default=None, max_length=32)
@@ -139,13 +161,8 @@ class StudentUpdate(BaseModel):
     previous_class: Optional[str] = Field(default=None, max_length=64)
     transfer_certificate_no: Optional[str] = Field(default=None, max_length=64)
 
-    present_address: Optional[str] = Field(default=None, max_length=500)
-    permanent_address: Optional[str] = Field(default=None, max_length=500)
-    city: Optional[str] = Field(default=None, max_length=100)
     thana: Optional[str] = Field(default=None, max_length=100)
     postal_code: Optional[str] = Field(default=None, max_length=20)
-    emergency_contact_name: Optional[str] = Field(default=None, max_length=200)
-    emergency_contact_phone: Optional[str] = Field(default=None, max_length=32)
 
     known_allergies: Optional[str] = Field(default=None, max_length=500)
     chronic_illness: Optional[str] = Field(default=None, max_length=500)

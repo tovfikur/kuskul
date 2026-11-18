@@ -31,7 +31,12 @@ import {
   createAsset,
   updateAsset,
 } from "../../../../api/logistics";
+import { getUsers, type User } from "../../../../api/people";
 import type { Asset, AssetStatus } from "../../logisticsTypes";
+import {
+  listLogisticsAssetCategories,
+  type LogisticsAssetCategory,
+} from "../../logisticsSettings";
 import ListFiltersBar from "../shared/ListFiltersBar";
 import StatusChip from "../shared/StatusChip";
 import { showToast } from "../../../../app/toast";
@@ -50,6 +55,10 @@ export default function AssetsTab() {
 
   const [retireDialogOpen, setRetireDialogOpen] = useState(false);
   const [assetToRetire, setAssetToRetire] = useState<Asset | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<
+    LogisticsAssetCategory[]
+  >([]);
 
   const [form, setForm] = useState({
     tag: "",
@@ -82,6 +91,14 @@ export default function AssetsTab() {
   useEffect(() => {
     loadAssets();
   }, [loadAssets]);
+
+  useEffect(() => {
+    getUsers(1, 500).then((res) => setUsers(res.items)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setCategoryOptions(listLogisticsAssetCategories(true));
+  }, [dialogOpen]);
 
   const handleCreate = async () => {
     try {
@@ -318,14 +335,21 @@ export default function AssetsTab() {
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                label="Category"
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-                required
-                placeholder="e.g., Computer, Furniture, Vehicle"
-              />
+              <FormControl fullWidth required>
+                <InputLabel>Category</InputLabel>
+                <Select
+                  value={form.category}
+                  label="Category"
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                >
+                  <MenuItem value="">Select category</MenuItem>
+                  {categoryOptions.map((category) => (
+                    <MenuItem key={category.id} value={category.name}>
+                      {category.name} ({category.code})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
@@ -338,13 +362,21 @@ export default function AssetsTab() {
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                label="Custodian User ID"
-                value={form.custodian_user_id}
-                onChange={(e) => setForm({ ...form, custodian_user_id: e.target.value })}
-                placeholder="Optional"
-              />
+              <FormControl fullWidth>
+                <InputLabel>Custodian (User)</InputLabel>
+                <Select
+                  value={form.custodian_user_id}
+                  label="Custodian (User)"
+                  onChange={(e) => setForm({ ...form, custodian_user_id: e.target.value })}
+                >
+                  <MenuItem value="">None</MenuItem>
+                  {users.map((u) => (
+                    <MenuItem key={u.id} value={u.id}>
+                      {u.full_name || u.email}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth>

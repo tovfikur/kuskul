@@ -54,8 +54,17 @@ import {
 
 type SettingsSection = "departments" | "designations" | "leave-types";
 
+const extractItems = <T,>(data: unknown): T[] => {
+  if (data && typeof data === "object" && "items" in data) {
+    const items = (data as { items?: unknown }).items;
+    if (Array.isArray(items)) return items as T[];
+  }
+  return [];
+};
+
 export default function SettingsTab() {
-  const [activeSection, setActiveSection] = useState<SettingsSection>("departments");
+  const [activeSection, setActiveSection] =
+    useState<SettingsSection>("departments");
 
   return (
     <Box>
@@ -109,18 +118,18 @@ function DepartmentsSection() {
   });
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    loadDepartments();
-  }, []);
-
   const loadDepartments = async () => {
     setLoading(true);
     const result = await listDepartments({ limit: 100 });
     if (result.ok && result.data) {
-      setDepartments((result.data as any).items || []);
+      setDepartments(extractItems<Department>(result.data));
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    loadDepartments();
+  }, []);
 
   const handleAdd = () => {
     setEditingDept(null);
@@ -144,7 +153,7 @@ function DepartmentsSection() {
 
   const handleSave = async () => {
     setError("");
-    
+
     if (!formData.name || !formData.code) {
       setError("Name and Code are required");
       return;
@@ -164,7 +173,7 @@ function DepartmentsSection() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this department?")) return;
-    
+
     const result = await deleteDepartment(id);
     if (result.ok) {
       loadDepartments();
@@ -175,11 +184,7 @@ function DepartmentsSection() {
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
         <Typography variant="h6">Departments</Typography>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={handleAdd}
-        >
+        <Button variant="contained" startIcon={<Add />} onClick={handleAdd}>
           Add Department
         </Button>
       </Box>
@@ -198,11 +203,15 @@ function DepartmentsSection() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} align="center">Loading...</TableCell>
+                <TableCell colSpan={5} align="center">
+                  Loading...
+                </TableCell>
               </TableRow>
             ) : departments.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} align="center">No departments found</TableCell>
+                <TableCell colSpan={5} align="center">
+                  No departments found
+                </TableCell>
               </TableRow>
             ) : (
               departments.map((dept) => (
@@ -227,7 +236,10 @@ function DepartmentsSection() {
                     <IconButton size="small" onClick={() => handleEdit(dept)}>
                       <Edit fontSize="small" />
                     </IconButton>
-                    <IconButton size="small" onClick={() => handleDelete(dept.id)}>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDelete(dept.id)}
+                    >
                       <Delete fontSize="small" />
                     </IconButton>
                   </TableCell>
@@ -238,13 +250,22 @@ function DepartmentsSection() {
         </Table>
       </TableContainer>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>
           {editingDept ? "Edit Department" : "Add Department"}
         </DialogTitle>
         <DialogContent>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
           <TextField
             label="Name"
             fullWidth
@@ -253,26 +274,33 @@ function DepartmentsSection() {
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
           />
-          
+
           <TextField
             label="Code"
             fullWidth
             margin="normal"
             value={formData.code}
-            onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+            onChange={(e) =>
+              setFormData({ ...formData, code: e.target.value.toUpperCase() })
+            }
             required
             helperText="Unique code (e.g., MATH, ADMIN)"
           />
-          
+
           <TextField
             label="Budget Allocated"
             fullWidth
             margin="normal"
             type="number"
             value={formData.budget_allocated || ""}
-            onChange={(e) => setFormData({ ...formData, budget_allocated: parseFloat(e.target.value) || undefined })}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                budget_allocated: parseFloat(e.target.value) || undefined,
+              })
+            }
           />
-          
+
           <TextField
             label="Description"
             fullWidth
@@ -280,14 +308,18 @@ function DepartmentsSection() {
             multiline
             rows={3}
             value={formData.description || ""}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, description: e.target.value })
+            }
           />
-          
+
           <FormControlLabel
             control={
               <Switch
                 checked={formData.is_active}
-                onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                onChange={(e) =>
+                  setFormData({ ...formData, is_active: e.target.checked })
+                }
               />
             }
             label="Active"
@@ -322,18 +354,18 @@ function DesignationsSection() {
   });
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    loadDesignations();
-  }, []);
-
   const loadDesignations = async () => {
     setLoading(true);
     const result = await listDesignations({ limit: 100 });
     if (result.ok && result.data) {
-      setDesignations((result.data as any).items || []);
+      setDesignations(extractItems<Designation>(result.data));
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    loadDesignations();
+  }, []);
 
   const handleAdd = () => {
     setEditingDesig(null);
@@ -359,7 +391,7 @@ function DesignationsSection() {
 
   const handleSave = async () => {
     setError("");
-    
+
     if (!formData.title || !formData.code) {
       setError("Title and Code are required");
       return;
@@ -379,7 +411,7 @@ function DesignationsSection() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this designation?")) return;
-    
+
     const result = await deleteDesignation(id);
     if (result.ok) {
       loadDesignations();
@@ -390,11 +422,7 @@ function DesignationsSection() {
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
         <Typography variant="h6">Designations</Typography>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={handleAdd}
-        >
+        <Button variant="contained" startIcon={<Add />} onClick={handleAdd}>
           Add Designation
         </Button>
       </Box>
@@ -414,11 +442,15 @@ function DesignationsSection() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} align="center">Loading...</TableCell>
+                <TableCell colSpan={6} align="center">
+                  Loading...
+                </TableCell>
               </TableRow>
             ) : designations.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} align="center">No designations found</TableCell>
+                <TableCell colSpan={6} align="center">
+                  No designations found
+                </TableCell>
               </TableRow>
             ) : (
               designations.map((desig) => (
@@ -428,7 +460,11 @@ function DesignationsSection() {
                     <Chip label={desig.code} size="small" />
                   </TableCell>
                   <TableCell>
-                    <Chip label={`Level ${desig.level}`} size="small" color="primary" />
+                    <Chip
+                      label={`Level ${desig.level}`}
+                      size="small"
+                      color="primary"
+                    />
                   </TableCell>
                   <TableCell>
                     {desig.min_salary && desig.max_salary
@@ -446,7 +482,10 @@ function DesignationsSection() {
                     <IconButton size="small" onClick={() => handleEdit(desig)}>
                       <Edit fontSize="small" />
                     </IconButton>
-                    <IconButton size="small" onClick={() => handleDelete(desig.id)}>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDelete(desig.id)}
+                    >
                       <Delete fontSize="small" />
                     </IconButton>
                   </TableCell>
@@ -457,43 +496,58 @@ function DesignationsSection() {
         </Table>
       </TableContainer>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>
           {editingDesig ? "Edit Designation" : "Add Designation"}
         </DialogTitle>
         <DialogContent>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
           <TextField
             label="Title"
             fullWidth
             margin="normal"
             value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, title: e.target.value })
+            }
             required
           />
-          
+
           <TextField
             label="Code"
             fullWidth
             margin="normal"
             value={formData.code}
-            onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+            onChange={(e) =>
+              setFormData({ ...formData, code: e.target.value.toUpperCase() })
+            }
             required
             helperText="Unique code (e.g., PRIN, TEACH)"
           />
-          
+
           <TextField
             label="Hierarchy Level"
             fullWidth
             margin="normal"
             type="number"
             value={formData.level}
-            onChange={(e) => setFormData({ ...formData, level: parseInt(e.target.value) || 5 })}
+            onChange={(e) =>
+              setFormData({ ...formData, level: parseInt(e.target.value) || 5 })
+            }
             helperText="1 = Highest (Principal), 10 = Lowest"
             inputProps={{ min: 1, max: 10 }}
           />
-          
+
           <Box sx={{ display: "flex", gap: 2 }}>
             <TextField
               label="Min Salary"
@@ -501,7 +555,12 @@ function DesignationsSection() {
               margin="normal"
               type="number"
               value={formData.min_salary || ""}
-              onChange={(e) => setFormData({ ...formData, min_salary: parseFloat(e.target.value) || undefined })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  min_salary: parseFloat(e.target.value) || undefined,
+                })
+              }
             />
             <TextField
               label="Max Salary"
@@ -509,10 +568,15 @@ function DesignationsSection() {
               margin="normal"
               type="number"
               value={formData.max_salary || ""}
-              onChange={(e) => setFormData({ ...formData, max_salary: parseFloat(e.target.value) || undefined })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  max_salary: parseFloat(e.target.value) || undefined,
+                })
+              }
             />
           </Box>
-          
+
           <TextField
             label="Description"
             fullWidth
@@ -520,14 +584,18 @@ function DesignationsSection() {
             multiline
             rows={3}
             value={formData.description || ""}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, description: e.target.value })
+            }
           />
-          
+
           <FormControlLabel
             control={
               <Switch
                 checked={formData.is_active}
-                onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                onChange={(e) =>
+                  setFormData({ ...formData, is_active: e.target.checked })
+                }
               />
             }
             label="Active"
@@ -565,18 +633,21 @@ function LeaveTypesSection() {
   });
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    loadLeaveTypes();
-  }, []);
-
   const loadLeaveTypes = async () => {
     setLoading(true);
     const result = await listLeaveTypes();
     if (result.ok && result.data) {
-      setLeaveTypes(result.data as LeaveType[]);
+      const items = Array.isArray(result.data)
+        ? result.data
+        : extractItems<LeaveType>(result.data);
+      setLeaveTypes(items);
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    loadLeaveTypes();
+  }, []);
 
   const handleAdd = () => {
     setEditingType(null);
@@ -612,7 +683,7 @@ function LeaveTypesSection() {
 
   const handleSave = async () => {
     setError("");
-    
+
     if (!formData.name || !formData.code) {
       setError("Name and Code are required");
       return;
@@ -632,7 +703,7 @@ function LeaveTypesSection() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this leave type?")) return;
-    
+
     const result = await deleteLeaveType(id);
     if (result.ok) {
       loadLeaveTypes();
@@ -643,11 +714,7 @@ function LeaveTypesSection() {
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
         <Typography variant="h6">Leave Types</Typography>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={handleAdd}
-        >
+        <Button variant="contained" startIcon={<Add />} onClick={handleAdd}>
           Add Leave Type
         </Button>
       </Box>
@@ -668,11 +735,15 @@ function LeaveTypesSection() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} align="center">Loading...</TableCell>
+                <TableCell colSpan={7} align="center">
+                  Loading...
+                </TableCell>
               </TableRow>
             ) : leaveTypes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} align="center">No leave types found</TableCell>
+                <TableCell colSpan={7} align="center">
+                  No leave types found
+                </TableCell>
               </TableRow>
             ) : (
               leaveTypes.map((type) => (
@@ -713,7 +784,10 @@ function LeaveTypesSection() {
                     <IconButton size="small" onClick={() => handleEdit(type)}>
                       <Edit fontSize="small" />
                     </IconButton>
-                    <IconButton size="small" onClick={() => handleDelete(type.id)}>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDelete(type.id)}
+                    >
                       <Delete fontSize="small" />
                     </IconButton>
                   </TableCell>
@@ -724,13 +798,22 @@ function LeaveTypesSection() {
         </Table>
       </TableContainer>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>
           {editingType ? "Edit Leave Type" : "Add Leave Type"}
         </DialogTitle>
         <DialogContent>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
           <TextField
             label="Name"
             fullWidth
@@ -739,17 +822,19 @@ function LeaveTypesSection() {
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
           />
-          
+
           <TextField
             label="Code"
             fullWidth
             margin="normal"
             value={formData.code}
-            onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+            onChange={(e) =>
+              setFormData({ ...formData, code: e.target.value.toUpperCase() })
+            }
             required
             helperText="Unique code (e.g., SL, CL, AL)"
           />
-          
+
           <Box sx={{ display: "flex", gap: 2 }}>
             <TextField
               label="Days Per Year"
@@ -757,7 +842,12 @@ function LeaveTypesSection() {
               margin="normal"
               type="number"
               value={formData.days_per_year}
-              onChange={(e) => setFormData({ ...formData, days_per_year: parseInt(e.target.value) || 0 })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  days_per_year: parseInt(e.target.value) || 0,
+                })
+              }
               required
             />
             <TextField
@@ -766,20 +856,27 @@ function LeaveTypesSection() {
               margin="normal"
               type="number"
               value={formData.max_consecutive_days || ""}
-              onChange={(e) => setFormData({ ...formData, max_consecutive_days: parseInt(e.target.value) || undefined })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  max_consecutive_days: parseInt(e.target.value) || undefined,
+                })
+              }
             />
           </Box>
-          
+
           <TextField
             label="Color"
             fullWidth
             margin="normal"
             type="color"
             value={formData.color}
-            onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, color: e.target.value })
+            }
             helperText="Color for calendar display"
           />
-          
+
           <TextField
             label="Description"
             fullWidth
@@ -787,35 +884,46 @@ function LeaveTypesSection() {
             multiline
             rows={3}
             value={formData.description || ""}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, description: e.target.value })
+            }
           />
-          
+
           <FormControlLabel
             control={
               <Switch
                 checked={formData.requires_approval}
-                onChange={(e) => setFormData({ ...formData, requires_approval: e.target.checked })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    requires_approval: e.target.checked,
+                  })
+                }
               />
             }
             label="Requires Approval"
             sx={{ mt: 2 }}
           />
-          
+
           <FormControlLabel
             control={
               <Switch
                 checked={formData.is_paid}
-                onChange={(e) => setFormData({ ...formData, is_paid: e.target.checked })}
+                onChange={(e) =>
+                  setFormData({ ...formData, is_paid: e.target.checked })
+                }
               />
             }
             label="Paid Leave"
           />
-          
+
           <FormControlLabel
             control={
               <Switch
                 checked={formData.is_active}
-                onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                onChange={(e) =>
+                  setFormData({ ...formData, is_active: e.target.checked })
+                }
               />
             }
             label="Active"

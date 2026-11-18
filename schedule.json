@@ -1,0 +1,1026 @@
+[
+  {
+    "name": " [General] Review & Refactor Frontend Project Structure",
+    "hours": 2.0,
+    "description": "Review & Refactor Frontend Project Structure (Folders, Types, API Client).",
+    "date": "2026-01-16",
+    "start_time": "08:00",
+    "end_time": "10:00"
+  },
+  {
+    "name": " [General] polish `AuthContext` and Login Flows",
+    "hours": 2.0,
+    "description": "polish `AuthContext` and Login Flows (Persist tokens, handle refresh).",
+    "date": "2026-01-16",
+    "start_time": "10:00",
+    "end_time": "12:00"
+  },
+  {
+    "name": " [General] Build Reusable UI Components",
+    "hours": 2.0,
+    "description": "Build Reusable UI Components (DataGrid, Modal, Form Inputs, Buttons).",
+    "date": "2026-01-16",
+    "start_time": "12:00",
+    "end_time": "14:00"
+  },
+  {
+    "name": " [General] Implement `AppShell` / Layout",
+    "hours": 1.5,
+    "description": "Implement `AppShell` / Layout (Sidebar, Header, Responsive Navigation).",
+    "date": "2026-01-16",
+    "start_time": "14:00",
+    "end_time": "15:30"
+  },
+  {
+    "name": " [Staff] Design & Implement Staff List View",
+    "hours": 1.5,
+    "description": "Design & Implement Staff List View (API integration).",
+    "date": "2026-01-16",
+    "start_time": "15:30",
+    "end_time": "17:00"
+  },
+  {
+    "name": " [Staff] Implement Add Staff Wizard",
+    "hours": 2.0,
+    "description": "Implement Add Staff Wizard (Step 1: Basic Info).",
+    "date": "2026-01-16",
+    "start_time": "17:00",
+    "end_time": "19:00"
+  },
+  {
+    "name": " [Staff] Implement Add Staff Wizard",
+    "hours": 1.5,
+    "description": "Implement Add Staff Wizard (Step 2: Professional & Banking).",
+    "date": "2026-01-16",
+    "start_time": "19:00",
+    "end_time": "20:30"
+  },
+  {
+    "name": " [Staff] Implement Staff Profile View",
+    "hours": 1.5,
+    "description": "Implement Staff Profile View (ReadOnly).",
+    "date": "2026-01-16",
+    "start_time": "20:30",
+    "end_time": "22:00"
+  },
+  {
+    "name": " [Staff] Implement Edit Staff Functionality.",
+    "hours": 1.5,
+    "description": "Implement Edit Staff Functionality.",
+    "date": "2026-01-16",
+    "start_time": "22:00",
+    "end_time": "23:30"
+  },
+  {
+    "name": " [Staff] Unit & Integration Tests for Staff Module.",
+    "hours": 1.5,
+    "description": "Unit & Integration Tests for Staff Module.",
+    "date": "2026-01-16",
+    "start_time": "23:30",
+    "end_time": "01:00"
+  },
+  {
+    "name": " [Students] Design & Implement Student List with Advanced Filters.",
+    "hours": 2.0,
+    "description": "Design & Implement Student List with Advanced Filters.",
+    "date": "2026-01-17",
+    "start_time": "08:00",
+    "end_time": "10:00"
+  },
+  {
+    "name": " [Students] Build \"Admission Form\"",
+    "hours": 2.0,
+    "description": "Build \"Admission Form\" (Complex Multi-step Form).",
+    "date": "2026-01-17",
+    "start_time": "10:00",
+    "end_time": "12:00"
+  },
+  {
+    "name": " [Students] Implement Guardian/Parent Linking in Admission.",
+    "hours": 1.5,
+    "description": "Implement Guardian/Parent Linking in Admission.",
+    "date": "2026-01-17",
+    "start_time": "12:00",
+    "end_time": "13:30"
+  },
+  {
+    "name": " [Students] Implement Photo Upload & Document Attachments.",
+    "hours": 1.5,
+    "description": "Implement Photo Upload & Document Attachments.",
+    "date": "2026-01-17",
+    "start_time": "13:30",
+    "end_time": "15:00"
+  },
+  {
+    "name": " [Students] Student Profile Dashboard",
+    "hours": 2.0,
+    "description": "Student Profile Dashboard (Attendance, Fee summary placeholders).",
+    "date": "2026-01-17",
+    "start_time": "15:00",
+    "end_time": "17:00"
+  },
+  {
+    "name": " [Students] Bulk Student Import UI",
+    "hours": 1.5,
+    "description": "Bulk Student Import UI (CSV/Excel).",
+    "date": "2026-01-17",
+    "start_time": "17:00",
+    "end_time": "18:30"
+  },
+  {
+    "name": " [Students] Student Promotion/Transfer Logic",
+    "hours": 1.5,
+    "description": "Student Promotion/Transfer Logic (UI).",
+    "date": "2026-01-17",
+    "start_time": "18:30",
+    "end_time": "20:00"
+  },
+  {
+    "name": " [Students] Verify & Fix Backend \"Students\" Endpoints",
+    "hours": 2.0,
+    "description": "Verify & Fix Backend \"Students\" Endpoints (if items missing).",
+    "date": "2026-01-17",
+    "start_time": "20:00",
+    "end_time": "22:00"
+  },
+  {
+    "name": " [Students] Testing",
+    "hours": 2.0,
+    "description": "Testing (E2E flows for Admission).",
+    "date": "2026-01-17",
+    "start_time": "22:00",
+    "end_time": "00:00"
+  },
+  {
+    "name": " [Academic] Academic Year Management UI",
+    "hours": 1.5,
+    "description": "Academic Year Management UI (Create, Activate).",
+    "date": "2026-01-18",
+    "start_time": "08:00",
+    "end_time": "09:30"
+  },
+  {
+    "name": " [Academic] Class & Section Management UI",
+    "hours": 2.0,
+    "description": "Class & Section Management UI (Hierarchy View).",
+    "date": "2026-01-18",
+    "start_time": "09:30",
+    "end_time": "11:30"
+  },
+  {
+    "name": " [Subjects] Subject Master UI",
+    "hours": 2.0,
+    "description": "Subject Master UI (Create, Edit, Codes).",
+    "date": "2026-01-18",
+    "start_time": "11:30",
+    "end_time": "13:30"
+  },
+  {
+    "name": " [Subjects] Assign Subjects to Classes",
+    "hours": 2.0,
+    "description": "Assign Subjects to Classes (Matrix/Multi-select UI).",
+    "date": "2026-01-18",
+    "start_time": "13:30",
+    "end_time": "15:30"
+  },
+  {
+    "name": " [Setup] Teacher Allocation",
+    "hours": 2.0,
+    "description": "Teacher Allocation (Assign Teachers to Class-Subjects).",
+    "date": "2026-01-18",
+    "start_time": "15:30",
+    "end_time": "17:30"
+  },
+  {
+    "name": " [Backend] Verify `teacher_assignments` and `subjects` API performance.",
+    "hours": 2.0,
+    "description": "Verify `teacher_assignments` and `subjects` API performance.",
+    "date": "2026-01-18",
+    "start_time": "17:30",
+    "end_time": "19:30"
+  },
+  {
+    "name": " [UI] \"My Subjects\" View for Teachers.",
+    "hours": 1.5,
+    "description": "\"My Subjects\" View for Teachers.",
+    "date": "2026-01-18",
+    "start_time": "19:30",
+    "end_time": "21:00"
+  },
+  {
+    "name": " [UI] Class Details View",
+    "hours": 1.5,
+    "description": "Class Details View (Summary of students/subjects).",
+    "date": "2026-01-18",
+    "start_time": "21:00",
+    "end_time": "22:30"
+  },
+  {
+    "name": " [General] Integration Testing for Academic Setup.",
+    "hours": 1.5,
+    "description": "Integration Testing for Academic Setup.",
+    "date": "2026-01-18",
+    "start_time": "22:30",
+    "end_time": "00:00"
+  },
+  {
+    "name": " [Timetable] Time Slots Configuration UI.",
+    "hours": 2.0,
+    "description": "Time Slots Configuration UI.",
+    "date": "2026-01-19",
+    "start_time": "08:00",
+    "end_time": "10:00"
+  },
+  {
+    "name": " [Timetable] Build Interactive Grid Component",
+    "hours": 2.5,
+    "description": "Build Interactive Grid Component (Drag & Drop placeholder).",
+    "date": "2026-01-19",
+    "start_time": "10:00",
+    "end_time": "12:30"
+  },
+  {
+    "name": " [Timetable] Implement \"Assign Class Timetable\" Logic.",
+    "hours": 2.0,
+    "description": "Implement \"Assign Class Timetable\" Logic.",
+    "date": "2026-01-19",
+    "start_time": "12:30",
+    "end_time": "14:30"
+  },
+  {
+    "name": " [Timetable] Conflict Detection UI",
+    "hours": 2.0,
+    "description": "Conflict Detection UI (Warning on double booking).",
+    "date": "2026-01-19",
+    "start_time": "14:30",
+    "end_time": "16:30"
+  },
+  {
+    "name": " [Timetable] Teacher's Personal Timetable View.",
+    "hours": 2.0,
+    "description": "Teacher's Personal Timetable View.",
+    "date": "2026-01-19",
+    "start_time": "16:30",
+    "end_time": "18:30"
+  },
+  {
+    "name": " [Timetable] Printable View",
+    "hours": 2.0,
+    "description": "Printable View (PDF Generation Frontend).",
+    "date": "2026-01-19",
+    "start_time": "18:30",
+    "end_time": "20:30"
+  },
+  {
+    "name": " [Timetable] Backend Fixes for Conflict Logic.",
+    "hours": 1.5,
+    "description": "Backend Fixes for Conflict Logic.",
+    "date": "2026-01-19",
+    "start_time": "20:30",
+    "end_time": "22:00"
+  },
+  {
+    "name": " [Timetable] \"Free Teachers\" Finder Utilities.",
+    "hours": 1.5,
+    "description": "\"Free Teachers\" Finder Utilities.",
+    "date": "2026-01-19",
+    "start_time": "22:00",
+    "end_time": "23:30"
+  },
+  {
+    "name": " [Attendance] Class Attendance Marking UI",
+    "hours": 2.0,
+    "description": "Class Attendance Marking UI (Grid/List toggle).",
+    "date": "2026-01-20",
+    "start_time": "08:00",
+    "end_time": "10:00"
+  },
+  {
+    "name": " [Attendance] Quick Actions",
+    "hours": 2.0,
+    "description": "Quick Actions (Mark All Present, Bulk Updates).",
+    "date": "2026-01-20",
+    "start_time": "10:00",
+    "end_time": "12:00"
+  },
+  {
+    "name": " [Attendance] Backend Optimization for Bulk Inserts",
+    "hours": 2.0,
+    "description": "Backend Optimization for Bulk Inserts (if needed).",
+    "date": "2026-01-20",
+    "start_time": "12:00",
+    "end_time": "14:00"
+  },
+  {
+    "name": " [Attendance] Attendance Reports",
+    "hours": 2.0,
+    "description": "Attendance Reports (Calendar View, Monthly Stats).",
+    "date": "2026-01-20",
+    "start_time": "14:00",
+    "end_time": "16:00"
+  },
+  {
+    "name": " [Attendance] Student Individual Attendance Report.",
+    "hours": 1.5,
+    "description": "Student Individual Attendance Report.",
+    "date": "2026-01-20",
+    "start_time": "16:00",
+    "end_time": "17:30"
+  },
+  {
+    "name": " [Staff Attendance] Admin Marking Interface & Biometric Sync",
+    "hours": 2.0,
+    "description": "Admin Marking Interface & Biometric Sync (Mock).",
+    "date": "2026-01-20",
+    "start_time": "17:30",
+    "end_time": "19:30"
+  },
+  {
+    "name": " [Staff Attendance] Leave Management UI",
+    "hours": 1.5,
+    "description": "Leave Management UI (Apply, Approve).",
+    "date": "2026-01-20",
+    "start_time": "19:30",
+    "end_time": "21:00"
+  },
+  {
+    "name": " [Staff Attendance] Leave Balance & Rules Configuration.",
+    "hours": 1.5,
+    "description": "Leave Balance & Rules Configuration.",
+    "date": "2026-01-20",
+    "start_time": "21:00",
+    "end_time": "22:30"
+  },
+  {
+    "name": " [General] Testing Attendance Calculations.",
+    "hours": 1.5,
+    "description": "Testing Attendance Calculations.",
+    "date": "2026-01-20",
+    "start_time": "22:30",
+    "end_time": "00:00"
+  },
+  {
+    "name": " [Exams] Exam Term/Category Management.",
+    "hours": 2.0,
+    "description": "Exam Term/Category Management.",
+    "date": "2026-01-21",
+    "start_time": "08:00",
+    "end_time": "10:00"
+  },
+  {
+    "name": " [Exams] Create Exam Workflow",
+    "hours": 2.0,
+    "description": "Create Exam Workflow (Select Classes, Dates).",
+    "date": "2026-01-21",
+    "start_time": "10:00",
+    "end_time": "12:00"
+  },
+  {
+    "name": " [Exams] Exam Schedule Builder",
+    "hours": 2.0,
+    "description": "Exam Schedule Builder (Dates per subject).",
+    "date": "2026-01-21",
+    "start_time": "12:00",
+    "end_time": "14:00"
+  },
+  {
+    "name": " [Exams] Hall Ticket Generation",
+    "hours": 2.0,
+    "description": "Hall Ticket Generation (UI & Layout).",
+    "date": "2026-01-21",
+    "start_time": "14:00",
+    "end_time": "16:00"
+  },
+  {
+    "name": " [Backend] Ensure `exam_schedules` supports all edge cases.",
+    "hours": 2.0,
+    "description": "Ensure `exam_schedules` supports all edge cases.",
+    "date": "2026-01-21",
+    "start_time": "16:00",
+    "end_time": "18:00"
+  },
+  {
+    "name": " [Exams] Student Exam Dashboard",
+    "hours": 2.0,
+    "description": "Student Exam Dashboard (Upcoming Exams).",
+    "date": "2026-01-21",
+    "start_time": "18:00",
+    "end_time": "20:00"
+  },
+  {
+    "name": " [Exams] Seating Arrangement Plan",
+    "hours": 2.0,
+    "description": "Seating Arrangement Plan (Basic UI).",
+    "date": "2026-01-21",
+    "start_time": "20:00",
+    "end_time": "22:00"
+  },
+  {
+    "name": " [General] Unit Testing Exam Scheduling Logic.",
+    "hours": 2.0,
+    "description": "Unit Testing Exam Scheduling Logic.",
+    "date": "2026-01-21",
+    "start_time": "22:00",
+    "end_time": "00:00"
+  },
+  {
+    "name": " [Marks] Grade System Configuration",
+    "hours": 2.0,
+    "description": "Grade System Configuration (GPA, Percentages).",
+    "date": "2026-01-22",
+    "start_time": "08:00",
+    "end_time": "10:00"
+  },
+  {
+    "name": " [Marks] High-Performance Marks Entry Grid",
+    "hours": 3.0,
+    "description": "High-Performance Marks Entry Grid (Excel-like navigation).",
+    "date": "2026-01-22",
+    "start_time": "10:00",
+    "end_time": "13:00"
+  },
+  {
+    "name": " [Marks] Logic for Input Validation",
+    "hours": 2.0,
+    "description": "Logic for Input Validation (Max marks, Absents).",
+    "date": "2026-01-22",
+    "start_time": "13:00",
+    "end_time": "15:00"
+  },
+  {
+    "name": " [Marks] Teacher \"Submit for Approval\" Workflow.",
+    "hours": 2.0,
+    "description": "Teacher \"Submit for Approval\" Workflow.",
+    "date": "2026-01-22",
+    "start_time": "15:00",
+    "end_time": "17:00"
+  },
+  {
+    "name": " [Marks] Backend Calculation Verification",
+    "hours": 2.0,
+    "description": "Backend Calculation Verification (Totals, Ranks).",
+    "date": "2026-01-22",
+    "start_time": "17:00",
+    "end_time": "19:00"
+  },
+  {
+    "name": " [Marks] Result Ledger View",
+    "hours": 2.0,
+    "description": "Result Ledger View (Class-wide summary).",
+    "date": "2026-01-22",
+    "start_time": "19:00",
+    "end_time": "21:00"
+  },
+  {
+    "name": " [Marks] Tabulation Sheet Generation.",
+    "hours": 2.0,
+    "description": "Tabulation Sheet Generation.",
+    "date": "2026-01-22",
+    "start_time": "21:00",
+    "end_time": "23:00"
+  },
+  {
+    "name": " [General] Testing Marks Entry Edge Cases.",
+    "hours": 1.5,
+    "description": "Testing Marks Entry Edge Cases.",
+    "date": "2026-01-22",
+    "start_time": "23:00",
+    "end_time": "00:30"
+  },
+  {
+    "name": " [Reports] Design Report Card Layouts",
+    "hours": 2.5,
+    "description": "Design Report Card Layouts (HTML/CSS for PDF).",
+    "date": "2026-01-23",
+    "start_time": "08:00",
+    "end_time": "10:30"
+  },
+  {
+    "name": " [Reports] Implement PDF Generation",
+    "hours": 2.5,
+    "description": "Implement PDF Generation (Client-side or Backend Trigger).",
+    "date": "2026-01-23",
+    "start_time": "10:30",
+    "end_time": "13:00"
+  },
+  {
+    "name": " [Reports] Student \"My Results\" View.",
+    "hours": 2.0,
+    "description": "Student \"My Results\" View.",
+    "date": "2026-01-23",
+    "start_time": "13:00",
+    "end_time": "15:00"
+  },
+  {
+    "name": " [Analytics] Class Performance Charts",
+    "hours": 2.0,
+    "description": "Class Performance Charts (Avg, Top Scorers).",
+    "date": "2026-01-23",
+    "start_time": "15:00",
+    "end_time": "17:00"
+  },
+  {
+    "name": " [Analytics] Subject-wise Analysis Dashboard.",
+    "hours": 2.0,
+    "description": "Subject-wise Analysis Dashboard.",
+    "date": "2026-01-23",
+    "start_time": "17:00",
+    "end_time": "19:00"
+  },
+  {
+    "name": " [Backend] Verify `results.py` and Aggregation Queries.",
+    "hours": 2.0,
+    "description": "Verify `results.py` and Aggregation Queries.",
+    "date": "2026-01-23",
+    "start_time": "19:00",
+    "end_time": "21:00"
+  },
+  {
+    "name": " [Reports] Parent Portal Results View.",
+    "hours": 2.0,
+    "description": "Parent Portal Results View.",
+    "date": "2026-01-23",
+    "start_time": "21:00",
+    "end_time": "23:00"
+  },
+  {
+    "name": " [General] Final Polish on Report Cards.",
+    "hours": 1.5,
+    "description": "Final Polish on Report Cards.",
+    "date": "2026-01-23",
+    "start_time": "23:00",
+    "end_time": "00:30"
+  },
+  {
+    "name": " [Fees] Fee Head/Category Management.",
+    "hours": 2.0,
+    "description": "Fee Head/Category Management.",
+    "date": "2026-01-24",
+    "start_time": "08:00",
+    "end_time": "10:00"
+  },
+  {
+    "name": " [Fees] Create Fee Structures",
+    "hours": 2.5,
+    "description": "Create Fee Structures (Allocating to Classes/Types).",
+    "date": "2026-01-24",
+    "start_time": "10:00",
+    "end_time": "12:30"
+  },
+  {
+    "name": " [Fees] Allocate Fees to Students",
+    "hours": 2.0,
+    "description": "Allocate Fees to Students (Bulk Implementation).",
+    "date": "2026-01-24",
+    "start_time": "12:30",
+    "end_time": "14:30"
+  },
+  {
+    "name": " [Fees] Discount/Scholarship Management UI.",
+    "hours": 2.0,
+    "description": "Discount/Scholarship Management UI.",
+    "date": "2026-01-24",
+    "start_time": "14:30",
+    "end_time": "16:30"
+  },
+  {
+    "name": " [Fees] Student Fee Profile",
+    "hours": 2.0,
+    "description": "Student Fee Profile (Dues, Payment History).",
+    "date": "2026-01-24",
+    "start_time": "16:30",
+    "end_time": "18:30"
+  },
+  {
+    "name": " [Backend] Verify Fee Calculation Logic & Dues.",
+    "hours": 2.0,
+    "description": "Verify Fee Calculation Logic & Dues.",
+    "date": "2026-01-24",
+    "start_time": "18:30",
+    "end_time": "20:30"
+  },
+  {
+    "name": " [Fees] Fee Receipt Template Design.",
+    "hours": 1.5,
+    "description": "Fee Receipt Template Design.",
+    "date": "2026-01-24",
+    "start_time": "20:30",
+    "end_time": "22:00"
+  },
+  {
+    "name": " [General] Testing Fee Allocation Scenarios.",
+    "hours": 2.0,
+    "description": "Testing Fee Allocation Scenarios.",
+    "date": "2026-01-24",
+    "start_time": "22:00",
+    "end_time": "00:00"
+  },
+  {
+    "name": " [Payments] Collect Fee UI",
+    "hours": 3.0,
+    "description": "Collect Fee UI (Cash/Bank entry, Partial payments).",
+    "date": "2026-01-25",
+    "start_time": "08:00",
+    "end_time": "11:00"
+  },
+  {
+    "name": " [Payments] Online Payment Gateway Integration",
+    "hours": 2.0,
+    "description": "Online Payment Gateway Integration (UI hooks).",
+    "date": "2026-01-25",
+    "start_time": "11:00",
+    "end_time": "13:00"
+  },
+  {
+    "name": " [Accounting] Expense Management UI",
+    "hours": 2.0,
+    "description": "Expense Management UI (Vouchers, Categories).",
+    "date": "2026-01-25",
+    "start_time": "13:00",
+    "end_time": "15:00"
+  },
+  {
+    "name": " [Accounting] Income vs Expense Reports.",
+    "hours": 2.0,
+    "description": "Income vs Expense Reports.",
+    "date": "2026-01-25",
+    "start_time": "15:00",
+    "end_time": "17:00"
+  },
+  {
+    "name": " [Accounting] Daily Collection Report.",
+    "hours": 2.0,
+    "description": "Daily Collection Report.",
+    "date": "2026-01-25",
+    "start_time": "17:00",
+    "end_time": "19:00"
+  },
+  {
+    "name": " [Payroll] Staff Salary Structure Setup.",
+    "hours": 2.0,
+    "description": "Staff Salary Structure Setup.",
+    "date": "2026-01-25",
+    "start_time": "19:00",
+    "end_time": "21:00"
+  },
+  {
+    "name": " [Payroll] Generate Payslip UI.",
+    "hours": 2.0,
+    "description": "Generate Payslip UI.",
+    "date": "2026-01-25",
+    "start_time": "21:00",
+    "end_time": "23:00"
+  },
+  {
+    "name": " [General] Audit & Testing Financials.",
+    "hours": 1.5,
+    "description": "Audit & Testing Financials.",
+    "date": "2026-01-25",
+    "start_time": "23:00",
+    "end_time": "00:30"
+  },
+  {
+    "name": " [Library] Book Master Management.",
+    "hours": 2.0,
+    "description": "Book Master Management.",
+    "date": "2026-01-26",
+    "start_time": "08:00",
+    "end_time": "10:00"
+  },
+  {
+    "name": " [Library] Issue/Return Interface",
+    "hours": 2.0,
+    "description": "Issue/Return Interface (Barcode ready).",
+    "date": "2026-01-26",
+    "start_time": "10:00",
+    "end_time": "12:00"
+  },
+  {
+    "name": " [Library] Member Management & Fine Collection.",
+    "hours": 2.0,
+    "description": "Member Management & Fine Collection.",
+    "date": "2026-01-26",
+    "start_time": "12:00",
+    "end_time": "14:00"
+  },
+  {
+    "name": " [Transport] Vehicle & Route Management.",
+    "hours": 2.0,
+    "description": "Vehicle & Route Management.",
+    "date": "2026-01-26",
+    "start_time": "14:00",
+    "end_time": "16:00"
+  },
+  {
+    "name": " [Transport] Route-Student Allocation UI.",
+    "hours": 2.0,
+    "description": "Route-Student Allocation UI.",
+    "date": "2026-01-26",
+    "start_time": "16:00",
+    "end_time": "18:00"
+  },
+  {
+    "name": " [Frontend] Integration with Fees",
+    "hours": 2.0,
+    "description": "Integration with Fees (Lib fines, Transport fees).",
+    "date": "2026-01-26",
+    "start_time": "18:00",
+    "end_time": "20:00"
+  },
+  {
+    "name": " [Backend] Verify `library_*` and `transport_*` endpoints.",
+    "hours": 2.0,
+    "description": "Verify `library_*` and `transport_*` endpoints.",
+    "date": "2026-01-26",
+    "start_time": "20:00",
+    "end_time": "22:00"
+  },
+  {
+    "name": " [General] Testing Library & Transport Flows.",
+    "hours": 1.5,
+    "description": "Testing Library & Transport Flows.",
+    "date": "2026-01-26",
+    "start_time": "22:00",
+    "end_time": "23:30"
+  },
+  {
+    "name": " [Comm] Notice Board UI",
+    "hours": 2.0,
+    "description": "Notice Board UI (Rich Text Editor).",
+    "date": "2026-01-27",
+    "start_time": "08:00",
+    "end_time": "10:00"
+  },
+  {
+    "name": " [Comm] SMS/Email Gateway Configuration UI.",
+    "hours": 2.0,
+    "description": "SMS/Email Gateway Configuration UI.",
+    "date": "2026-01-27",
+    "start_time": "10:00",
+    "end_time": "12:00"
+  },
+  {
+    "name": " [Comm] Send Bulk Message Interface",
+    "hours": 2.0,
+    "description": "Send Bulk Message Interface (Filters).",
+    "date": "2026-01-27",
+    "start_time": "12:00",
+    "end_time": "14:00"
+  },
+  {
+    "name": " [Dashboards] Admin Dashboard Widgets",
+    "hours": 2.0,
+    "description": "Admin Dashboard Widgets (Stats, Graphs).",
+    "date": "2026-01-27",
+    "start_time": "14:00",
+    "end_time": "16:00"
+  },
+  {
+    "name": " [Dashboards] Teacher Dashboard",
+    "hours": 2.0,
+    "description": "Teacher Dashboard (Schedule, Actions).",
+    "date": "2026-01-27",
+    "start_time": "16:00",
+    "end_time": "18:00"
+  },
+  {
+    "name": " [Dashboards] Student/Parent Dashboard.",
+    "hours": 2.0,
+    "description": "Student/Parent Dashboard.",
+    "date": "2026-01-27",
+    "start_time": "18:00",
+    "end_time": "20:00"
+  },
+  {
+    "name": " [Settings] General School Settings UI.",
+    "hours": 2.0,
+    "description": "General School Settings UI.",
+    "date": "2026-01-27",
+    "start_time": "20:00",
+    "end_time": "22:00"
+  },
+  {
+    "name": " [Settings] Role & Permission Manager.",
+    "hours": 1.5,
+    "description": "Role & Permission Manager.",
+    "date": "2026-01-27",
+    "start_time": "22:00",
+    "end_time": "23:30"
+  },
+  {
+    "name": "",
+    "hours": 2.0,
+    "description": "AI Dashboard & \"Create Website\" Wizard.",
+    "date": "2026-01-28",
+    "start_time": "08:00",
+    "end_time": "10:00"
+  },
+  {
+    "name": " [AI] Prompt Interface & Progress Bar Implementation.",
+    "hours": 2.0,
+    "description": "Prompt Interface & Progress Bar Implementation.",
+    "date": "2026-01-28",
+    "start_time": "10:00",
+    "end_time": "12:00"
+  },
+  {
+    "name": " [AI] Real-time Status Polling Hook",
+    "hours": 2.0,
+    "description": "Real-time Status Polling Hook (React Query).",
+    "date": "2026-01-28",
+    "start_time": "12:00",
+    "end_time": "14:00"
+  },
+  {
+    "name": " [AI] Generated Website Previewer",
+    "hours": 2.0,
+    "description": "Generated Website Previewer (Iframe/Component).",
+    "date": "2026-01-28",
+    "start_time": "14:00",
+    "end_time": "16:00"
+  },
+  {
+    "name": " [AI] Theme/Color Editor for Generated Sites.",
+    "hours": 2.0,
+    "description": "Theme/Color Editor for Generated Sites.",
+    "date": "2026-01-28",
+    "start_time": "16:00",
+    "end_time": "18:00"
+  },
+  {
+    "name": " [AI] Publish/Deploy Workflows.",
+    "hours": 2.0,
+    "description": "Publish/Deploy Workflows.",
+    "date": "2026-01-28",
+    "start_time": "18:00",
+    "end_time": "20:00"
+  },
+  {
+    "name": " [AI] History & Management of Generated Sites.",
+    "hours": 2.0,
+    "description": "History & Management of Generated Sites.",
+    "date": "2026-01-28",
+    "start_time": "20:00",
+    "end_time": "22:00"
+  },
+  {
+    "name": " [AI] User Acceptance Testing",
+    "hours": 2.0,
+    "description": "User Acceptance Testing (AI Flows).",
+    "date": "2026-01-28",
+    "start_time": "22:00",
+    "end_time": "00:00"
+  },
+  {
+    "name": " [Public] Dynamic Tenant Routing",
+    "hours": 2.0,
+    "description": "Dynamic Tenant Routing (Frontend).",
+    "date": "2026-01-29",
+    "start_time": "08:00",
+    "end_time": "10:00"
+  },
+  {
+    "name": " [Public] Generic Template Components",
+    "hours": 3.0,
+    "description": "Generic Template Components (Hero, Features, Contact).",
+    "date": "2026-01-29",
+    "start_time": "10:00",
+    "end_time": "13:00"
+  },
+  {
+    "name": " [Public] Integration with Backend CMS",
+    "hours": 2.0,
+    "description": "Integration with Backend CMS (Public Content).",
+    "date": "2026-01-29",
+    "start_time": "13:00",
+    "end_time": "15:00"
+  },
+  {
+    "name": " [Public] Admission Enquiry Form",
+    "hours": 2.0,
+    "description": "Admission Enquiry Form (Public).",
+    "date": "2026-01-29",
+    "start_time": "15:00",
+    "end_time": "17:00"
+  },
+  {
+    "name": " [Public] Student Login Page",
+    "hours": 2.0,
+    "description": "Student Login Page (Tenant specific).",
+    "date": "2026-01-29",
+    "start_time": "17:00",
+    "end_time": "19:00"
+  },
+  {
+    "name": " [Backend] Verify Domain/Subdomain Resolution.",
+    "hours": 2.0,
+    "description": "Verify Domain/Subdomain Resolution.",
+    "date": "2026-01-29",
+    "start_time": "19:00",
+    "end_time": "21:00"
+  },
+  {
+    "name": " [General] Cross-Tenant Data Isolation Testing.",
+    "hours": 2.0,
+    "description": "Cross-Tenant Data Isolation Testing.",
+    "date": "2026-01-29",
+    "start_time": "21:00",
+    "end_time": "23:00"
+  },
+  {
+    "name": " [General] Security Audit",
+    "hours": 1.5,
+    "description": "Security Audit (Tenant Leaks).",
+    "date": "2026-01-29",
+    "start_time": "23:00",
+    "end_time": "00:30"
+  },
+  {
+    "name": " [Mobile] Responsive Design Audit",
+    "hours": 2.0,
+    "description": "Responsive Design Audit (Mobile/Tablets).",
+    "date": "2026-01-30",
+    "start_time": "08:00",
+    "end_time": "10:00"
+  },
+  {
+    "name": " [Mobile] Touch Optimization",
+    "hours": 2.0,
+    "description": "Touch Optimization (Tables, Grids).",
+    "date": "2026-01-30",
+    "start_time": "10:00",
+    "end_time": "12:00"
+  },
+  {
+    "name": " [Perf] Code Splitting & Lazy Loading Optimization.",
+    "hours": 2.0,
+    "description": "Code Splitting & Lazy Loading Optimization.",
+    "date": "2026-01-30",
+    "start_time": "12:00",
+    "end_time": "14:00"
+  },
+  {
+    "name": " [Perf] Image Optimization & Caching Strategy.",
+    "hours": 2.0,
+    "description": "Image Optimization & Caching Strategy.",
+    "date": "2026-01-30",
+    "start_time": "14:00",
+    "end_time": "16:00"
+  },
+  {
+    "name": " [SEO] Meta Tags, Sitemap, Robots.txt",
+    "hours": 2.0,
+    "description": "Meta Tags, Sitemap, Robots.txt (Dynamic).",
+    "date": "2026-01-30",
+    "start_time": "16:00",
+    "end_time": "18:00"
+  },
+  {
+    "name": " [Security] Input Sanitization & XSS Audit.",
+    "hours": 2.0,
+    "description": "Input Sanitization & XSS Audit.",
+    "date": "2026-01-30",
+    "start_time": "18:00",
+    "end_time": "20:00"
+  },
+  {
+    "name": " [Security] Rate Limiting & Auth Checks.",
+    "hours": 2.0,
+    "description": "Rate Limiting & Auth Checks.",
+    "date": "2026-01-30",
+    "start_time": "20:00",
+    "end_time": "22:00"
+  },
+  {
+    "name": " [Bugfix] Regression Testing & Fixes.",
+    "hours": 2.0,
+    "description": "Regression Testing & Fixes.",
+    "date": "2026-01-30",
+    "start_time": "22:00",
+    "end_time": "00:00"
+  },
+  {
+    "name": " [Docs] API Documentation Review",
+    "hours": 2.0,
+    "description": "API Documentation Review (Swagger).",
+    "date": "2026-01-31",
+    "start_time": "08:00",
+    "end_time": "10:00"
+  },
+  {
+    "name": " [Deploy] Docker Compose Finalization",
+    "hours": 2.0,
+    "description": "Docker Compose Finalization (Prod Ready).",
+    "date": "2026-01-31",
+    "start_time": "13:00",
+    "end_time": "15:00"
+  },
+  {
+    "name": " [Deploy] Database Migration & Seed Scripts Finalization.",
+    "hours": 2.0,
+    "description": "Database Migration & Seed Scripts Finalization.",
+    "date": "2026-01-31",
+    "start_time": "17:00",
+    "end_time": "19:00"
+  }
+]

@@ -18,6 +18,7 @@ import {
   Build,
   LocalShipping,
   Assessment,
+  Settings,
   Menu as MenuIcon,
 } from "@mui/icons-material";
 
@@ -27,7 +28,8 @@ type LogisticsTab =
   | "assets"
   | "maintenance"
   | "vendors"
-  | "reports";
+  | "reports"
+  | "settings";
 
 type LogisticsLayoutProps = {
   activeTab: LogisticsTab;
@@ -48,6 +50,7 @@ const tabs: {
   { id: "maintenance", label: "Maintenance", icon: <Build /> },
   { id: "vendors", label: "Vendors", icon: <LocalShipping /> },
   { id: "reports", label: "Reports", icon: <Assessment /> },
+  { id: "settings", label: "Settings", icon: <Settings /> },
 ];
 
 export default function LogisticsLayout({

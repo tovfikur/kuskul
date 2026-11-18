@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Box,
   Paper,
@@ -57,13 +57,28 @@ import type {
   Staff,
 } from "../../../../api/staffManagement";
 
+function extractItems<T>(data: unknown): T[] {
+  if (data && typeof data === "object" && "items" in data) {
+    const items = (data as { items?: unknown }).items;
+    if (Array.isArray(items)) return items as T[];
+  }
+  return [];
+}
+
+function getDetailMessage(data: unknown, fallback: string): string {
+  if (data && typeof data === "object" && "detail" in data) {
+    const detail = (data as { detail?: unknown }).detail;
+    if (typeof detail === "string") return detail;
+  }
+  return fallback;
+}
+
 export function PayrollTab() {
   // Data State
   const [cycles, setCycles] = useState<PayrollCycle[]>([]);
   const [currentCycle, setCurrentCycle] =
     useState<PayrollCycleWithStats | null>(null);
   const [payslips, setPayslips] = useState<Payslip[]>([]);
-  const [staffList, setStaffList] = useState<Staff[]>([]);
   const [staffMap, setStaffMap] = useState<Record<string, Staff>>({});
 
   // UI State
@@ -84,13 +99,82 @@ export function PayrollTab() {
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
   const [editMode, setEditMode] = useState(false);
-  const [editData, setEditData] = useState<any>({});
+  const [editData, setEditData] = useState<{
+    basic_salary?: number;
+    allowances?: Record<string, number>;
+    deductions?: Record<string, number>;
+    working_days?: number;
+    present_days?: number;
+    leave_days?: number;
+  }>({});
 
-  // Initial Load
+  const loadStaff = useCallback(async () => {
+    try {
+      const res = await listStaff({ limit: 1000, status: "active" });
+      if (res.ok && res.data) {
+        const list = extractItems<Staff>(res.data);
+        const map: Record<string, Staff> = {};
+        list.forEach((s) => {
+          map[s.id] = s;
+        });
+        setStaffMap(map);
+      }
+    } catch (err) {
+      console.error("Failed to load staff", err);
+    }
+  }, []);
+
+  const loadCycles = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listPayrollCycles({ year: selectedYear, limit: 12 });
+      const items =
+        res.ok && res.data ? extractItems<PayrollCycle>(res.data) : [];
+      setCycles(items);
+
+      const match = items.find(
+        (c: PayrollCycle) =>
+          Number(c.month) === Number(selectedMonth) &&
+          Number(c.year) === Number(selectedYear),
+      );
+      if (match) {
+        setSelectedCycleId(match.id);
+      } else {
+        setSelectedCycleId("");
+      }
+    } catch (err) {
+      console.error("Failed to load cycles", err);
+      setError("Failed to load payroll cycles");
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedMonth, selectedYear]);
+
+  const loadCycleDetails = useCallback(async (id: string) => {
+    try {
+      const cycleRes = await getPayrollCycle(id);
+      if (cycleRes.ok && cycleRes.data) {
+        setCurrentCycle(cycleRes.data as PayrollCycleWithStats);
+      }
+
+      const payslipsRes = await getCyclePayslips(id, { limit: 500 });
+      if (payslipsRes.ok && payslipsRes.data) {
+        setPayslips(extractItems<Payslip>(payslipsRes.data));
+      } else {
+        setError(getDetailMessage(payslipsRes.data, "Failed to load payslips"));
+      }
+    } catch (err) {
+      console.error("Failed to load cycle details", err);
+    }
+  }, []);
+
   useEffect(() => {
     loadStaff();
+  }, [loadStaff]);
+
+  useEffect(() => {
     loadCycles();
-  }, [selectedYear]);
+  }, [loadCycles]);
 
   useEffect(() => {
     if (selectedCycleId) {
@@ -99,87 +183,7 @@ export function PayrollTab() {
       setCurrentCycle(null);
       setPayslips([]);
     }
-  }, [selectedCycleId]);
-
-  useEffect(() => {
-    const match = cycles.find(
-      (c: PayrollCycle) =>
-        Number(c.month) === Number(selectedMonth) &&
-        Number(c.year) === Number(selectedYear),
-    );
-    const nextId = match ? match.id : "";
-    if (nextId !== selectedCycleId) {
-      setSelectedCycleId(nextId);
-    }
-  }, [cycles, selectedMonth, selectedYear, selectedCycleId]);
-
-  const loadStaff = async () => {
-    try {
-      const res = await listStaff({ limit: 1000, status: "active" });
-      if ((res as any).data?.items) {
-        const list = (res as any).data.items;
-        setStaffList(list);
-        const map: Record<string, Staff> = {};
-        list.forEach((s: Staff) => (map[s.id] = s));
-        setStaffMap(map);
-      }
-    } catch (err) {
-      console.error("Failed to load staff", err);
-    }
-  };
-
-  const loadCycles = async () => {
-    setLoading(true);
-    try {
-      const res = await listPayrollCycles({ year: selectedYear, limit: 12 });
-      // safeRequest returns { data: { items: [...] } }
-      const items = (res as any).data?.items || [];
-      setCycles(items);
-
-      // Auto-select current month cycle or first available
-      // Ensure strict type matching for month/year comparison
-      const match = items.find(
-        (c: PayrollCycle) =>
-          Number(c.month) === Number(selectedMonth) &&
-          Number(c.year) === Number(selectedYear),
-      );
-      if (match) {
-        setSelectedCycleId(match.id);
-      } else if (items.length > 0) {
-        // If the selected month doesn't exist, we should NOT auto-select another month randomly
-        // because that confuses the user who thinks they are looking at "selectedMonth"
-        // Instead, we should clear the selection so the UI shows "Create" state for the selected month.
-        setSelectedCycleId("");
-      } else {
-        setSelectedCycleId("");
-      }
-    } catch (err: any) {
-      console.error("Failed to load cycles", err);
-      setError("Failed to load payroll cycles");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadCycleDetails = async (id: string) => {
-    try {
-      const cycleRes = await getPayrollCycle(id);
-      if ((cycleRes as any).ok && (cycleRes as any).data) {
-        setCurrentCycle((cycleRes as any).data);
-      }
-
-      const payslipsRes = await getCyclePayslips(id, { limit: 500 });
-      if ((payslipsRes as any).ok) {
-        setPayslips((payslipsRes as any).data?.items || []);
-      } else {
-        setError(
-          (payslipsRes as any).data?.detail || "Failed to load payslips",
-        );
-      }
-    } catch (err) {
-      console.error("Failed to load cycle details", err);
-    }
-  };
+  }, [selectedCycleId, loadCycleDetails]);
 
   const handleCreateCycle = async () => {
     setProcessing(true);
@@ -279,7 +283,7 @@ export function PayrollTab() {
   const handleViewDetails = (payslip: Payslip) => {
     setSelectedPayslip(payslip);
     setEditData({
-      basic_salary: payslip.basic_salary,
+      basic_salary: Number(payslip.basic_salary),
       allowances: payslip.allowances,
       deductions: payslip.deductions,
       working_days: payslip.working_days,

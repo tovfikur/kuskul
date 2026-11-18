@@ -23,6 +23,7 @@ import {
   TextField,
   Typography,
   IconButton,
+  GlobalStyles,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -92,7 +93,7 @@ export default function TimetableTab() {
         const [cls, subs, staff, slots, year] = await Promise.all([
           getClasses(),
           getSubjects(),
-          getStaff(),
+          getStaff(1, 100, true),
           getTimeSlots(),
           getCurrentAcademicYear(),
         ]);
@@ -304,6 +305,11 @@ export default function TimetableTab() {
     return map;
   }, [subjects]);
 
+  const getSubjectLabel = (subject: Subject) => {
+    const code = subject.code?.trim();
+    return code ? `(${code}) ${subject.name}` : subject.name;
+  };
+
   const staffById = useMemo(() => {
     const map = new Map<string, Staff>();
     for (const s of staffList) map.set(s.id, s);
@@ -320,6 +326,83 @@ export default function TimetableTab() {
 
   return (
     <Box>
+      <GlobalStyles
+        styles={{
+          "@page": {
+            size: "A4 landscape",
+            margin: "10mm",
+          },
+          "@media print": {
+            "html, body": {
+              width: "297mm",
+              height: "210mm",
+              background: "#fff !important",
+              margin: "0 !important",
+            },
+            "body *": {
+              visibility: "hidden",
+            },
+            ".timetable-print-area, .timetable-print-area *": {
+              visibility: "visible",
+            },
+            ".timetable-print-area": {
+              position: "absolute",
+              left: 0,
+              top: 0,
+              width: "100%",
+              margin: 0,
+              padding: 0,
+              transform: "none !important",
+            },
+            ".timetable-print-hidden, .timetable-entry-actions": {
+              display: "none !important",
+            },
+            ".timetable-print-area.MuiPaper-root": {
+              borderRadius: "0 !important",
+              boxShadow: "none !important",
+            },
+            ".timetable-print-area.MuiTableContainer-root": {
+              maxHeight: "none !important",
+              overflow: "visible !important",
+            },
+            ".timetable-print-area .MuiTableContainer-root": {
+              maxHeight: "none !important",
+              overflow: "visible !important",
+              boxShadow: "none !important",
+            },
+            ".timetable-print-area .MuiTable-root": {
+              width: "100% !important",
+              tableLayout: "fixed",
+              borderCollapse: "collapse",
+            },
+            ".timetable-print-area .MuiTableRow-root": {
+              breakInside: "avoid",
+              pageBreakInside: "avoid",
+            },
+            ".timetable-print-area .MuiTableCell-root": {
+              border: "1px solid #222 !important",
+              color: "#000 !important",
+              padding: "6px 8px !important",
+              fontSize: "10px !important",
+              lineHeight: "1.25 !important",
+              overflowWrap: "break-word",
+              wordBreak: "normal",
+            },
+            ".timetable-print-area .MuiTableCell-root:first-of-type": {
+              width: "22mm !important",
+            },
+            ".timetable-print-area .MuiTableCell-stickyHeader": {
+              position: "static !important",
+              backgroundColor: "#fff !important",
+            },
+            ".timetable-print-area .MuiTypography-root": {
+              color: "#000 !important",
+              fontSize: "inherit !important",
+              lineHeight: "inherit !important",
+            },
+          },
+        }}
+      />
       <Box sx={{ mb: 3, display: "flex", gap: 2 }}>
         <FormControl sx={{ minWidth: 200 }} disabled={initLoading}>
           <InputLabel>Class</InputLabel>
@@ -381,7 +464,9 @@ export default function TimetableTab() {
           }}
         >
           <Button
+            className="timetable-add-entry-button--hidden"
             variant="contained"
+            sx={{ display: "none" }}
             disabled={
               initLoading ||
               sectionsLoading ||
@@ -415,7 +500,22 @@ export default function TimetableTab() {
           >
             Add Entry
           </Button>
+          <Button
+            className="timetable-print-hidden"
+            variant="outlined"
+            disabled={
+              initLoading ||
+              sectionsLoading ||
+              !effectiveSectionId ||
+              visibleDays.length === 0 ||
+              visibleTimeSlots.length === 0
+            }
+            onClick={() => window.print()}
+          >
+            Print
+          </Button>
           <FormControlLabel
+            className="timetable-print-hidden"
             control={
               <Switch
                 checked={showAllDays}
@@ -476,7 +576,12 @@ export default function TimetableTab() {
         </Paper>
       ) : (
         <>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          <Typography
+            className="timetable-print-hidden"
+            variant="body2"
+            color="text.secondary"
+            sx={{ mb: 1 }}
+          >
             Click a cell to add or edit an entry.
           </Typography>
           {visibleDays.length === 0 ? (
@@ -496,7 +601,11 @@ export default function TimetableTab() {
               </Box>
             </Paper>
           ) : (
-            <TableContainer component={Paper} sx={{ maxHeight: 640 }}>
+            <TableContainer
+              className="timetable-print-area"
+              component={Paper}
+              sx={{ maxHeight: 640 }}
+            >
               <Table stickyHeader>
                 <TableHead>
                   <TableRow>
@@ -539,6 +648,7 @@ export default function TimetableTab() {
                             ? staffById.get(entry.staff_id)
                             : undefined;
                           const primary = subject?.name || "-";
+                          const subjectCode = subject?.code?.trim();
                           const secondaryParts: string[] = [];
                           if (staff) {
                             secondaryParts.push(staff.full_name);
@@ -585,6 +695,7 @@ export default function TimetableTab() {
                                 </Typography>
                                 {entry ? (
                                   <Box
+                                    className="timetable-entry-actions"
                                     sx={{
                                       display: "flex",
                                       alignItems: "flex-start",
@@ -613,6 +724,14 @@ export default function TimetableTab() {
                                   </Box>
                                 ) : null}
                               </Box>
+                              {subjectCode ? (
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  ({subjectCode})
+                                </Typography>
+                              ) : null}
                               {secondary ? (
                                 <Typography
                                   variant="body2"
@@ -704,7 +823,7 @@ export default function TimetableTab() {
               <MenuItem value="">(None)</MenuItem>
               {subjects.map((s) => (
                 <MenuItem key={s.id} value={s.id}>
-                  {s.name}
+                  {getSubjectLabel(s)}
                 </MenuItem>
               ))}
             </Select>

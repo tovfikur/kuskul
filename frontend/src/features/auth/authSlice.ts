@@ -13,6 +13,7 @@ type AuthState = {
   memberships: Array<{
     school_id: string;
     role_id: string;
+    role_name?: string | null;
     school_name: string;
   }>;
   activeSchoolId: string | null;

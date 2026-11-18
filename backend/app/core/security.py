@@ -1,12 +1,15 @@
 import hashlib
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from jose import jwt
+from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from app.core.config import settings
+
+PUBLIC_ADMISSION_SCOPE = "admission_form"
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -41,6 +44,28 @@ def decode_access_token(token: str) -> dict[str, Any]:
         issuer=settings.jwt_issuer,
         audience=settings.jwt_audience,
     )
+
+
+def create_public_admission_token(*, school_id: uuid.UUID, version: str) -> str:
+    payload = {
+        "scope": PUBLIC_ADMISSION_SCOPE,
+        "school_id": str(school_id),
+        "version": version,
+        "iat": int(datetime.now(timezone.utc).timestamp()),
+    }
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")
+
+
+def decode_public_admission_token(token: str) -> dict[str, Any]:
+    try:
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"])
+    except JWTError as exc:
+        raise ValueError("Invalid admission form token") from exc
+    if payload.get("scope") != PUBLIC_ADMISSION_SCOPE:
+        raise ValueError("Invalid token scope")
+    if not payload.get("school_id") or not payload.get("version"):
+        raise ValueError("Invalid token payload")
+    return payload
 
 
 def new_refresh_token() -> str:

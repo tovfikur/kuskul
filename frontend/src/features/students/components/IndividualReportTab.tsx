@@ -116,7 +116,7 @@ export default function IndividualReportTab() {
           <Card elevation={0} sx={{ mb: 4, border: "1px solid", borderColor: "divider" }}>
             <CardContent>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Typography variant="h5" fontWeight={700}>
                     {selectedStudent.first_name} {selectedStudent.last_name}
                   </Typography>
@@ -124,7 +124,7 @@ export default function IndividualReportTab() {
                     Admission No: {selectedStudent.admission_no}
                   </Typography>
                 </Grid>
-                <Grid item xs={12} sm={6} sx={{ textAlign: "right" }}>
+                <Grid size={{ xs: 12, sm: 6 }} sx={{ textAlign: "right" }}>
                   <Chip
                     label={selectedStudent.status}
                     color={selectedStudent.status === "active" ? "success" : "default"}

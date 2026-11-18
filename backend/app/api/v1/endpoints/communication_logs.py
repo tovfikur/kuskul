@@ -12,7 +12,8 @@ from app.db.session import get_db
 from app.models.communication_log import CommunicationLog
 from app.models.membership import Membership
 from app.models.user import User
-from app.schemas.communication_logs import CommunicationLogOut, SendEmailRequest, SendSmsRequest
+from app.schemas.communication_logs import CommunicationLogOut, SendEmailRequest, SendSmsRequest, TestSmsRequest
+from app.services.sms import deliver_sms, sms_gateway_config
 
 router = APIRouter(dependencies=[Depends(require_permission("communication_logs:read"))])
 
@@ -35,6 +36,10 @@ def _out(l: CommunicationLog) -> CommunicationLogOut:
         recipient=l.recipient,
         subject=l.subject,
         body=l.body,
+        student_id=l.student_id,
+        category=l.category,
+        provider_result=l.provider_result,
+        created_at=l.created_at,
     )
 
 
@@ -82,6 +87,7 @@ def send_sms(
                 recipient=r,
                 subject=None,
                 body=payload.message,
+                category="manual",
                 created_at=now,
             )
         )
@@ -110,6 +116,7 @@ def send_email(
                 recipient=r,
                 subject=payload.subject,
                 body=payload.body,
+                category="manual",
                 created_at=now,
             )
         )
@@ -133,6 +140,31 @@ def send_bulk_email(
     school_id=Depends(get_active_school_id),
 ) -> dict[str, int]:
     return send_email(payload=payload, db=db, user=user, school_id=school_id)
+
+
+@router.post("/test-sms", dependencies=[Depends(require_permission("communication_logs:write"))])
+def test_sms(
+    payload: TestSmsRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    school_id=Depends(get_active_school_id),
+) -> dict:
+    """Send a single test message through the configured gateway from the UI."""
+    _ensure_membership(db, user.id, school_id)
+    config = sms_gateway_config(db, school_id)
+    if not config.get("gateway_configured"):
+        return {"ok": False, "status": "configured", "detail": "No SMS gateway URL is configured in Settings > Email & SMS."}
+    status = deliver_sms(
+        db, school_id=school_id, user_id=user.id, recipient=payload.recipient, body=payload.message, category="test"
+    )
+    db.commit()
+    log = db.scalar(
+        select(CommunicationLog)
+        .where(CommunicationLog.school_id == school_id, CommunicationLog.category == "test")
+        .order_by(CommunicationLog.created_at.desc())
+        .limit(1)
+    )
+    return {"ok": status == "sent", "status": status, "detail": log.provider_result if log else None}
 
 
 @router.get("/{log_id}", response_model=CommunicationLogOut)

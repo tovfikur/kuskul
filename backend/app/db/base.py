@@ -55,6 +55,7 @@ from app.models.holiday import Holiday
 from app.models.setting import Setting
 from app.models.backup_entry import BackupEntry
 from app.models.attendance_excuse import AttendanceExcuse
+from app.models.hikvision_attendance import HikvisionAttendanceEvent, HikvisionDevice, HikvisionStudentCredential
 from app.models.discipline_record import DisciplineRecord
 from app.models.appointment_request import AppointmentRequest
 from app.models.user import User

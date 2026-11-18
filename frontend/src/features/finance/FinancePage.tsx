@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Box, Button, Chip, Paper, Tab, Tabs, Typography } from "@mui/material";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
@@ -75,12 +75,21 @@ export default function FinancePage() {
   const tabKey = (params.get("tab") as FinanceTabKey | null) ?? "fees";
   const activeTab: FinanceTabKey = TAB_KEYS.includes(tabKey) ? tabKey : "fees";
   const tabIndex = TAB_KEYS.indexOf(activeTab);
+  const prefillStudentId = params.get("student_id");
+  const wantsCollect = params.get("collect") === "1";
 
   const setTab = (k: FinanceTabKey) => {
     const next = new URLSearchParams(params);
     next.set("tab", k);
     setParams(next, { replace: true });
   };
+
+  useEffect(() => {
+    if (activeTab !== "payments") return;
+    if (!wantsCollect) return;
+    if (collectOpen) return;
+    setCollectOpen(true);
+  }, [activeTab, collectOpen, wantsCollect]);
 
   const recalc = async () => {
     if (!confirm("Recalculate dues for the current academic year?")) return;
@@ -233,8 +242,15 @@ export default function FinancePage() {
         {activeTab === "payments" && (
           <PaymentsTab
             openCollect={collectOpen}
-            onCloseCollect={() => setCollectOpen(false)}
+            onCloseCollect={() => {
+              setCollectOpen(false);
+              const next = new URLSearchParams(params);
+              next.delete("collect");
+              next.delete("student_id");
+              setParams(next, { replace: true });
+            }}
             onOpenCollect={() => setCollectOpen(true)}
+            prefillStudentId={prefillStudentId}
           />
         )}
         {activeTab === "dues" && <DuesTab />}

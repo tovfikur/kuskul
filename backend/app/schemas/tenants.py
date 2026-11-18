@@ -13,6 +13,10 @@ class TenantOut(BaseModel):
     custom_domain: Optional[str] = None
     status: str
     admin_email: Optional[str] = None
+    school_count: int = 0
+    student_count: int = 0
+    staff_count: int = 0
+    user_count: int = 0
 
 
 class TenantProvisionRequest(BaseModel):

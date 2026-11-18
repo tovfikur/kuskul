@@ -20,6 +20,7 @@ import {
   getCurrentAcademicYear,
   type AcademicYear,
 } from "../../../api/academic";
+import { getStudent } from "../../../api/people";
 import { StudentPicker, type StudentOption } from "./StudentPicker";
 import { isoDate } from "../financeUtils";
 import { showToast } from "../../../app/toast";
@@ -28,10 +29,11 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onCollected: () => void;
+  prefillStudentId?: string | null;
 };
 
 export function CollectPaymentDialog(props: Props) {
-  const { open, onClose, onCollected } = props;
+  const { open, onClose, onCollected, prefillStudentId } = props;
 
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [student, setStudent] = useState<StudentOption | null>(null);
@@ -53,6 +55,21 @@ export function CollectPaymentDialog(props: Props) {
         showToast({ severity: "error", message: "Failed to load academic years" });
       });
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const id = (prefillStudentId || "").trim();
+    if (!id) return;
+    void getStudent(id)
+      .then((s) => {
+        const name = [s.first_name, s.last_name || ""].filter(Boolean).join(" ").trim();
+        const label = s.admission_no ? `${name} (${s.admission_no})` : name;
+        setStudent({ id: s.id, admission_no: s.admission_no ?? null, label });
+      })
+      .catch(() => {
+        return;
+      });
+  }, [open, prefillStudentId]);
 
   const submit = async () => {
     const amt = Number(amount);
@@ -166,4 +183,3 @@ export function CollectPaymentDialog(props: Props) {
     </Dialog>
   );
 }
-

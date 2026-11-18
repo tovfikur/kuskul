@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Run KusKul
+Comment=Start the KusKul local Docker development stack
+Exec=/home/saifur/Pictures/KusKul/run-kuskul.sh
+Path=/home/saifur/Pictures/KusKul
+Terminal=true
+Categories=Development;

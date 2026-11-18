@@ -38,6 +38,8 @@ def _out(d: Document) -> DocumentOut:
         entity_type=d.entity_type,
         entity_id=d.entity_id,
         filename=d.filename,
+        content_type=d.content_type,
+        created_at=d.created_at,
     )
 
 

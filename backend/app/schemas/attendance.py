@@ -12,6 +12,7 @@ class StudentAttendanceOut(BaseModel):
     class_id: Optional[uuid.UUID]
     section_id: Optional[uuid.UUID]
     status: str
+    is_late: bool = False
 
 
 class StaffAttendanceOut(BaseModel):

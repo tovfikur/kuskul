@@ -1,4 +1,10 @@
-import axios from "axios";
+import axios, { type AxiosError, type AxiosRequestConfig } from "axios";
+
+declare module "axios" {
+  interface AxiosRequestConfig {
+    suppressSuccessToast?: boolean;
+  }
+}
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -7,9 +13,12 @@ export const api = axios.create({
 
 // Flag to prevent multiple refresh requests
 let isRefreshing = false;
-let failedQueue: any[] = [];
+let failedQueue: Array<{
+  resolve: (value?: unknown) => void;
+  reject: (reason?: unknown) => void;
+}> = [];
 
-const processQueue = (error: any, token: any = null) => {
+const processQueue = (error: unknown, token: unknown = null) => {
   failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error);
@@ -33,6 +42,11 @@ api.interceptors.request.use((config) => {
         config.headers["X-School-Id"] = parsed.activeSchoolId;
       }
     }
+    const tenantSubdomain = localStorage.getItem("kuskul_tenant_subdomain");
+    if (tenantSubdomain) {
+      config.headers["X-Tenant-Subdomain"] = tenantSubdomain;
+    }
+
   } catch {
     // Ignore errors
   }
@@ -42,7 +56,9 @@ api.interceptors.request.use((config) => {
 // Response interceptor
 api.interceptors.response.use(
   async (response) => {
-    const originalRequest = response.config as any;
+    const originalRequest = response.config as AxiosRequestConfig & {
+      _retry?: boolean;
+    };
 
     // Handle 401 when validateStatus allows it (e.g. safeRequest)
     // We check !originalRequest._retry to avoid infinite loops
@@ -58,7 +74,7 @@ api.interceptors.response.use(
           .then(() => {
             return api(originalRequest);
           })
-          .catch((err) => {
+          .catch(() => {
             // If refresh failed, we still return the original response so the app can handle it
             return response;
           });
@@ -83,11 +99,14 @@ api.interceptors.response.use(
 
     return response;
   },
-  async (error) => {
-    const originalRequest = error.config;
+  async (error: AxiosError) => {
+    const originalRequest = error.config as
+      | (AxiosRequestConfig & { _retry?: boolean })
+      | undefined;
 
     // Handle 401 when validateStatus throws error (standard axios usage)
     if (
+      originalRequest &&
       error.response?.status === 401 &&
       !originalRequest._retry &&
       !originalRequest.url?.includes("/auth/refresh")

@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Grid, Paper, Stack, Typography } from "@mui/material";
+import {
+  Button,
+  Grid,
+  Paper,
+  Stack,
+  Typography,
+} from "@mui/material";
 import { Add } from "@mui/icons-material";
 
 import {
@@ -151,6 +157,22 @@ export function SaasAdminPage() {
   const total = tenants.length;
   const active = tenants.filter((t) => t.status === "active").length;
   const inactive = total - active;
+  const totalSchools = tenants.reduce(
+    (sum, tenant) => sum + (tenant.school_count ?? 0),
+    0,
+  );
+  const totalStudents = tenants.reduce(
+    (sum, tenant) => sum + (tenant.student_count ?? 0),
+    0,
+  );
+  const totalStaff = tenants.reduce(
+    (sum, tenant) => sum + (tenant.staff_count ?? 0),
+    0,
+  );
+  const totalUsers = tenants.reduce(
+    (sum, tenant) => sum + (tenant.user_count ?? 0),
+    0,
+  );
 
   return (
     <SaasAdminLayout>
@@ -181,14 +203,26 @@ export function SaasAdminPage() {
       </Stack>
 
       <Grid container spacing={2} sx={{ mb: 2.5 }}>
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <KpiCard label="Total tenants" value={total} />
         </Grid>
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <KpiCard label="Active" value={active} />
         </Grid>
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <KpiCard label="Inactive" value={inactive} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <KpiCard label="Schools" value={totalSchools} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <KpiCard label="Students" value={totalStudents} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <KpiCard label="Staff" value={totalStaff} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <KpiCard label="Users" value={totalUsers} />
         </Grid>
       </Grid>
 

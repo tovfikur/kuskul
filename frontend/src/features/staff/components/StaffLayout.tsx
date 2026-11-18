@@ -16,7 +16,6 @@ import {
   EventAvailable,
   BeachAccess,
   AccountBalance,
-  Star,
   Folder,
   Settings,
   Menu as MenuIcon,
@@ -27,7 +26,6 @@ type StaffTab =
   | "attendance"
   | "leave"
   | "payroll"
-  | "performance"
   | "documents"
   | "settings";
 
@@ -48,7 +46,6 @@ const tabs: {
   { id: "attendance", label: "Attendance", icon: <EventAvailable /> },
   { id: "leave", label: "Leave", icon: <BeachAccess /> },
   { id: "payroll", label: "Payroll", icon: <AccountBalance /> },
-  { id: "performance", label: "Performance", icon: <Star /> },
   { id: "documents", label: "Documents", icon: <Folder /> },
   { id: "settings", label: "Settings", icon: <Settings /> },
 ];

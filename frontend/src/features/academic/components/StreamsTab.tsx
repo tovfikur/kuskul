@@ -96,7 +96,7 @@ export default function StreamsTab() {
     <Box>
       <Box sx={{ mb: 2, display: "flex", justifyContent: "flex-end" }}>
         <Button variant="contained" onClick={() => setOpen(true)}>
-          Add Stream
+          Add Group
         </Button>
       </Box>
       <TableContainer component={Paper}>
@@ -141,7 +141,7 @@ export default function StreamsTab() {
             ))}
             {streams.length === 0 && (
               <TableRow>
-                <TableCell colSpan={3}>No streams found.</TableCell>
+                <TableCell colSpan={3}>No groups found.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -154,10 +154,10 @@ export default function StreamsTab() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Add Stream</DialogTitle>
+        <DialogTitle>Add Group</DialogTitle>
         <DialogContent>
           <TextField
-            label="Stream Name (e.g. Science)"
+            label="Group Name (e.g. Science)"
             fullWidth
             margin="normal"
             value={form.name}

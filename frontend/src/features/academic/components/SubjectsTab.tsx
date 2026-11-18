@@ -262,13 +262,13 @@ export default function SubjectsTab() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Name</TableCell>
+              <TableCell>Subject Name</TableCell>
               <TableCell>Code</TableCell>
               <TableCell>Type</TableCell>
               <TableCell>Credits</TableCell>
               <TableCell>Max Marks</TableCell>
-              <TableCell>Stream</TableCell>
               <TableCell>Group</TableCell>
+              <TableCell>Compulsory</TableCell>
               <TableCell>Status</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -381,7 +381,7 @@ export default function SubjectsTab() {
             />
           </Box>
           <FormControl fullWidth margin="normal">
-            <InputLabel>Stream</InputLabel>
+            <InputLabel>Group</InputLabel>
             <Select
               value={form.stream_id}
               label="Stream"
@@ -396,7 +396,7 @@ export default function SubjectsTab() {
             </Select>
           </FormControl>
           <FormControl fullWidth margin="normal">
-            <InputLabel>Subject Group</InputLabel>
+            <InputLabel>Compulsory Subject</InputLabel>
             <Select
               value={form.group_id}
               label="Subject Group"
@@ -451,7 +451,7 @@ export default function SubjectsTab() {
         <DialogTitle>Edit Subject</DialogTitle>
         <DialogContent>
           <TextField
-            label="Name"
+            label="Subject Name"
             fullWidth
             margin="normal"
             value={editForm.name}
@@ -520,10 +520,10 @@ export default function SubjectsTab() {
             />
           </Box>
           <FormControl fullWidth margin="normal">
-            <InputLabel>Stream</InputLabel>
+            <InputLabel>Group</InputLabel>
             <Select
               value={editForm.stream_id}
-              label="Stream"
+              label="Group"
               onChange={(e) =>
                 setEditForm({
                   ...editForm,
@@ -540,10 +540,10 @@ export default function SubjectsTab() {
             </Select>
           </FormControl>
           <FormControl fullWidth margin="normal">
-            <InputLabel>Subject Group</InputLabel>
+            <InputLabel>Compulsory Subject</InputLabel>
             <Select
               value={editForm.group_id}
-              label="Subject Group"
+              label="Compulsory Subject"
               onChange={(e) =>
                 setEditForm({
                   ...editForm,

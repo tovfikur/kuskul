@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import uuid
 
 from sqlalchemy import select
 from sqlalchemy import inspect
@@ -11,6 +12,49 @@ from app.models.role import Role
 from app.models.school import School
 from app.models.tenant import Tenant
 from app.models.user import User
+
+_DEFAULT_DESIGNATIONS = [
+    {'title': 'Principal',      'code': 'PRIN',  'level': 1, 'description': 'School Principal'},
+    {'title': 'Vice Principal', 'code': 'VPRIN', 'level': 2, 'description': 'Vice Principal'},
+    {'title': 'Admin',          'code': 'ADM',   'level': 3, 'description': 'Administrative Staff'},
+    {'title': 'Head Teacher',   'code': 'HTCH',  'level': 4, 'description': 'Head of Department / Senior Teacher'},
+    {'title': 'Teacher',        'code': 'TCH',   'level': 5, 'description': 'Teaching Staff'},
+    {'title': 'Librarian',      'code': 'LIB',   'level': 6, 'description': 'Library Staff'},
+    {'title': 'Lab Assistant',  'code': 'LAB',   'level': 7, 'description': 'Laboratory Assistant'},
+    {'title': 'Support Staff',  'code': 'SUP',   'level': 8, 'description': 'General Support Staff'},
+]
+
+
+def ensure_default_designations(db: Session, school_id: uuid.UUID) -> None:
+    """Seed default designations for a school if they don't already exist."""
+    try:
+        from app.models.staff_extended import Designation
+    except ImportError:
+        return
+
+    # Only seed if the designations table exists
+    if not inspect(db.get_bind()).has_table('designations'):
+        return
+
+    now = datetime.now(timezone.utc)
+    for d in _DEFAULT_DESIGNATIONS:
+        existing = db.scalar(
+            select(Designation).where(
+                Designation.school_id == school_id,
+                Designation.code == d['code'],
+            )
+        )
+        if not existing:
+            db.add(Designation(
+                school_id=school_id,
+                title=d['title'],
+                code=d['code'],
+                level=d['level'],
+                description=d['description'],
+                is_active=True,
+                created_at=now,
+            ))
+    db.flush()
 
 
 def ensure_default_roles(db: Session) -> None:
@@ -116,28 +160,43 @@ def ensure_default_roles(db: Session) -> None:
             "allow": [
                 "schools:read",
                 "academic:read",
+                "academic:write",
                 "students:read",
+                "students:write",
                 "enrollments:read",
+                "enrollments:write",
+                "guardians:read",
+                "guardians:write",
                 "staff:read",
                 "teacher_assignments:read",
+                "teacher_assignments:write",
                 "attendance:read",
+                "attendance:write",
                 "leaves:read",
                 "time_slots:read",
+                "time_slots:write",
                 "timetable:read",
+                "timetable:write",
                 "exams:read",
+                "exams:write",
                 "exam_schedules:read",
+                "exam_schedules:write",
                 "online_exams:read",
                 "online_exams:write",
                 "marks:read",
+                "marks:write",
                 "results:read",
                 "grades:read",
+                "grades:write",
                 "fee_structures:read",
                 "fee_payments:read",
                 "fee_dues:read",
                 "discounts:read",
                 "notices:read",
+                "notices:write",
                 "notifications:read",
                 "messages:read",
+                "messages:write",
                 "communication_logs:read",
                 "library_books:read",
                 "library_issues:read",
@@ -151,6 +210,7 @@ def ensure_default_roles(db: Session) -> None:
                 "documents:read",
                 "certificates:read",
                 "events:read",
+                "events:write",
                 "holidays:read",
                 "settings:read",
                 "audit_logs:read",
@@ -214,10 +274,10 @@ def ensure_default_roles(db: Session) -> None:
 
 
 def ensure_platform_admin(db: Session) -> None:
-    email = "platform@kuskul.com"
+    email = "platform@school.com"
     password = "password123"
-    school_code = "KUSKUL_PLATFORM"
-    school_name = "KusKul Platform"
+    school_code = "PLATFORM_ADMIN"
+    school_name = "Platform Admin"
 
     ensure_default_roles(db)
 
@@ -351,12 +411,12 @@ def ensure_default_exam_types(db: Session) -> None:
 
 
 def ensure_default_admin(db: Session) -> None:
-    email = "admin@kuskul.com"
+    email = "admin@school.com"
     password = "password123"
-    school_code = "KUSKUL_DEMO"
-    school_name = "KusKul Demo School"
+    school_code = "DEMO_SCHOOL"
+    school_name = "Demo School"
     tenant_subdomain = "demo"
-    tenant_name = "KusKul Demo"
+    tenant_name = "Demo Tenant"
 
     ensure_default_roles(db)
     ensure_default_exam_types(db)
@@ -409,3 +469,4 @@ def ensure_default_admin(db: Session) -> None:
     if role:
         membership = Membership(user_id=user.id, school_id=school.id, role_id=role.id, is_active=True, created_at=now)
         db.add(membership)
+    ensure_default_designations(db, school.id)

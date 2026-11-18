@@ -33,7 +33,7 @@ class PayrollCycleOut(PayrollCycleBase):
     id: UUID
     school_id: UUID
     status: str  # draft, processing, completed, paid
-    total_amount: Decimal
+    total_amount: float
     processed_by_user_id: Optional[UUID] = None
     processed_at: Optional[datetime] = None
     created_at: datetime
@@ -97,9 +97,12 @@ class PayslipOut(PayslipBase):
     id: UUID
     payroll_cycle_id: UUID
     staff_id: UUID
-    gross_salary: Decimal
-    total_deductions: Decimal
-    net_salary: Decimal
+    basic_salary: float  # type: ignore[assignment]
+    allowances: Dict[str, float] = Field(default_factory=dict)  # type: ignore[assignment]
+    deductions: Dict[str, float] = Field(default_factory=dict)  # type: ignore[assignment]
+    gross_salary: float
+    total_deductions: float
+    net_salary: float
     payment_date: Optional[date] = None
     status: str  # generated, sent, paid
     created_at: datetime

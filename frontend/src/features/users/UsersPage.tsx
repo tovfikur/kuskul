@@ -102,6 +102,27 @@ const initialForm = {
   is_active: true,
 };
 
+type UserUpdatePayload = {
+  email: string;
+  role_name: string;
+  full_name?: string;
+  is_active: boolean;
+  password?: string;
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error && typeof error === "object" && "response" in error) {
+    const response = (error as { response?: { data?: unknown } }).response;
+    const data = response?.data;
+    if (data && typeof data === "object" && "detail" in data) {
+      const detail = (data as { detail?: unknown }).detail;
+      if (typeof detail === "string") return detail;
+    }
+  }
+  if (error instanceof Error) return error.message;
+  return fallback;
+};
+
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -137,9 +158,9 @@ export default function UsersPage() {
       ]);
       setUsers(usersRes.items);
       setRoles(rolesRes);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to load users", err);
-      setError("Failed to load users. Please check your connection.");
+      setError(getErrorMessage(err, "Failed to load users. Please check your connection."));
     } finally {
       setLoading(false);
     }
@@ -170,8 +191,8 @@ export default function UsersPage() {
     try {
       await deleteUser(id);
       loadData();
-    } catch (err: any) {
-      alert("Failed to delete user: " + (err.response?.data?.detail || err.message));
+    } catch (err) {
+      alert("Failed to delete user: " + getErrorMessage(err, "Unknown error"));
     }
   };
 
@@ -181,6 +202,13 @@ export default function UsersPage() {
       setFormError("Email and Role are required");
       return;
     }
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setFormError("Invalid email format");
+      return;
+    }
+
     if (!editingUser && !formData.password) {
       setFormError("Password is required for new users");
       return;
@@ -189,7 +217,7 @@ export default function UsersPage() {
     setSubmitting(true);
     try {
       if (editingUser) {
-        const updatePayload: any = {
+        const updatePayload: UserUpdatePayload = {
           email: formData.email,
           role_name: formData.role_name,
           full_name: formData.full_name,
@@ -202,8 +230,8 @@ export default function UsersPage() {
       }
       setOpenDialog(false);
       loadData();
-    } catch (err: any) {
-      setFormError(err.response?.data?.detail || "Failed to save user");
+    } catch (err) {
+      setFormError(getErrorMessage(err, "Failed to save user"));
     } finally {
       setSubmitting(false);
     }
@@ -231,8 +259,8 @@ export default function UsersPage() {
       await updateUser(editingUser.id, { password: pwdFormData.password });
       setOpenPwdDialog(false);
       alert("Password updated successfully");
-    } catch (err: any) {
-      alert("Failed to update password: " + (err.response?.data?.detail || err.message));
+    } catch (err) {
+      alert("Failed to update password: " + getErrorMessage(err, "Unknown error"));
     } finally {
       setSubmitting(false);
     }
@@ -306,16 +334,16 @@ export default function UsersPage() {
 
       {/* Stats Cards */}
       <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard title="Total Users" value={totalUsers} icon={<PersonIcon fontSize="large" />} color="#6366f1" />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard title="Students" value={totalStudents} icon={<SchoolIcon fontSize="large" />} color="#10b981" />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard title="Teachers" value={totalTeachers} icon={<BadgeIcon fontSize="large" />} color="#f59e0b" />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard title="Parents" value={totalParents} icon={<ParentIcon fontSize="large" />} color="#ec4899" />
         </Grid>
       </Grid>
@@ -469,7 +497,7 @@ export default function UsersPage() {
                     Personal Information
                 </Typography>
                 <Grid container spacing={2}>
-                    <Grid item xs={12}>
+                    <Grid size={{ xs: 12 }}>
                         <TextField
                             label="Full Name"
                             placeholder="e.g. John Doe"
@@ -486,7 +514,7 @@ export default function UsersPage() {
                             }}
                         />
                     </Grid>
-                    <Grid item xs={12}>
+                    <Grid size={{ xs: 12 }}>
                         <TextField
                             label="Email Address"
                             placeholder="e.g. john@school.com"
@@ -516,7 +544,7 @@ export default function UsersPage() {
                     System Access
                 </Typography>
                 <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                         <FormControl fullWidth required>
                         <InputLabel>Role</InputLabel>
                         <Select
@@ -537,7 +565,7 @@ export default function UsersPage() {
                         </Select>
                         </FormControl>
                     </Grid>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                         <FormControl fullWidth>
                         <InputLabel>Account Status</InputLabel>
                         <Select
@@ -562,7 +590,7 @@ export default function UsersPage() {
                     </Grid>
                     
                     {!editingUser && (
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                         <TextField
                             label="Initial Password"
                             type="password"

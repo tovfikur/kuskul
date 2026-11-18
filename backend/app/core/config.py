@@ -13,8 +13,8 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./dev.db"
 
-    jwt_issuer: str = "kuskul"
-    jwt_audience: str = "kuskul-web"
+    jwt_issuer: str = "sms-api"
+    jwt_audience: str = "sms-web"
     jwt_secret_key: str = Field(default="change-me-please-32-bytes", min_length=16)
     jwt_access_token_expires_minutes: int = 60
 
@@ -23,10 +23,15 @@ class Settings(BaseSettings):
     refresh_token_cookie_secure: bool = False
     refresh_token_cookie_samesite: str = "lax"
 
-    cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    platform_domain: str | None = None
+
+    cors_origins: str = "*"
     rate_limit_enabled: bool = True
     rate_limit_api_per_minute: int = 100
     rate_limit_auth_per_15_minutes: int = 5
+
+    ai_writer_url: str = "http://kuskul-ai-writer:8010"
+    ai_writer_timeout_seconds: float = 60.0
 
     @property
     def cors_allow_origins(self) -> list[str]:

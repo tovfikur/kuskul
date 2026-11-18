@@ -508,6 +508,7 @@ export type CurriculumUnit = {
   academic_year_id: string;
   subject_id: string;
   title: string;
+  chapter_name: string | null;
   description: string | null;
   order_index: number;
 };
@@ -524,6 +525,7 @@ export async function createCurriculumUnit(data: {
   academic_year_id: string;
   subject_id: string;
   title: string;
+  chapter_name?: string | null;
   description?: string | null;
   order_index?: number;
 }): Promise<CurriculumUnit> {
@@ -535,6 +537,7 @@ export async function updateCurriculumUnit(
   id: string,
   data: {
     title?: string;
+    chapter_name?: string | null;
     description?: string | null;
     order_index?: number;
   }

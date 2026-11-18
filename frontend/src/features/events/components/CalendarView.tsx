@@ -5,16 +5,13 @@ import {
   Card,
   CircularProgress,
   IconButton,
-  Paper,
   Typography,
   useTheme,
-  Chip,
   Tooltip,
 } from "@mui/material";
 import {
   ChevronLeft,
   ChevronRight,
-  Event as EventIcon,
 } from "@mui/icons-material";
 import {
   format,
@@ -26,7 +23,6 @@ import {
   addMonths,
   subMonths,
   isSameMonth,
-  isSameDay,
   isToday,
 } from "date-fns";
 import { getCalendar, type Event } from "../../../api/analytics";

@@ -19,5 +19,8 @@ class CommunicationLog(Base):
     recipient: Mapped[str] = mapped_column(String(255), nullable=False)
     subject: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     body: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
+    student_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("students.id", ondelete="SET NULL"), index=True, nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    provider_result: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

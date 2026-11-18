@@ -23,6 +23,7 @@ def _out(c: CurriculumUnit) -> CurriculumUnitOut:
         academic_year_id=c.academic_year_id,
         subject_id=c.subject_id,
         title=c.title,
+        chapter_name=c.chapter_name,
         description=c.description,
         order_index=c.order_index,
     )
@@ -63,6 +64,7 @@ def create_curriculum_unit(
         academic_year_id=payload.academic_year_id,
         subject_id=payload.subject_id,
         title=payload.title,
+        chapter_name=payload.chapter_name,
         description=payload.description,
         order_index=payload.order_index,
         created_at=now,
@@ -85,6 +87,8 @@ def update_curriculum_unit(
         raise not_found("Curriculum unit not found")
     if payload.title is not None:
         c.title = payload.title
+    if payload.chapter_name is not None:
+        c.chapter_name = payload.chapter_name
     if payload.description is not None or payload.description is None:
         c.description = payload.description
     if payload.order_index is not None:

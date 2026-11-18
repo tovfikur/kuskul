@@ -149,14 +149,15 @@ export function setupInterceptors() {
       const url = resp.config.url ?? "";
       const status = resp.status;
 
-      if (
-        method &&
-        ["post", "put", "patch", "delete"].includes(method) &&
-        status >= 200 &&
-        status < 300 &&
-        !url.includes("/auth/refresh") &&
-        !url.includes("/auth/login")
-      ) {
+	      if (
+	        method &&
+	        ["post", "put", "patch", "delete"].includes(method) &&
+	        status >= 200 &&
+	        status < 300 &&
+	        !resp.config.suppressSuccessToast &&
+	        !url.includes("/auth/refresh") &&
+	        !url.includes("/auth/login")
+	      ) {
         const data = resp.data as unknown;
         let message = "";
 

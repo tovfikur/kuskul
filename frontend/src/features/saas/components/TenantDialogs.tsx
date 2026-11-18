@@ -35,12 +35,7 @@ export function CreateTenantDialog(props: {
 }) {
   const form = useForm<ProvisionValues>({
     resolver: zodResolver(provisionSchema),
-    defaultValues: {
-      name: "",
-      subdomain: "",
-      admin_email: "",
-      admin_password: "",
-    },
+    defaultValues: { name: "", subdomain: "", admin_email: "", admin_password: "" },
   });
 
   return (
@@ -196,10 +191,7 @@ export function EditTenantAdminDialog(props: {
               type="password"
               fullWidth
               error={!!form.formState.errors.new_password}
-              helperText={
-                form.formState.errors.new_password?.message ??
-                "Leave blank to keep current password"
-              }
+              helperText={form.formState.errors.new_password?.message ?? "Leave blank to keep current password"}
               {...form.register("new_password")}
             />
             <input type="submit" hidden />

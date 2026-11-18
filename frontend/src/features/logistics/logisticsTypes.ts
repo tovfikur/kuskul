@@ -94,11 +94,12 @@ export type PurchaseRequest = {
   id: Id;
   school_id: Id;
   status: PurchaseRequestStatus;
-  requested_by_user_id: Id;
-  approved_by_user_id?: Id;
-  rejected_by_user_id?: Id;
+  created_by_user_id: Id;
+  decided_by_user_id?: Id;
+  decided_at?: ISODateTime;
   decision_note?: string;
   created_at: ISODateTime;
+  updated_at?: ISODateTime;
 };
 
 export type PurchaseRequestLine = {
@@ -109,7 +110,7 @@ export type PurchaseRequestLine = {
   note?: string;
 };
 
-export type PurchaseOrderStatus = "open" | "partial" | "received" | "cancelled";
+export type PurchaseOrderStatus = "open" | "partial" | "received" | "closed" | "cancelled";
 
 export type PurchaseOrder = {
   id: Id;
@@ -117,7 +118,9 @@ export type PurchaseOrder = {
   vendor_id: Id;
   status: PurchaseOrderStatus;
   created_from_purchase_request_id?: Id;
+  created_by_user_id: Id;
   created_at: ISODateTime;
+  updated_at?: ISODateTime;
 };
 
 export type PurchaseOrderLine = {
@@ -125,6 +128,7 @@ export type PurchaseOrderLine = {
   purchase_order_id: Id;
   item_id: Id;
   qty_ordered: number;
+  qty_received: number;
   unit_price?: number;
 };
 

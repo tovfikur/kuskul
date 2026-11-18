@@ -56,9 +56,9 @@ const tabs: {
 }[] = [
   { id: "years", label: "Academic Years", icon: <School /> },
   { id: "terms", label: "Terms / Semesters", icon: <CalendarMonth /> },
-  { id: "streams", label: "Streams", icon: <AccountTree /> },
+  { id: "streams", label: "Groups", icon: <AccountTree /> },
   { id: "classes", label: "Classes & Sections", icon: <Class /> },
-  { id: "subjectGroups", label: "Subject Groups", icon: <Category /> },
+  { id: "subjectGroups", label: "Compulsory Subjects", icon: <Category /> },
   { id: "subjects", label: "Subjects", icon: <Book /> },
   { id: "teacherMapping", label: "Class-Subject-Teacher", icon: <Assignment /> },
   { id: "timeSlots", label: "Period Structure", icon: <Schedule /> },

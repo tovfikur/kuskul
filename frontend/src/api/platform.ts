@@ -7,6 +7,10 @@ export type Tenant = {
   custom_domain?: string | null;
   status: string;
   admin_email?: string | null;
+  school_count?: number;
+  student_count?: number;
+  staff_count?: number;
+  user_count?: number;
 };
 
 export type TenantProvisionRequest = {
@@ -25,18 +29,28 @@ export type TenantProvisionResponse = {
   admin_user_id: string;
 };
 
+
 export async function listTenants(): Promise<Tenant[]> {
   const resp = await api.get("/platform/tenants");
   return resp.data as Tenant[];
 }
 
-export async function provisionTenant(payload: TenantProvisionRequest): Promise<TenantProvisionResponse> {
+export async function provisionTenant(
+  payload: TenantProvisionRequest,
+): Promise<TenantProvisionResponse> {
   const resp = await api.post("/platform/tenants", payload);
   return resp.data as TenantProvisionResponse;
 }
 
-export async function updateTenantStatus(tenantId: string, status: "active" | "inactive"): Promise<Tenant> {
-  const resp = await api.patch(`/platform/tenants/${tenantId}/status`, { status });
+
+
+export async function updateTenantStatus(
+  tenantId: string,
+  status: "active" | "inactive",
+): Promise<Tenant> {
+  const resp = await api.patch(`/platform/tenants/${tenantId}/status`, {
+    status,
+  });
   return resp.data as Tenant;
 }
 

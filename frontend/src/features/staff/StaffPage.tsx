@@ -4,7 +4,6 @@ import DirectoryTab from "./components/directory/DirectoryTab";
 import AttendanceTab from "./components/attendance/AttendanceTab";
 import LeaveTab from "./components/leave/LeaveTab";
 import { PayrollTab } from "./components/payroll/PayrollTab";
-import PerformanceTab from "./components/performance/PerformanceTab";
 import DocumentsTab from "./components/documents/DocumentsTab";
 import SettingsTab from "./components/settings/SettingsTab";
 
@@ -13,7 +12,6 @@ type StaffTab =
   | "attendance"
   | "leave"
   | "payroll"
-  | "performance"
   | "documents"
   | "settings";
 
@@ -30,8 +28,6 @@ export default function StaffPage() {
         return "Leave Management";
       case "payroll":
         return "Payroll Management";
-      case "performance":
-        return "Performance Reviews";
       case "documents":
         return "Documents & Contracts";
       case "settings":
@@ -51,8 +47,6 @@ export default function StaffPage() {
         return <LeaveTab />;
       case "payroll":
         return <PayrollTab />;
-      case "performance":
-        return <PerformanceTab />;
       case "documents":
         return <DocumentsTab />;
       case "settings":

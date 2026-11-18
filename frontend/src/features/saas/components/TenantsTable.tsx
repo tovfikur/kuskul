@@ -37,6 +37,7 @@ export function TenantsTable(props: {
   onRefresh: () => void;
   onToggleStatus: (tenant: Tenant) => void;
   onEditAdmin: (tenant: Tenant) => void;
+
   buildTenantUrl: (tenant: Tenant) => string;
 }) {
   const [query, setQuery] = useState("");
@@ -108,6 +109,10 @@ export function TenantsTable(props: {
               <TableCell sx={{ fontWeight: 800 }}>Name</TableCell>
               <TableCell sx={{ fontWeight: 800 }}>Subdomain</TableCell>
               <TableCell sx={{ fontWeight: 800 }}>Admin email</TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>Schools</TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>Students</TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>Staff</TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>Users</TableCell>
               <TableCell sx={{ fontWeight: 800 }}>Status</TableCell>
               <TableCell sx={{ fontWeight: 800, width: 160 }}>
                 Actions
@@ -117,7 +122,7 @@ export function TenantsTable(props: {
           <TableBody>
             {filtered.length === 0 && !props.loading ? (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={9}>
                   <Box sx={{ py: 4, textAlign: "center" }}>
                     <Typography sx={{ fontWeight: 900 }}>
                       No tenants found
@@ -140,6 +145,7 @@ export function TenantsTable(props: {
                   buildTenantUrl={props.buildTenantUrl}
                   onToggleStatus={props.onToggleStatus}
                   onEditAdmin={props.onEditAdmin}
+
                 />
               ))
             )}
@@ -155,6 +161,7 @@ function TenantRow(props: {
   buildTenantUrl: (tenant: Tenant) => string;
   onToggleStatus: (tenant: Tenant) => void;
   onEditAdmin: (tenant: Tenant) => void;
+
 }) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const url = props.buildTenantUrl(props.tenant);
@@ -195,6 +202,26 @@ function TenantRow(props: {
       <TableCell>
         <Typography sx={{ fontFamily: "monospace" }}>
           {props.tenant.admin_email ?? "-"}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        <Typography sx={{ fontWeight: 700 }}>
+          {props.tenant.school_count ?? 0}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        <Typography sx={{ fontWeight: 700 }}>
+          {props.tenant.student_count ?? 0}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        <Typography sx={{ fontWeight: 700 }}>
+          {props.tenant.staff_count ?? 0}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        <Typography sx={{ fontWeight: 700 }}>
+          {props.tenant.user_count ?? 0}
         </Typography>
       </TableCell>
       <TableCell>
@@ -260,6 +287,7 @@ function TenantRow(props: {
               <Shield fontSize="small" />
               <Box sx={{ ml: 1 }}>Edit admin credentials</Box>
             </MenuItem>
+
           </Menu>
         </Stack>
       </TableCell>

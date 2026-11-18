@@ -8,6 +8,7 @@ import {
 import {
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   Chip,
   Dialog,
@@ -22,6 +23,8 @@ import {
   LinearProgress,
   MenuItem,
   Paper,
+  Radio,
+  RadioGroup,
   Select,
   Switch,
   Tab,
@@ -101,25 +104,17 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-function parseJsonObject(
-  raw: string,
-):
-  | { ok: true; value: Record<string, unknown> }
-  | { ok: false; message: string } {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return { ok: true, value: {} };
-  }
-  try {
-    const parsed = JSON.parse(trimmed) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return { ok: false, message: "JSON must be an object" };
-    }
-    return { ok: true, value: parsed as Record<string, unknown> };
-  } catch {
-    return { ok: false, message: "Invalid JSON" };
-  }
-}
+const QUESTION_TYPES = [
+  { value: "mcq_single", label: "Multiple Choice (Single Answer)" },
+  { value: "mcq_multi", label: "Multiple Choice (Multiple Answers)" },
+  { value: "true_false", label: "True / False" },
+  { value: "short_answer", label: "Short Answer" },
+  { value: "essay", label: "Essay" },
+];
+
+const CHOICE_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+
+const DEFAULT_CHOICES = ["", "", "", ""];
 
 export default function ExamsPage() {
   const [tab, setTab] = useState(0);
@@ -167,8 +162,11 @@ export default function ExamsPage() {
     difficulty: "",
     tags: "",
     is_active: true,
-    options_json: "",
-    correct_answer_json: "",
+    mcq_choices: DEFAULT_CHOICES as string[],
+    correct_choice_id: "A",
+    correct_choice_ids: [] as string[],
+    correct_tf: "true",
+    correct_text: "",
   });
 
   const [configs, setConfigs] = useState<OnlineExamConfig[]>([]);
@@ -508,14 +506,46 @@ export default function ExamsPage() {
       difficulty: "",
       tags: "",
       is_active: true,
-      options_json: "",
-      correct_answer_json: "",
+      mcq_choices: [...DEFAULT_CHOICES],
+      correct_choice_id: "A",
+      correct_choice_ids: [],
+      correct_tf: "true",
+      correct_text: "",
     });
     setQuestionDialogOpen(true);
   };
 
   const openEditQuestion = (q: QuestionBankQuestion) => {
     setEditingQuestion(q);
+
+    // Parse existing options
+    let mcq_choices: string[] = [...DEFAULT_CHOICES];
+    const rawChoices =
+      q.options && typeof q.options === "object" && "choices" in q.options
+        ? (q.options as { choices?: unknown }).choices
+        : null;
+    if (Array.isArray(rawChoices) && rawChoices.length > 0) {
+      mcq_choices = rawChoices.map((c: unknown) =>
+        c && typeof c === "object" && "text" in c
+          ? String((c as { text: unknown }).text ?? "")
+          : "",
+      );
+    }
+
+    // Parse existing correct answer
+    let correct_choice_id = "A";
+    let correct_choice_ids: string[] = [];
+    let correct_tf = "true";
+    let correct_text = "";
+    if (q.correct_answer && typeof q.correct_answer === "object") {
+      const ca = q.correct_answer as Record<string, unknown>;
+      if ("choice_id" in ca) correct_choice_id = String(ca.choice_id ?? "A");
+      if ("choice_ids" in ca && Array.isArray(ca.choice_ids))
+        correct_choice_ids = ca.choice_ids.map(String);
+      if ("value" in ca) correct_tf = String(ca.value ?? "true");
+      if ("text" in ca) correct_text = String(ca.text ?? "");
+    }
+
     setQuestionForm({
       category_id: q.category_id ?? "",
       subject_id: q.subject_id ?? "",
@@ -525,8 +555,11 @@ export default function ExamsPage() {
       difficulty: q.difficulty ?? "",
       tags: q.tags ?? "",
       is_active: q.is_active,
-      options_json: q.options ? JSON.stringify(q.options, null, 2) : "",
-      correct_answer_json: "",
+      mcq_choices,
+      correct_choice_id,
+      correct_choice_ids,
+      correct_tf,
+      correct_text,
     });
     setQuestionDialogOpen(true);
   };
@@ -537,36 +570,46 @@ export default function ExamsPage() {
       showToast({ severity: "error", message: "Question prompt is required" });
       return;
     }
-    if (!questionForm.question_type.trim()) {
-      showToast({ severity: "error", message: "Question type is required" });
-      return;
+
+    const qtype = questionForm.question_type;
+
+    // Build options payload
+    let optionsPayload: Record<string, unknown> | null = null;
+    if (qtype === "mcq_single" || qtype === "mcq_multi") {
+      const filled = questionForm.mcq_choices.filter((t) => t.trim());
+      if (filled.length < 2) {
+        showToast({ severity: "error", message: "Add at least 2 options" });
+        return;
+      }
+      optionsPayload = {
+        choices: questionForm.mcq_choices
+          .filter((t) => t.trim())
+          .map((text, i) => ({ id: CHOICE_LETTERS[i], text: text.trim() })),
+      };
     }
 
-    const optionsRes = parseJsonObject(questionForm.options_json);
-    if (!optionsRes.ok) {
-      showToast({
-        severity: "error",
-        message: `Options: ${optionsRes.message}`,
-      });
-      return;
+    // Build correct answer payload
+    let correctPayload: Record<string, unknown> | null = null;
+    if (qtype === "mcq_single") {
+      if (!questionForm.correct_choice_id) {
+        showToast({ severity: "error", message: "Select the correct answer" });
+        return;
+      }
+      correctPayload = { choice_id: questionForm.correct_choice_id };
+    } else if (qtype === "mcq_multi") {
+      if (questionForm.correct_choice_ids.length === 0) {
+        showToast({
+          severity: "error",
+          message: "Select at least one correct answer",
+        });
+        return;
+      }
+      correctPayload = { choice_ids: questionForm.correct_choice_ids };
+    } else if (qtype === "true_false") {
+      correctPayload = { value: questionForm.correct_tf };
+    } else if (qtype === "short_answer" && questionForm.correct_text.trim()) {
+      correctPayload = { text: questionForm.correct_text.trim() };
     }
-
-    const correctTrimmed = questionForm.correct_answer_json.trim();
-    const correctRes = correctTrimmed
-      ? parseJsonObject(correctTrimmed)
-      : { ok: true as const, value: {} };
-    if (!correctRes.ok) {
-      showToast({
-        severity: "error",
-        message: `Correct answer: ${correctRes.message}`,
-      });
-      return;
-    }
-
-    const optionsPayload = questionForm.options_json.trim()
-      ? optionsRes.value
-      : null;
-    const correctPayload = correctTrimmed ? correctRes.value : null;
 
     try {
       if (editingQuestion) {
@@ -1824,18 +1867,29 @@ export default function ExamsPage() {
               </FormControl>
             </Grid2>
             <Grid2 size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Question type"
-                fullWidth
-                margin="normal"
-                value={questionForm.question_type}
-                onChange={(e) =>
-                  setQuestionForm((p) => ({
-                    ...p,
-                    question_type: e.target.value,
-                  }))
-                }
-              />
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Question Type</InputLabel>
+                <Select
+                  label="Question Type"
+                  value={questionForm.question_type}
+                  onChange={(e) =>
+                    setQuestionForm((p) => ({
+                      ...p,
+                      question_type: e.target.value,
+                      correct_choice_id: "A",
+                      correct_choice_ids: [],
+                      correct_tf: "true",
+                      correct_text: "",
+                    }))
+                  }
+                >
+                  {QUESTION_TYPES.map((t) => (
+                    <MenuItem key={t.value} value={t.value}>
+                      {t.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid2>
             <Grid2 size={{ xs: 12, md: 3 }}>
               <TextField
@@ -1871,30 +1925,40 @@ export default function ExamsPage() {
               />
             </Grid2>
             <Grid2 size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Difficulty"
-                fullWidth
-                margin="normal"
-                value={questionForm.difficulty}
-                onChange={(e) =>
-                  setQuestionForm((p) => ({ ...p, difficulty: e.target.value }))
-                }
-              />
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Difficulty</InputLabel>
+                <Select
+                  label="Difficulty"
+                  value={questionForm.difficulty}
+                  onChange={(e) =>
+                    setQuestionForm((p) => ({
+                      ...p,
+                      difficulty: e.target.value,
+                    }))
+                  }
+                >
+                  <MenuItem value="">Not specified</MenuItem>
+                  <MenuItem value="easy">Easy</MenuItem>
+                  <MenuItem value="medium">Medium</MenuItem>
+                  <MenuItem value="hard">Hard</MenuItem>
+                </Select>
+              </FormControl>
             </Grid2>
             <Grid2 size={{ xs: 12, md: 6 }}>
               <TextField
-                label="Tags"
+                label="Tags (comma separated)"
                 fullWidth
                 margin="normal"
                 value={questionForm.tags}
                 onChange={(e) =>
                   setQuestionForm((p) => ({ ...p, tags: e.target.value }))
                 }
+                placeholder="e.g. algebra, chapter-3"
               />
             </Grid2>
             <Grid2 size={{ xs: 12 }}>
               <TextField
-                label="Prompt"
+                label="Question"
                 fullWidth
                 margin="normal"
                 value={questionForm.prompt}
@@ -1902,42 +1966,198 @@ export default function ExamsPage() {
                   setQuestionForm((p) => ({ ...p, prompt: e.target.value }))
                 }
                 multiline
-                minRows={4}
+                minRows={3}
+                placeholder="Write the question here…"
               />
             </Grid2>
-            <Grid2 size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Options (JSON object)"
-                fullWidth
-                margin="normal"
-                value={questionForm.options_json}
-                onChange={(e) =>
-                  setQuestionForm((p) => ({
-                    ...p,
-                    options_json: e.target.value,
-                  }))
-                }
-                multiline
-                minRows={6}
-                placeholder={`{\n  "choices": [\n    {"id": "A", "text": "Option A"}\n  ]\n}`}
-              />
-            </Grid2>
-            <Grid2 size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Correct answer (JSON object)"
-                fullWidth
-                margin="normal"
-                value={questionForm.correct_answer_json}
-                onChange={(e) =>
-                  setQuestionForm((p) => ({
-                    ...p,
-                    correct_answer_json: e.target.value,
-                  }))
-                }
-                multiline
-                minRows={6}
-                placeholder={`{\n  "choice_id": "A"\n}`}
-              />
+
+            {/* MCQ options */}
+            {(questionForm.question_type === "mcq_single" ||
+              questionForm.question_type === "mcq_multi") && (
+              <Grid2 size={{ xs: 12 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Answer Options
+                </Typography>
+                {questionForm.mcq_choices.map((text, idx) => (
+                  <Box
+                    key={idx}
+                    sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
+                  >
+                    <Typography
+                      variant="body2"
+                      sx={{ fontWeight: 700, minWidth: 24 }}
+                    >
+                      {CHOICE_LETTERS[idx]}.
+                    </Typography>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      placeholder={`Option ${CHOICE_LETTERS[idx]}`}
+                      value={text}
+                      onChange={(e) =>
+                        setQuestionForm((p) => {
+                          const next = [...p.mcq_choices];
+                          next[idx] = e.target.value;
+                          return { ...p, mcq_choices: next };
+                        })
+                      }
+                    />
+                    {questionForm.mcq_choices.length > 2 && (
+                      <IconButton
+                        size="small"
+                        onClick={() =>
+                          setQuestionForm((p) => ({
+                            ...p,
+                            mcq_choices: p.mcq_choices.filter(
+                              (_, i) => i !== idx,
+                            ),
+                            correct_choice_id:
+                              p.correct_choice_id === CHOICE_LETTERS[idx]
+                                ? "A"
+                                : p.correct_choice_id,
+                            correct_choice_ids: p.correct_choice_ids.filter(
+                              (id) => id !== CHOICE_LETTERS[idx],
+                            ),
+                          }))
+                        }
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
+                ))}
+                {questionForm.mcq_choices.length < CHOICE_LETTERS.length && (
+                  <Button
+                    size="small"
+                    onClick={() =>
+                      setQuestionForm((p) => ({
+                        ...p,
+                        mcq_choices: [...p.mcq_choices, ""],
+                      }))
+                    }
+                  >
+                    + Add option
+                  </Button>
+                )}
+              </Grid2>
+            )}
+
+            {/* Correct answer */}
+            <Grid2 size={{ xs: 12 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Correct Answer
+              </Typography>
+
+              {questionForm.question_type === "mcq_single" && (
+                <RadioGroup
+                  row
+                  value={questionForm.correct_choice_id}
+                  onChange={(e) =>
+                    setQuestionForm((p) => ({
+                      ...p,
+                      correct_choice_id: e.target.value,
+                    }))
+                  }
+                >
+                  {questionForm.mcq_choices.map((text, idx) => {
+                    const letter = CHOICE_LETTERS[idx];
+                    return (
+                      <FormControlLabel
+                        key={letter}
+                        value={letter}
+                        control={<Radio size="small" />}
+                        label={
+                          text.trim()
+                            ? `${letter}. ${text}`
+                            : `Option ${letter}`
+                        }
+                      />
+                    );
+                  })}
+                </RadioGroup>
+              )}
+
+              {questionForm.question_type === "mcq_multi" && (
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                  {questionForm.mcq_choices.map((text, idx) => {
+                    const letter = CHOICE_LETTERS[idx];
+                    return (
+                      <FormControlLabel
+                        key={letter}
+                        control={
+                          <Checkbox
+                            size="small"
+                            checked={questionForm.correct_choice_ids.includes(
+                              letter,
+                            )}
+                            onChange={(e) =>
+                              setQuestionForm((p) => ({
+                                ...p,
+                                correct_choice_ids: e.target.checked
+                                  ? [...p.correct_choice_ids, letter]
+                                  : p.correct_choice_ids.filter(
+                                      (id) => id !== letter,
+                                    ),
+                              }))
+                            }
+                          />
+                        }
+                        label={
+                          text.trim()
+                            ? `${letter}. ${text}`
+                            : `Option ${letter}`
+                        }
+                      />
+                    );
+                  })}
+                </Box>
+              )}
+
+              {questionForm.question_type === "true_false" && (
+                <RadioGroup
+                  row
+                  value={questionForm.correct_tf}
+                  onChange={(e) =>
+                    setQuestionForm((p) => ({
+                      ...p,
+                      correct_tf: e.target.value,
+                    }))
+                  }
+                >
+                  <FormControlLabel
+                    value="true"
+                    control={<Radio size="small" />}
+                    label="True"
+                  />
+                  <FormControlLabel
+                    value="false"
+                    control={<Radio size="small" />}
+                    label="False"
+                  />
+                </RadioGroup>
+              )}
+
+              {questionForm.question_type === "short_answer" && (
+                <TextField
+                  size="small"
+                  fullWidth
+                  placeholder="Expected answer (optional)"
+                  value={questionForm.correct_text}
+                  onChange={(e) =>
+                    setQuestionForm((p) => ({
+                      ...p,
+                      correct_text: e.target.value,
+                    }))
+                  }
+                />
+              )}
+
+              {questionForm.question_type === "essay" && (
+                <Typography variant="body2" color="text.secondary">
+                  Essay questions are graded manually — no correct answer
+                  needed.
+                </Typography>
+              )}
             </Grid2>
           </Grid2>
         </DialogContent>

@@ -3,12 +3,12 @@ from datetime import datetime, timezone
 import uuid
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, has_permission, require_permission
 from app.core.problems import not_found, problem
-from app.core.seed import ensure_default_roles
+from app.core.seed import ensure_default_roles, ensure_default_designations
 from app.db.session import get_db
 from app.models.membership import Membership
 from app.models.role import Role
@@ -34,19 +34,20 @@ def list_schools(request: Request, db: Session = Depends(get_db), user=Depends(g
 
 
 @router.post("", response_model=SchoolOut, dependencies=[Depends(require_permission("schools:write"))])
-def create_school(payload: SchoolCreate, db: Session = Depends(get_db), user=Depends(get_current_user)) -> SchoolOut:
+def create_school(request: Request, payload: SchoolCreate, db: Session = Depends(get_db), user=Depends(get_current_user)) -> SchoolOut:
     existing = db.scalar(select(School).where(School.code == payload.code))
     if existing:
         raise problem(status_code=409, title="Conflict", detail="School code already exists")
 
     now = datetime.now(timezone.utc)
-    school = School(name=payload.name, code=payload.code, is_active=True, created_at=now)
+    school = School(tenant_id=request.state.tenant_id, name=payload.name, code=payload.code, is_active=True, created_at=now)
     db.add(school)
     ensure_default_roles(db)
     admin_role = db.scalar(select(Role).where(Role.name == "admin"))
     db.flush()
     if admin_role:
         db.add(Membership(user_id=user.id, school_id=school.id, role_id=admin_role.id, is_active=True, created_at=now))
+    ensure_default_designations(db, school.id)
     db.commit()
     return SchoolOut(id=school.id, name=school.name, code=school.code, is_active=school.is_active)
 
@@ -101,6 +102,7 @@ def delete_school(
     if not school:
         raise not_found("School not found")
     school.is_active = False
+    db.execute(update(Membership).where(Membership.school_id == school_id).values(is_active=False))
     db.commit()
     return {"status": "ok"}
 

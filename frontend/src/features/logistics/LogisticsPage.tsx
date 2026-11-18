@@ -6,6 +6,7 @@ import AssetsTab from "./components/assets/AssetsTab";
 import MaintenanceTab from "./components/maintenance/MaintenanceTab";
 import VendorsTab from "./components/vendors/VendorsTab";
 import ReportsTab from "./components/reports/ReportsTab";
+import SettingsTab from "./components/settings/SettingsTab";
 
 type LogisticsTab =
   | "inventory"
@@ -13,7 +14,8 @@ type LogisticsTab =
   | "assets"
   | "maintenance"
   | "vendors"
-  | "reports";
+  | "reports"
+  | "settings";
 
 export default function LogisticsPage() {
   const [activeTab, setActiveTab] = useState<LogisticsTab>("inventory");
@@ -32,6 +34,8 @@ export default function LogisticsPage() {
         return "Vendor Management";
       case "reports":
         return "Reports & Analytics";
+      case "settings":
+        return "Logistics Settings";
       default:
         return "Logistics";
     }
@@ -51,6 +55,8 @@ export default function LogisticsPage() {
         return <VendorsTab />;
       case "reports":
         return <ReportsTab />;
+      case "settings":
+        return <SettingsTab />;
       default:
         return <InventoryTab />;
     }

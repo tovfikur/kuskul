@@ -78,6 +78,7 @@ export function ensureLogisticsSeed(schoolId: string) {
 
   const v1: Vendor = {
     id: crypto.randomUUID(),
+    school_id: schoolId,
     name: "Campus Supplies Co.",
     phone: "+8801000000000",
     email: "sales@campus-supplies.example",
@@ -86,6 +87,7 @@ export function ensureLogisticsSeed(schoolId: string) {
   };
   const v2: Vendor = {
     id: crypto.randomUUID(),
+    school_id: schoolId,
     name: "BrightLab Stationery",
     phone: "+8801000000011",
     email: "support@brightlab.example",
@@ -95,6 +97,7 @@ export function ensureLogisticsSeed(schoolId: string) {
 
   const i1: InventoryItem = {
     id: crypto.randomUUID(),
+    school_id: schoolId,
     sku: "PAPER-A4-80G",
     name: "A4 Paper 80gsm",
     uom: "ream",
@@ -104,6 +107,7 @@ export function ensureLogisticsSeed(schoolId: string) {
   };
   const i2: InventoryItem = {
     id: crypto.randomUUID(),
+    school_id: schoolId,
     sku: "INK-BLACK",
     name: "Printer Ink (Black)",
     uom: "pcs",
@@ -113,6 +117,7 @@ export function ensureLogisticsSeed(schoolId: string) {
   };
   const i3: InventoryItem = {
     id: crypto.randomUUID(),
+    school_id: schoolId,
     sku: "SANITIZER-500ML",
     name: "Hand Sanitizer 500ml",
     uom: "bottle",
@@ -123,27 +128,32 @@ export function ensureLogisticsSeed(schoolId: string) {
 
   const m1: StockMovement = {
     id: crypto.randomUUID(),
+    school_id: schoolId,
     item_id: i1.id,
+    location_id: "default",
     type: "receive",
+    created_by_user_id: "seed",
     qty: 25,
     ref_type: "manual",
-    ref_id: null,
     note: "Opening stock",
     created_at: nowIso(),
   };
   const m2: StockMovement = {
     id: crypto.randomUUID(),
+    school_id: schoolId,
     item_id: i2.id,
+    location_id: "default",
     type: "receive",
+    created_by_user_id: "seed",
     qty: 6,
     ref_type: "manual",
-    ref_id: null,
     note: "Opening stock",
     created_at: nowIso(),
   };
 
   const a1: Asset = {
     id: crypto.randomUUID(),
+    school_id: schoolId,
     tag: "ASSET-PRN-001",
     name: "Office Printer",
     category: "IT",
@@ -153,6 +163,7 @@ export function ensureLogisticsSeed(schoolId: string) {
   };
   const a2: Asset = {
     id: crypto.randomUUID(),
+    school_id: schoolId,
     tag: "ASSET-DESK-021",
     name: "Teacher Desk",
     category: "Furniture",
@@ -163,14 +174,14 @@ export function ensureLogisticsSeed(schoolId: string) {
 
   const t1: MaintenanceTicket = {
     id: crypto.randomUUID(),
+    school_id: schoolId,
     asset_id: a1.id,
     title: "Printer paper jam issue",
     priority: "medium",
     status: "open",
-    assigned_to: null,
-    cost: null,
-    notes: "Happens intermittently during heavy printing.",
+    description: "Happens intermittently during heavy printing.",
     created_at: nowIso(),
+    updated_at: nowIso(),
   };
 
   data.vendors = [v1, v2];
@@ -248,7 +259,7 @@ export function upsertAsset(schoolId: string, asset: Asset): Asset {
 export function deleteAsset(schoolId: string, id: string) {
   const data = readAll(schoolId);
   data.assets = data.assets.filter((x) => x.id !== id);
-  data.tickets = data.tickets.map((t) => (t.asset_id === id ? { ...t, asset_id: null } : t));
+  data.tickets = data.tickets.map((t) => (t.asset_id === id ? { ...t, asset_id: undefined } : t));
   writeAll(schoolId, data);
 }
 

@@ -1,6 +1,7 @@
 import uuid
 import io
 import html
+import re
 from datetime import date, datetime, time, timezone
 from typing import Optional
 
@@ -112,7 +113,9 @@ def list_staff(
     department: Optional[str] = None,
     search: Optional[str] = None,
     status: Optional[str] = None,
+    is_teacher: Optional[bool] = None,
 ) -> dict:
+    from app.models.staff_extended import Designation
     offset = (page - 1) * limit if page > 1 else 0
     base = select(Staff).where(Staff.school_id == school_id)
     if designation:
@@ -127,9 +130,42 @@ def list_staff(
             | Staff.email.ilike(f"%{search}%")
             | Staff.phone.ilike(f"%{search}%")
         )
+    if is_teacher:
+        base = base.outerjoin(Designation, Staff.designation_id == Designation.id).where(
+            Designation.title.ilike("%teacher%")
+            | Staff.designation.ilike("%teacher%")
+            | (Staff.is_teaching_staff == "true")
+        )
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
     rows = db.execute(base.order_by(Staff.full_name.asc()).offset(offset).limit(limit)).scalars().all()
     return {"items": [_out(r).model_dump() for r in rows], "total": int(total), "page": page, "limit": limit}
+
+
+@router.get("/next-employee-id", response_model=dict)
+def get_next_employee_id(
+    db: Session = Depends(get_db),
+    school_id=Depends(get_active_school_id),
+) -> dict[str, str]:
+    rows = db.execute(
+        select(Staff.employee_id).where(
+            Staff.school_id == school_id,
+            Staff.employee_id.is_not(None),
+        )
+    ).scalars().all()
+
+    next_number = 1
+    width = 3
+    for employee_id in rows:
+        match = re.fullmatch(r"EMP(\d+)", (employee_id or "").strip(), re.IGNORECASE)
+        if not match:
+            continue
+
+        current_number = int(match.group(1))
+        if current_number >= next_number:
+            next_number = current_number + 1
+            width = max(3, len(match.group(1)))
+
+    return {"employee_id": f"EMP{next_number:0{width}d}"}
 
 
 @router.get("/{staff_id}", response_model=StaffOut)
@@ -219,31 +255,44 @@ def create_staff(payload: StaffCreate, db: Session = Depends(get_db), school_id=
     db.commit()
     db.refresh(s)
     
-    # Auto-create User for Staff
+    # Auto-create or link a Teacher user for every staff record created here.
     if not s.user_id:
         email = s.email
         if not email:
-             email = f"staff{s.id.hex[:6]}@kuskul.com"
+             email = f"staff{s.id.hex[:6]}@example.com"
         
         ensure_default_roles(db)
-        # Determine role
-        role_name = "staff"
-        if s.designation and "teacher" in s.designation.lower():
-             role_name = "teacher"
-             
-        role = db.scalar(select(Role).where(func.lower(Role.name) == role_name))
+        role = db.scalar(select(Role).where(func.lower(Role.name) == "teacher"))
+        if not role:
+            raise problem(status_code=400, title="Bad Request", detail="Teacher role not found")
         
         existing_user = db.scalar(select(User).where(User.email == email))
         if existing_user:
              s.user_id = existing_user.id
-             db.commit() # Save linkage
+             existing_user.full_name = s.full_name
+             existing_user.phone = s.phone
+             existing_user.photo_url = s.photo_url
+             existing_user.is_active = True
+             existing_user.updated_at = now
+             membership = db.scalar(
+                 select(Membership).where(
+                     Membership.user_id == existing_user.id,
+                     Membership.school_id == school_id,
+                 )
+             )
+             if membership:
+                 membership.role_id = role.id
+                 membership.is_active = True
+             else:
+                 db.add(Membership(user_id=existing_user.id, school_id=school_id, role_id=role.id, is_active=True, created_at=now))
+             db.commit()
         else:
              new_user = User(
                 email=email,
                 full_name=s.full_name,
                 phone=s.phone,
                 photo_url=s.photo_url,
-                password_hash=hash_password("password123"),
+                password_hash=hash_password("12345678"),
                 is_active=True,
                 created_at=now,
                 updated_at=now
@@ -252,8 +301,7 @@ def create_staff(payload: StaffCreate, db: Session = Depends(get_db), school_id=
              db.flush()
              s.user_id = new_user.id
              
-             if role:
-                 db.add(Membership(user_id=new_user.id, school_id=school_id, role_id=role.id, is_active=True, created_at=now))
+             db.add(Membership(user_id=new_user.id, school_id=school_id, role_id=role.id, is_active=True, created_at=now))
             
              db.commit()
              db.refresh(s)
@@ -437,6 +485,8 @@ def _doc_out(d: Document) -> DocumentOut:
         entity_type=d.entity_type,
         entity_id=d.entity_id,
         filename=d.filename,
+        content_type=d.content_type,
+        created_at=d.created_at,
     )
 
 

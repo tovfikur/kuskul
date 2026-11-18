@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,10 +14,17 @@ import {
 
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { signIn, restoreSession } from "./authSlice";
+import { getGuardians, getStudents } from "../../api/people";
 
+const hostname = window.location.hostname;
+const isIp = /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/.test(hostname);
+const parts = hostname.split(".");
+// We need tenant subdomain if we are on localhost, an IP address,
+// or a root domain (e.g. example.com, assuming 2 parts for TLDs like .com, but this is a heuristic).
+// Ideally, we'd know the root domain suffix. For now, we assume if only 1 (localhost) or 2 parts, it's root.
+// If 3+ parts, the first part is likely the subdomain.
 const needsTenantSubdomain =
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "127.0.0.1";
+  hostname === "localhost" || isIp || parts.length <= 2;
 
 const schema = z
   .object({
@@ -33,7 +40,7 @@ const schema = z
     if (!t) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Tenant subdomain is required on localhost",
+        message: "Tenant subdomain is required on this domain",
         path: ["tenant_subdomain"],
       });
     }
@@ -52,6 +59,9 @@ export function LoginPage() {
   const accessToken = useAppSelector((s) => s.auth.accessToken);
   const isPlatformAdmin = useAppSelector((s) => s.auth.isPlatformAdmin);
   const sessionChecked = useAppSelector((s) => s.auth.sessionChecked);
+  const roleName = useAppSelector((s) => s.auth.memberships[0]?.role_name);
+  const authEmail = useAppSelector((s) => s.auth.email);
+  const [redirectPath, setRedirectPath] = useState<string | null>(null);
 
   // Try to restore session on mount (in case user is already logged in via cookie)
   useEffect(() => {
@@ -61,13 +71,70 @@ export function LoginPage() {
   }, [dispatch, sessionChecked, status]);
 
   useEffect(() => {
-    if (accessToken) {
-      const to =
-        location.state?.from?.pathname ??
-        (isPlatformAdmin ? "/saas-admin" : "/dashboard");
-      navigate(to, { replace: true });
+    if (!accessToken) {
+      setRedirectPath(null);
+      return;
     }
-  }, [accessToken, isPlatformAdmin, location.state, navigate]);
+
+    const from = location.state?.from?.pathname;
+    if (from) {
+      setRedirectPath(from);
+      return;
+    }
+    if (isPlatformAdmin) {
+      setRedirectPath("/saas-admin");
+      return;
+    }
+    if (roleName === "student") {
+      setRedirectPath("/student-portal");
+      return;
+    }
+    if (roleName === "parent" || roleName === "guardian") {
+      setRedirectPath("/guardian-portal");
+      return;
+    }
+    if (roleName === "teacher") {
+      setRedirectPath("/teacher-portal");
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      if (!authEmail) {
+        setRedirectPath("/dashboard");
+        return;
+      }
+      try {
+        const students = await getStudents({ search: authEmail, limit: 1 });
+        if (!cancelled && students.items.length > 0) {
+          setRedirectPath("/student-portal");
+          return;
+        }
+        const guardians = await getGuardians({ search: authEmail, limit: 1 });
+        if (!cancelled && guardians.items.length > 0) {
+          setRedirectPath("/guardian-portal");
+          return;
+        }
+        if (!cancelled) {
+          setRedirectPath("/dashboard");
+        }
+      } catch {
+        if (!cancelled) {
+          setRedirectPath("/dashboard");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, authEmail, isPlatformAdmin, location.state, roleName]);
+
+  useEffect(() => {
+    if (redirectPath) {
+      navigate(redirectPath, { replace: true });
+    }
+  }, [navigate, redirectPath]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),

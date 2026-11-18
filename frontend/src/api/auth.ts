@@ -17,6 +17,7 @@ export type MeResponse = {
   memberships: Array<{
     school_id: string;
     role_id: string;
+    role_name?: string | null;
     school_name: string;
   }>;
   is_platform_admin: boolean;

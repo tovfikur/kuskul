@@ -18,6 +18,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  Stack,
   FormControl,
   InputLabel,
   Select,
@@ -82,6 +83,23 @@ export default function ClassesTab() {
     is_active: true,
   });
 
+  const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error && typeof error === "object" && "response" in error) {
+      const response = (error as { response?: { data?: unknown } }).response;
+      const data = response?.data;
+      if (data && typeof data === "object" && "detail" in data) {
+        const detail = (data as { detail?: unknown }).detail;
+        if (typeof detail === "string") return detail;
+        if (detail && typeof detail === "object" && "detail" in detail) {
+          const nested = (detail as { detail?: unknown }).detail;
+          if (typeof nested === "string") return nested;
+        }
+      }
+    }
+    if (error instanceof Error) return error.message;
+    return fallback;
+  };
+
   const loadClasses = async () => {
     try {
       const data = await getClasses();
@@ -102,14 +120,12 @@ export default function ClassesTab() {
       await createClass(classForm);
       setOpenClassDialog(false);
       loadClasses();
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
-      const detail = e.response?.data?.detail;
-      const msg =
-        typeof detail === "string"
-          ? detail
-          : detail?.detail || "Failed to create class";
-      showToast({ message: msg, severity: "error" });
+      showToast({
+        message: getErrorMessage(e, "Failed to create class"),
+        severity: "error",
+      });
     }
   };
 
@@ -137,14 +153,12 @@ export default function ClassesTab() {
         is_active: true,
       });
       loadClasses();
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
-      const detail = e.response?.data?.detail;
-      const msg =
-        typeof detail === "string"
-          ? detail
-          : detail?.detail || "Failed to update class";
-      showToast({ message: msg, severity: "error" });
+      showToast({
+        message: getErrorMessage(e, "Failed to update class"),
+        severity: "error",
+      });
     }
   };
 
@@ -159,14 +173,12 @@ export default function ClassesTab() {
       }
       loadClasses();
       showToast({ message: "Class deleted successfully", severity: "success" });
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
-      const detail = e.response?.data?.detail;
-      const msg =
-        typeof detail === "string"
-          ? detail
-          : detail?.detail || "Failed to delete class";
-      showToast({ message: msg, severity: "error" });
+      showToast({
+        message: getErrorMessage(e, "Failed to delete class"),
+        severity: "error",
+      });
     }
   };
 
@@ -199,14 +211,12 @@ export default function ClassesTab() {
       // reload sections
       const data = await getSections(selectedClass.id);
       setSections(data);
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
-      const detail = e.response?.data?.detail;
-      const msg =
-        typeof detail === "string"
-          ? detail
-          : detail?.detail || "Failed to create section";
-      showToast({ message: msg, severity: "error" });
+      showToast({
+        message: getErrorMessage(e, "Failed to create section"),
+        severity: "error",
+      });
     }
   };
 
@@ -240,11 +250,12 @@ export default function ClassesTab() {
         const data = await getSections(selectedClass.id);
         setSections(data);
       }
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
-      const detail = e.response?.data?.detail;
-      const msg = typeof detail === "string" ? detail : detail?.detail || "Failed to update section";
-      showToast({ message: msg, severity: "error" });
+      showToast({
+        message: getErrorMessage(e, "Failed to update section"),
+        severity: "error",
+      });
     }
   };
 
@@ -256,12 +267,16 @@ export default function ClassesTab() {
       // reload sections
       const data = await getSections(selectedClass.id);
       setSections(data);
-      showToast({ message: "Section deleted successfully", severity: "success" });
-    } catch (e: any) {
+      showToast({
+        message: "Section deleted successfully",
+        severity: "success",
+      });
+    } catch (e) {
       console.error(e);
-      const detail = e.response?.data?.detail;
-      const msg = typeof detail === "string" ? detail : detail?.detail || "Failed to delete section";
-      showToast({ message: msg, severity: "error" });
+      showToast({
+        message: getErrorMessage(e, "Failed to delete section"),
+        severity: "error",
+      });
     }
   };
 
@@ -471,67 +486,88 @@ export default function ClassesTab() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Sections for {selectedClass?.name}</DialogTitle>
+        <DialogTitle sx={{ pb: 1 }}>
+          <Typography variant="h6" fontWeight={800}>
+            Sections for {selectedClass?.name}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Manage sections, capacity, and groups for this class.
+          </Typography>
+        </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: "flex", gap: 1, mb: 2, mt: 1 }}>
-            <TextField
-              label="New Section Name (e.g. A)"
-              size="small"
-              value={sectionForm.name}
-              onChange={(e) =>
-                setSectionForm({ ...sectionForm, name: e.target.value })
-              }
-            />
-            <TextField
-              label="Capacity"
-              size="small"
-              type="number"
-              value={sectionForm.capacity}
-              onChange={(e) =>
-                setSectionForm({
-                  ...sectionForm,
-                  capacity: parseInt(e.target.value),
-                })
-              }
-              sx={{ width: 120 }}
-            />
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <InputLabel>Stream</InputLabel>
-              <Select
-                value={sectionForm.stream_id}
-                label="Stream"
+          <Paper
+            variant="outlined"
+            sx={{ p: 2, borderRadius: 2, mb: 2, bgcolor: "background.paper" }}
+          >
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1.5}
+              alignItems={{ sm: "center" }}
+              flexWrap="wrap"
+            >
+              <TextField
+                label="Section name"
+                size="small"
+                value={sectionForm.name}
                 onChange={(e) =>
-                  setSectionForm({ ...sectionForm, stream_id: e.target.value })
+                  setSectionForm({ ...sectionForm, name: e.target.value })
                 }
-              >
-                <MenuItem value="">None</MenuItem>
-                {streams.map((st) => (
-                  <MenuItem key={st.id} value={st.id}>
-                    {st.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={sectionForm.is_active}
+                sx={{ minWidth: 160 }}
+              />
+              <TextField
+                label="Capacity"
+                size="small"
+                type="number"
+                value={sectionForm.capacity}
+                onChange={(e) =>
+                  setSectionForm({
+                    ...sectionForm,
+                    capacity: parseInt(e.target.value),
+                  })
+                }
+                sx={{ width: 120 }}
+              />
+              <FormControl size="small" sx={{ minWidth: 180, mt: { xs: 1, sm: 0.5 } }}>
+                <InputLabel>Groups</InputLabel>
+                <Select
+                  value={sectionForm.stream_id}
+                  label="Stream"
                   onChange={(e) =>
                     setSectionForm({
                       ...sectionForm,
-                      is_active: e.target.checked,
+                      stream_id: e.target.value,
                     })
                   }
-                />
-              }
-              label="Active"
-              sx={{ ml: 1 }}
-            />
-            <Button variant="contained" onClick={handleCreateSection}>
-              Add
-            </Button>
-          </Box>
-          <List>
+                >
+                  <MenuItem value="">None</MenuItem>
+                  {streams.map((st) => (
+                    <MenuItem key={st.id} value={st.id}>
+                      {st.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={sectionForm.is_active}
+                    onChange={(e) =>
+                      setSectionForm({
+                        ...sectionForm,
+                        is_active: e.target.checked,
+                      })
+                    }
+                  />
+                }
+                label="Active"
+              />
+              <Box sx={{ flex: 1 }} />
+              <Button variant="contained" onClick={handleCreateSection}>
+                Add section
+              </Button>
+            </Stack>
+          </Paper>
+          <List sx={{ borderRadius: 2, overflow: "hidden" }}>
             {sections.map((sec) => (
               <ListItem
                 key={sec.id}
@@ -567,13 +603,18 @@ export default function ClassesTab() {
                           streams.find((s) => s.id === sec.stream_id)?.name ??
                           sec.stream_id
                         }`
-                      : "No stream"
+                      : "No group"
                   }
                 />
               </ListItem>
             ))}
             {sections.length === 0 && (
-              <Typography color="text.secondary">No sections yet.</Typography>
+              <Box sx={{ py: 3, textAlign: "center" }}>
+                <Typography fontWeight={700}>No sections yet</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Add the first section for this class.
+                </Typography>
+              </Box>
             )}
           </List>
         </DialogContent>

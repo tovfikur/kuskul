@@ -19,6 +19,8 @@ import {
   Menu,
   MenuItem,
   Divider,
+  FormControl,
+  Select,
 } from "@mui/material";
 import {
   Menu as MenuIcon,
@@ -33,9 +35,10 @@ import {
   Settings,
   Event as EventIcon,
   People as PeopleIcon,
+  Textsms as TextsmsIcon,
 } from "@mui/icons-material";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
-import { signOut } from "../features/auth/authSlice";
+import { signOut, setActiveSchoolId } from "../features/auth/authSlice";
 
 const drawerWidth = 280;
 
@@ -48,7 +51,13 @@ export default function MainLayout() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  const email = useAppSelector((s) => s.auth.email);
+  const auth = useAppSelector((s) => s.auth);
+  const email = auth.email;
+  const memberships = auth.memberships;
+  const activeSchoolId = auth.activeSchoolId;
+  const isTenantAdmin = memberships.some((m) => m.role_name === "admin");
+  const isTeacherPortal = location.pathname.startsWith("/teacher-portal");
+
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -67,8 +76,17 @@ export default function MainLayout() {
     dispatch(signOut());
   };
 
-  const menuItems = [
+  const teacherMenuItems = [
+    { text: "Teacher Dashboard", icon: <DashboardIcon />, path: "/teacher-portal/dashboard" },
+    { text: "Academic", icon: <MenuBook />, path: "/teacher-portal/academic" },
+    { text: "Students", icon: <SchoolIcon />, path: "/teacher-portal/students" },
+    { text: "Exams", icon: <Assignment />, path: "/teacher-portal/exams" },
+    { text: "Events & Notices", icon: <EventIcon />, path: "/teacher-portal/events" },
+  ];
+
+  const adminMenuItems = [
     { text: "Dashboard", icon: <DashboardIcon />, path: "/dashboard" },
+    ...(isTenantAdmin ? [{ text: "Manage Schools", icon: <SchoolIcon />, path: "/schools" }] : []),
     { text: "Academic", icon: <MenuBook />, path: "/academic" },
     { text: "Students", icon: <SchoolIcon />, path: "/students" },
     { text: "Staff", icon: <Badge />, path: "/staff" },
@@ -76,9 +94,12 @@ export default function MainLayout() {
     { text: "Exams", icon: <Assignment />, path: "/exams" },
     { text: "Events & Notices", icon: <EventIcon />, path: "/events" },
     { text: "Finance", icon: <AttachMoney />, path: "/finance" },
-    { text: "Logistics", icon: <LocalShipping />, path: "/logistics" },
+{ text: "Logistics", icon: <LocalShipping />, path: "/logistics" },
+    { text: "Communication Logs", icon: <TextsmsIcon />, path: "/communication-logs" },
     { text: "Settings", icon: <Settings />, path: "/settings" },
   ];
+
+  const menuItems = isTeacherPortal ? teacherMenuItems : adminMenuItems;
 
   const drawer = (
     <div>
@@ -147,6 +168,22 @@ export default function MainLayout() {
           </IconButton>
           <Box sx={{ flexGrow: 1 }} />
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            {memberships.length > 0 && (
+              <FormControl size="small" sx={{ minWidth: 160, display: { xs: "none", sm: "block" } }}>
+                <Select
+                  value={activeSchoolId ?? ""}
+                  onChange={(e) => dispatch(setActiveSchoolId(e.target.value || null))}
+                  displayEmpty
+                  sx={{ fontSize: "0.875rem" }}
+                >
+                  {memberships.map((m) => (
+                    <MenuItem key={m.school_id} value={m.school_id}>
+                      {m.school_name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
             <Typography
               variant="body2"
               sx={{ display: { xs: "none", sm: "block" } }}

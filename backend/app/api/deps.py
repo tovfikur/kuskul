@@ -109,6 +109,9 @@ def require_platform_admin() -> Callable:
 
 
 def has_permission(db: Session, *, user_id: uuid.UUID, school_id: uuid.UUID, permission: str) -> bool:
+    school = db.get(School, school_id)
+    if not school:
+        return False
     membership = db.scalar(
         select(Membership).where(
             Membership.user_id == user_id,
@@ -144,6 +147,9 @@ def require_permission(permission: str) -> Callable:
         school = db.get(School, school_id)
         if not school or school.tenant_id != tenant_id:
             raise forbidden("Invalid school for tenant")
+        if not school.is_active:
+            raise forbidden("School is deactivated. Please contact support.")
+
 
         if not has_permission(db, user_id=user.id, school_id=school_id, permission=permission):
             raise forbidden("Missing required permission")

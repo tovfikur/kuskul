@@ -16,10 +16,20 @@ import {
   PersonAdd,
   Assessment,
   Settings,
+  FactCheck,
+  Fingerprint,
+  Today,
   Menu as MenuIcon,
 } from "@mui/icons-material";
 
-type StudentsTab = "directory" | "admissions" | "reports" | "settings";
+type StudentsTab =
+  | "directory"
+  | "admissions"
+  | "attendance"
+  | "today-attendance"
+  | "attendance-settings"
+  | "reports"
+  | "settings";
 
 type StudentsLayoutProps = {
   activeTab: StudentsTab;
@@ -36,6 +46,9 @@ const tabs: {
 }[] = [
   { id: "directory", label: "Student Directory", icon: <People /> },
   { id: "admissions", label: "Admissions", icon: <PersonAdd /> },
+  { id: "attendance", label: "Attendance", icon: <FactCheck /> },
+  { id: "today-attendance", label: "Today Attendance", icon: <Today /> },
+  { id: "attendance-settings", label: "Attendance Settings", icon: <Fingerprint /> },
   { id: "reports", label: "Reports", icon: <Assessment /> },
   { id: "settings", label: "Settings", icon: <Settings /> },
 ];
